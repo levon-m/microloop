@@ -1,5 +1,6 @@
 #include <Audio.h>
 #include <MIDI.h>
+#include <TeensyThreads.h>
 #include "SGTL5000.h"
 #include "midi_io.h"
 #include "app_logic.h"
@@ -10,8 +11,13 @@ AudioConnection patchCord1(i2s1, 0, i2s2, 0);
 AudioConnection patchCord2(i2s1, 1, i2s2, 1);
 SGTL5000 codec;
 
+void IOThread() { MidiIO::threadLoop(); }
+void AppThread() { AppLogic::threadLoop(); }
+
 void setup() {
   Serial.begin(115200);
+
+  if (CrashReport) { while (!Serial && millis() < 4000); Serial.print(CrashReport); }
 
   AudioMemory(12);
   codec.enable();
@@ -21,8 +27,12 @@ void setup() {
   AppLogic::begin();
 
   // Start threads
-  int ioId = threads.addThread([]{ MidiIO::threadLoop(); }, 2048);   // I/O thread
-  int appId = threads.addThread([]{ AppLogic::threadLoop(); }, 3072); // App/UI thread
+  int ioId = threads.addThread(IOThread, 2048);   // I/O thread
+  int appId = threads.addThread(AppThread, 3072); // App/UI thread
+
+  if (ioId < 0 || appId < 0) {
+    Serial.println("addThread failed");
+  } 
 
   //make io super responsive but polite, app gets a bit more contiguous time
   //smaller slices improve responsiveness at the cost of more context switches
@@ -32,7 +42,7 @@ void setup() {
   //threads.setTimeSlice(ioId, 2);
   //threads.setTimeSlice(appId, 5);
 
-  Serial.println("TeensyThreads: MIDI I/O + App threads started.");
+  Serial.println("MIDI I/O + App threads started.");
 }
 
 void loop() {

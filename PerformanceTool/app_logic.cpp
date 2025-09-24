@@ -1,3 +1,4 @@
+#include <TeensyThreads.h>
 #include "app_logic.h"
 #include "midi_io.h"
 
@@ -16,11 +17,11 @@ void AppLogic::threadLoop() {
 
   for (;;) {
     // 1) Drain transport events
-    MidiEvent ev;
-    while (MidiIO::popEvent(ev)) {
-      if      (ev == EVENT_START) Serial.println("onStart");
-      else if (ev == EVENT_STOP)  Serial.println("onStop");
-      else if (ev == EVENT_CONT)  Serial.println("onContinue");
+    MidiEvent event;
+    while (MidiIO::popEvent(event)) {
+      if      (event == EVENT_START) Serial.println("onStart");
+      else if (event == EVENT_STOP)  Serial.println("onStop");
+      else if (event == EVENT_CONT)  Serial.println("onContinue");
       // TODO: update UI flags for running state if you want
     }
 
@@ -42,10 +43,22 @@ void AppLogic::threadLoop() {
     // 3) Periodic output / UI refresh (Serial, 7-seg, LED)
     if (millis() - lastPrint > 250) {
       lastPrint = millis();
-      Serial.printf("BPM=%.2f running=%d\n", bpm, MidiIO::running());
+
+      //CAUSED A STACK OVERFLOW
+      //Serial.printf("BPM=%.2f running=%d\n", bpm, MidiIO::running());
+
+      //instead, convert to fixed-point number
+      int bpm_x100 = (int)(bpm * 100.0f + 0.5f);
+      Serial.print("BPM="); Serial.print(bpm_x100/100); Serial.print('.');
+      int frac = abs(bpm_x100 % 100);
+      if (frac < 10) Serial.print('0');
+      Serial.print(frac);
+      Serial.print(" running=");
+      Serial.println(MidiIO::running());
+
       // TODO: write to your 7-seg here using latest bpm
     }
 
-    delay(2); // small sleep
+    threads.delay(2); // small sleep
   }
 }

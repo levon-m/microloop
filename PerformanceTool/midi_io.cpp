@@ -1,4 +1,5 @@
 #include <MIDI.h>
+#include <TeensyThreads.h>
 #include "midi_io.h"
 
 // Use Serial8 (pins RX8=34, TX8=35) to create global MIDI object DIN
@@ -95,7 +96,7 @@ void MidiIO::threadLoop() {
 //non-blocking dequeues
 bool MidiIO::popEvent(MidiEvent &outEvent) {
   if (eventRead == eventWrite) return false; //return false when queue is empty
-  outEvent = static_cast<MidiEvent>(eventBuffer[eventRead & (EV_SZ-1)]);
+  outEvent = static_cast<MidiEvent>(eventBuffer[eventRead & (EVENT_SIZE-1)]);
   eventRead++;
   return true;
 }
