@@ -18,9 +18,9 @@ void AppLogic::threadLoop() {
     // 1) Drain transport events
     MidiEvent ev;
     while (MidiIO::popEvent(ev)) {
-      if      (ev == EV_START) Serial.println("onStart");
-      else if (ev == EV_STOP)  Serial.println("onStop");
-      else if (ev == EV_CONT)  Serial.println("onContinue");
+      if      (ev == EVENT_START) Serial.println("onStart");
+      else if (ev == EVENT_STOP)  Serial.println("onStop");
+      else if (ev == EVENT_CONT)  Serial.println("onContinue");
       // TODO: update UI flags for running state if you want
     }
 
