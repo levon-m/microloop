@@ -1,0 +1,35 @@
+# Build directories
+build/
+cmake-build-*/
+
+# IDE files
+.vscode/
+.idea/
+.claude/
+*.code-workspace
+
+# Teensy build artifacts
+*.hex
+*.elf
+*.map
+*.lst
+*.o
+*.d
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Arduino IDE (legacy)
+*.ino.cpp
+*.ino.hex
+*.ino.elf
