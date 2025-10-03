@@ -31,7 +31,8 @@ static volatile bool transport_running = false; //current transport state, volat
 
 // ---- Handlers ----
 
-//when a tick arrives
+//called when DIN.read() parses the byte, NOT at the exact UART arrival
+//this can cause jitter, threads + ISRs can delay it by hundreds of microseconds
 static void onClock() {
   //with volatile, clkWrite would be read twice. Putting it into a local variable reads once and guarantees the same value is used in both lines,
   //which isn't really an issue in this case
