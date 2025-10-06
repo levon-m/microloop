@@ -33,7 +33,7 @@
  *
  * TYPICAL USE:
  * - ISR → Thread: Audio samples, MIDI clock ticks
- * - Thread → ISR: Control commands (be careful with priority inversion!)
+ * - Thread → ISR: Control commands
  * - Thread → Thread: Events, processed data
  *
  * @tparam T Element type (must be POD: Plain Old Data)

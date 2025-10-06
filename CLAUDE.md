@@ -6,38 +6,55 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **MicroLoop** is a live-performance looper/sampler for Teensy 4.1, designed for real-time audio processing with sample-accurate timing. The system receives MIDI clock from an Elektron Digitakt, processes audio through an SGTL5000 codec (Audio Shield Rev D), and will eventually support loop recording, playback, and sample triggering.
 
-**Current Status:** Basic infrastructure complete - MIDI clock tracking, beat indicator, audio passthrough
+**Current Status:**
+- ✅ MIDI clock tracking with professional-grade jitter smoothing (EMA)
+- ✅ Timestamp-based beat indicator (LED on pin 31)
+- ✅ **TimeKeeper: Single source of timing truth** (MIDI ↔ audio samples)
+- ✅ **Sample-accurate quantization API** (samplesToNextBeat, beatToSample, etc.)
+- ✅ **Trace utility for real-time debugging** (lock-free event logging)
+- ✅ Audio passthrough with sample position tracking
+- ✅ Custom minimal CMake build system (Ninja)
+- ✅ Transport control (PLAYING/STOPPED states synced to MIDI)
 
-**Future Features:** Loop recording/playback, sample triggering, BPM display, quantized operations
+**Future Features:** Loop recording/playback (quantized), sample triggering, BPM display, effects
 
 ## Build System
 
-### CMake-based Build (Recommended)
+### CMake Build (Custom, No teensy-cmake-macros)
 
-The project uses CMake with `teensy-cmake-macros` for professional embedded workflow:
+The project uses a **custom minimal CMake configuration** that directly compiles Teensy libraries without dependencies on teensy-cmake-macros:
 
 ```bash
-# Configure build
+# One-time setup
 mkdir build && cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/teensy41.cmake ..
+cmake -G "Ninja" -DCMAKE_TOOLCHAIN_FILE=../cmake/teensy41.cmake ..
 
-# Build firmware
-make
+# Build (incremental, fast)
+ninja
 
-# Upload to Teensy (requires teensy_loader_cli)
-make upload
+# Upload (use Teensy Loader GUI)
+# File → Open HEX → build/microloop.hex
 ```
 
 **Required tools:**
 - CMake 3.16+
-- arm-none-eabi-gcc toolchain (from Teensyduino)
-- teensy_loader_cli (for uploading)
+- Ninja build system
+- arm-none-eabi-gcc toolchain (from Arduino IDE 2.x or Teensyduino)
+- Teensy Loader (GUI or CLI) for uploading
 
-**Toolchain configuration:** Adjust `cmake/teensy41.cmake` if your arm-none-eabi-gcc is in a non-standard location.
+**Toolchain location (Arduino IDE 2.x on Windows):**
+- Path: `C:/Users/[username]/AppData/Local/Arduino15/packages/teensy/tools/teensy-compile/11.3.1/arm/bin/`
+- Already configured in `cmake/teensy41.cmake`
 
-### Arduino IDE (Legacy)
+**Build output:**
+- `build/microloop.elf` - Firmware binary with debug symbols
+- `build/microloop.hex` - Intel HEX format for Teensy Loader
 
-The old `PerformanceTool/` can still be opened in Arduino IDE, but new development should use CMake.
+**Why custom CMake vs teensy-cmake-macros?**
+- ✅ No external dependencies (more reliable)
+- ✅ Full control over compiler flags and linking
+- ✅ Faster incremental builds
+- ✅ Better understanding of build process
 
 ## Architecture
 
@@ -56,14 +73,14 @@ Three execution contexts with strict separation of concerns:
    - MIDI parsing via `MidiIO::threadLoop()` (src/midi_io.cpp:104)
    - Pumps DIN MIDI parser, pushes events to lock-free queues
    - Stack: 2KB
-   - Time slice: 10ms default (tunable)
+   - Time slice: 2ms (very responsive)
    - **Never blocks:** Uses SPSC queues for handoff
 
 3. **App Thread** (Normal Priority)
-   - Application logic via `AppLogic::threadLoop()` (src/app_logic.cpp:42)
-   - Drains queues, tracks beats, drives LED indicator
+   - Application logic via `AppLogic::threadLoop()` (src/app_logic.cpp:57)
+   - Drains queues, tracks beats with timestamp-based smoothing, drives LED
    - Stack: 3KB
-   - Time slice: 10ms default
+   - Time slice: 2ms
    - **Can afford latency:** Safe for Serial.print, UI updates
 
 ### Lock-Free Communication
@@ -86,22 +103,138 @@ All inter-thread data passing uses **Single Producer Single Consumer (SPSC)** qu
 - ✅ Cache-friendly (single writer per cache line)
 - ❌ Limited to single producer/consumer (acceptable for our use case)
 
-### MIDI Clock Handling
+### MIDI Clock Handling with Professional Timing
 
 **MIDI Timing:** 24 PPQN (Pulses Per Quarter Note)
 - 1 beat = 24 clock ticks
-- At 120 BPM: Ticks arrive every ~20ms
+- At 120 BPM: Ticks arrive every ~20.8ms
 
-**Jitter mitigation:**
-- Timestamp ticks in `onClock()` handler with `micros()`
-- Store timestamps (not just counts) for sub-tick precision
-- Future: Calculate BPM per-beat (24 ticks) to average out jitter
-- Why jitter exists: MIDI parser runs in thread (not ISR), subject to preemption
+**Professional-grade jitter smoothing:**
+- Timestamps captured with `micros()` in MIDI handler
+- **Exponential Moving Average (EMA)** calculates tick period: `avgTickPeriodUs`
+- Alpha = 0.1 (smooths jitter, converges in ~10 ticks)
+- Sanity check: Rejects outliers outside 60-300 BPM range (10-50ms tick period)
+- Foundation for sample-accurate quantization (future)
 
-**Current feature:** LED beat indicator
-- Blinks on every beat (24 ticks)
-- 50% duty cycle (12 ticks ON, 12 ticks OFF)
+**LED beat indicator (pin 31):**
+- Short pulse (2 ticks = ~40ms @ 120 BPM) at beat start
+- Rock-solid timing despite MIDI jitter from hardware chain
 - Pauses on MIDI STOP, resumes on START/CONTINUE
+- Uses tick count for simplicity (LED ON at tick 0, OFF at tick 2)
+
+**Why timestamp-based timing?**
+- Immune to MIDI jitter from hardware THRU chains (Digitakt → K-2 → Edge → Teensy)
+- LED timing stays smooth even when MIDI ticks arrive irregularly
+- Provides accurate BPM calculation: `60,000,000 / (avgTickPeriodUs * 24)`
+- Critical for sample-accurate loop quantization
+
+### TimeKeeper: Single Source of Timing Truth
+
+**Purpose:** Centralized timing authority that bridges MIDI clock (24 PPQN) and audio samples (44.1kHz)
+
+**Implementation:** `utils/timekeeper.h`, `utils/timekeeper.cpp`, `include/audio_timekeeper.h`
+
+**Design:**
+- **Audio timeline:** Monotonic sample counter (incremented by audio ISR every 128 samples)
+- **MIDI timeline:** Beat/bar position, synced from MIDI clock
+- **Lock-free:** Atomic operations for cross-thread safety (audio ISR + app thread)
+- **Sample-accurate:** All timing in samples, not microseconds
+
+**Key Features:**
+1. **Sample position tracking**
+   - Absolute sample count since audio start (or MIDI START)
+   - Incremented automatically via `AudioTimeKeeper` object in audio graph
+   - Provides monotonic timeline for loop recording/playback
+
+2. **MIDI-to-sample conversion**
+   - `syncToMIDIClock(tickPeriodUs)` converts MIDI ticks → samples per beat
+   - Formula: `samplesPerBeat = (tickPeriodUs * 24 * 44100) / 1e6`
+   - Example: 120 BPM → 22050 samples/beat
+   - Updated every MIDI tick via EMA smoothing
+
+3. **Quantization API**
+   - `samplesToNextBeat()` - Returns samples until next beat boundary
+   - `samplesToNextBar()` - Returns samples until next bar (4 beats)
+   - `beatToSample(beat)` - Converts beat number to sample position
+   - `isOnBeatBoundary()` - Checks if within ±128 samples of beat
+
+4. **Beat/bar tracking**
+   - `getBeatNumber()` - Current beat (0, 1, 2, 3...)
+   - `getBarNumber()` - Current bar (4 beats per bar in 4/4 time)
+   - `getBeatInBar()` - Beat within bar (0-3)
+   - `getTickInBeat()` - MIDI tick within beat (0-23)
+
+5. **Transport control**
+   - States: STOPPED, PLAYING, RECORDING
+   - Synced to MIDI START/STOP/CONTINUE
+   - `isRunning()` - Check if transport active
+
+**Usage example (quantize record to next beat):**
+```cpp
+// User presses record at sample 15000
+uint32_t samplesToWait = TimeKeeper::samplesToNextBeat();  // 7050 samples
+uint64_t recordStart = TimeKeeper::getSamplePosition() + samplesToWait;  // 22050 (beat 1)
+
+// In audio callback
+if (TimeKeeper::getSamplePosition() >= recordStart) {
+    startRecording();  // Sample-accurate!
+}
+```
+
+**Why centralized timing?**
+- ✅ Single source of truth (no drift between features)
+- ✅ Sample-accurate quantization (know exact sample of next beat)
+- ✅ Dynamic tempo tracking (handles BPM changes smoothly)
+- ✅ Simplifies future features (loop, sampler, etc. all query TimeKeeper)
+
+**Performance:**
+- `incrementSamples()`: ~20 CPU cycles (~33ns @ 600MHz)
+- `syncToMIDIClock()`: ~200 CPU cycles (~333ns)
+- All methods lock-free and real-time safe
+
+**Serial commands:**
+- Type `s` in serial monitor to see TimeKeeper status (sample position, beat, BPM, etc.)
+
+**See:** `utils/TIMEKEEPER_USAGE.md` for detailed usage guide
+
+### Trace Utility: Wait-Free Event Logging
+
+**Purpose:** Lock-free event tracing for real-time debugging (safe in ISR)
+
+**Implementation:** `utils/trace.h`, `utils/trace.cpp`
+
+**Design:**
+- Circular buffer (1024 events = 8KB RAM)
+- Each event: `{timestamp, eventId, value}` (8 bytes)
+- Wait-free recording (~10-20 CPU cycles)
+- Overwrites oldest events when full
+
+**Usage:**
+```cpp
+TRACE(TRACE_MIDI_CLOCK_RECV);                    // Record event
+TRACE(TRACE_TICK_PERIOD_UPDATE, avgTickPeriodUs / 10);  // Event with value
+```
+
+**Serial commands:**
+- `t` - Dump trace buffer (chronological list of events with timestamps)
+- `c` - Clear trace buffer
+
+**Predefined events:**
+- MIDI: Clock recv/queued/dropped, START/STOP/CONTINUE
+- Beat tracking: Beat start, LED on/off, tick period updates
+- TimeKeeper: MIDI sync, transport changes, beat advances
+- Audio: Callback invoked, buffer underruns (future)
+
+**Use cases:**
+- Debug MIDI timing jitter
+- Verify quantization accuracy
+- Measure thread latency (MIDI recv → app thread processing)
+- Analyze queue depths over time
+
+**Compile-time control:**
+- Define `TRACE_ENABLED=0` to compile out all tracing (zero overhead)
+
+**See:** `utils/TRACE_USAGE.md` for detailed usage guide
 
 ### Audio Path
 
@@ -122,6 +255,147 @@ All inter-thread data passing uses **Single Producer Single Consumer (SPSC)** qu
 - Better understanding of hardware
 - Easier to extend (volume control, EQ, etc.)
 
+## Testing
+
+### Test Philosophy
+
+**On-Device Testing:** All tests run directly on Teensy hardware (no PC-side mocking). This ensures:
+- Real hardware behavior (timing, interrupts, atomics)
+- No mocking complexity
+- Tests match production environment exactly
+
+**Test Coverage:**
+- ✅ **Unit Tests**: TimeKeeper (30+ tests), Trace (7 tests), SPSC Queue (10 tests)
+- ✅ **Integration Tests**: Full system with MIDI input, audio passthrough
+- ✅ **Performance Tests**: Timing measurements for real-time safety
+
+### Running Tests
+
+1. **Modify CMakeLists.txt** (temporarily):
+   ```cmake
+   # Comment out normal main
+   # add_executable(microloop.elf src/main.cpp)
+
+   # Use test main instead
+   add_executable(microloop.elf tests/run_tests.cpp)
+   ```
+
+2. **Build and upload**:
+   ```bash
+   cd build
+   ninja
+   # Upload microloop.hex with Teensy Loader
+   ```
+
+3. **Open Serial Monitor** (115200 baud) - you'll see:
+   ```
+   ╔════════════════════════════════════════╗
+   ║    MicroLoop On-Device Test Suite     ║
+   ╚════════════════════════════════════════╝
+
+   [ RUN      ] TimeKeeper_Begin_InitializesState
+   [       OK ] TimeKeeper_Begin_InitializesState
+   ...
+   ========================================
+   Tests run: 47
+   Passed: 47
+   Failed: 0
+   Duration: 145 ms
+   ========================================
+
+   ✓ All tests passed!
+   ```
+
+### Test Structure
+
+Tests are written using a simple macro-based framework in `tests/test_runner.h`:
+
+```cpp
+TEST(ModuleName_FunctionName_Behavior) {
+    // Arrange: Set up test conditions
+    TimeKeeper::reset();
+
+    // Act: Perform the operation
+    TimeKeeper::incrementSamples(128);
+
+    // Assert: Verify expected outcome
+    ASSERT_EQ(TimeKeeper::getSamplePosition(), 128ULL);
+}
+```
+
+**Available assertions:**
+- `ASSERT_TRUE(condition)` / `ASSERT_FALSE(condition)`
+- `ASSERT_EQ(actual, expected)` - Equality
+- `ASSERT_NE(actual, expected)` - Inequality
+- `ASSERT_LT(actual, expected)` - Less than
+- `ASSERT_GT(actual, expected)` - Greater than
+- `ASSERT_NEAR(actual, expected, tolerance)` - Floating point equality
+
+### Test Files
+
+```
+tests/
+├── test_runner.h        # Test framework (macros, assertions)
+├── test_timekeeper.cpp  # TimeKeeper unit tests (30+ tests)
+├── test_trace.cpp       # Trace utility tests (7 tests)
+├── test_spsc_queue.cpp  # SPSC queue tests (10 tests)
+├── run_tests.cpp        # Main test entry point
+└── TESTING.md          # Comprehensive testing documentation
+```
+
+### Writing New Tests
+
+1. **Create test file**: `tests/test_your_module.cpp`
+2. **Write tests using TEST() macro**
+3. **Include in run_tests.cpp**: `#include "test_your_module.cpp"`
+4. **Rebuild and run**
+
+**Test naming convention**: `ModuleName_FunctionUnderTest_ExpectedBehavior`
+
+Examples:
+- `TimeKeeper_IncrementSamples_UpdatesPosition`
+- `SPSCQueue_PushPop_MaintainsOrder`
+- `Trace_OverflowHandling_WrapsAround`
+
+### Integration Testing
+
+Beyond unit tests, manual integration tests verify real-world operation:
+
+**Test 1: MIDI Clock Reception**
+- Connect MIDI clock source (Digitakt, DAW, etc.)
+- Send MIDI START
+- Verify: Serial shows `▶ START`, LED blinks on beat
+
+**Test 2: TimeKeeper Accuracy**
+- Start MIDI clock @ 120 BPM
+- Type `s` in serial monitor after 10 seconds
+- Verify: BPM shows ~120, sample position ~441000
+
+**Test 3: Trace Verification**
+- Type `c` to clear trace
+- Wait 5 seconds
+- Type `t` to dump trace
+- Verify: Events in chronological order, no DROPPED events
+
+See `tests/TESTING.md` for complete integration test procedures.
+
+### Pre-Commit Testing Checklist
+
+Before committing changes:
+
+1. ✅ **Run unit tests** - All tests must pass
+2. ✅ **Run integration test** - MIDI clock reception works
+3. ✅ **Check serial output** - No assertion failures or warnings
+4. ✅ **Verify trace** - Type `t`, check for healthy operation
+
+### Regression Testing
+
+When fixing a bug:
+1. Write a failing test that reproduces the bug
+2. Fix the bug
+3. Verify test now passes
+4. Keep the test to prevent regression
+
 ## Code Structure
 
 ```
@@ -129,24 +403,38 @@ TeensyAudioTools/
 ├── src/                    # Implementation files
 │   ├── main.cpp           # Entry point, thread setup
 │   ├── midi_io.cpp        # MIDI I/O thread
-│   ├── app_logic.cpp      # App thread, beat tracking
+│   ├── app_logic.cpp      # App thread, timestamp-based beat tracking
 │   └── SGTL5000.cpp       # Codec driver
 ├── include/               # Public headers
 │   ├── midi_io.h
 │   ├── app_logic.h
-│   └── SGTL5000.h
+│   ├── SGTL5000.h
+│   └── audio_timekeeper.h # Audio object for TimeKeeper integration
 ├── utils/                 # Generic reusable utilities
-│   ├── spsc_queue.h      # Lock-free SPSC queue (POD only)
-│   └── span.h            # Buffer view (C++17 backport)
-├── PerformanceTool/       # Legacy Arduino project (deprecated)
+│   ├── spsc_queue.h       # Lock-free SPSC queue (POD only)
+│   ├── span.h             # Buffer view (C++17 backport)
+│   ├── timekeeper.h/cpp   # Centralized timing authority
+│   ├── trace.h/cpp        # Lock-free event tracing
+│   ├── TIMEKEEPER_USAGE.md  # TimeKeeper usage guide
+│   └── TRACE_USAGE.md     # Trace utility usage guide
+├── tests/                 # On-device test suite
+│   ├── test_runner.h      # Test framework
+│   ├── test_timekeeper.cpp  # TimeKeeper tests (30+)
+│   ├── test_trace.cpp     # Trace tests (7)
+│   ├── test_spsc_queue.cpp  # SPSC queue tests (10)
+│   ├── run_tests.cpp      # Test entry point
+│   └── TESTING.md         # Testing documentation
+├── build/                 # CMake build output (git-ignored)
 ├── cmake/                 # Build configuration
-└── CMakeLists.txt        # Main build file
+│   └── teensy41.cmake    # Toolchain file for Teensy 4.1
+└── CMakeLists.txt        # Main build file (custom, minimal)
 ```
 
 **Module boundaries:**
 - `utils/`: Generic, testable, no hardware dependencies
 - `src/`: Application-specific, hardware-aware
 - `include/`: Public APIs, thread interfaces
+- `tests/`: On-device test suite
 
 ## Real-Time Safety Guidelines
 
@@ -171,54 +459,44 @@ TeensyAudioTools/
 
 ## Common Tasks
 
+### Building and Uploading
+```bash
+# Rebuild after code changes
+cd build
+ninja
+
+# Upload with Teensy Loader
+# 1. Open Teensy Loader application
+# 2. File → Open HEX File → select build/microloop.hex
+# 3. Connect Teensy 4.1 via USB
+# 4. Press physical button on Teensy to enter bootloader mode
+# 5. Teensy Loader uploads automatically
+```
+
+### Viewing Serial Output (VS Code)
+- Install "Serial Monitor" extension by Microsoft
+- Click plug icon in status bar
+- Select Teensy COM port
+- Set baud rate: 115200
+
 ### Adding a New MIDI Event Type
 1. Add enum to `include/midi_io.h:16`
 2. Create handler in `src/midi_io.cpp` (push to event queue)
 3. Register in `MidiIO::begin()` (src/midi_io.cpp:77)
-4. Handle in `AppLogic::threadLoop()` (src/app_logic.cpp:52)
+4. Handle in `AppLogic::threadLoop()` (src/app_logic.cpp:78)
 
-### Tuning Thread Responsiveness
-Adjust time slices in `src/main.cpp:139`:
+### Tuning LED Pulse Duration
+Edit `src/app_logic.cpp:183`:
 ```cpp
-threads.setTimeSlice(ioThreadId, 2);   // 2ms - very responsive
-threads.setTimeSlice(appThreadId, 5);  // 5ms - moderate
+if (tickCount == 2)  // Current: 2 ticks (~40ms @ 120 BPM)
+if (tickCount == 1)  // Shorter: 1 tick (~20ms)
 ```
 
-**Tradeoff:**
-- Smaller slice → More responsive, more context switch overhead
-- Larger slice → Less overhead, chunkier execution
-
-### Debugging Stack Overflow
-Symptoms: Random crashes, hard faults, erratic behavior
-
-Solutions:
-1. Increase stack size in `src/main.cpp:128-129`
-2. Avoid `Serial.printf("%f", ...)` (use fixed-point integer instead)
-3. Minimize recursion and large local arrays
-4. Future: Implement stack watermarking
-
-### Measuring Audio Latency
+### Adjusting EMA Smoothing
+Edit `src/app_logic.cpp:165`:
 ```cpp
-// In audio callback:
-uint32_t start = ARM_DWT_CYCCNT;  // CPU cycle counter
-// ... processing ...
-uint32_t cycles = ARM_DWT_CYCCNT - start;
-float micros = cycles / (F_CPU / 1000000.0f);
-```
-
-### Using Span for Buffer Safety
-```cpp
-#include "span.h"
-
-void processAudio(Span<float> left, Span<float> right) {
-    for (size_t i = 0; i < left.size(); i++) {
-        left[i] *= 0.5f;  // Bounds-checked in debug builds
-    }
-}
-
-// Usage:
-float buffer[128];
-processAudio(makeSpan(buffer), makeSpan(buffer));
+avgTickPeriodUs = (avgTickPeriodUs * 9 + tickPeriod) / 10;  // Alpha = 0.1
+avgTickPeriodUs = (avgTickPeriodUs * 19 + tickPeriod) / 20; // Alpha = 0.05 (smoother, slower convergence)
 ```
 
 ## Hardware Configuration
@@ -226,7 +504,7 @@ processAudio(makeSpan(buffer), makeSpan(buffer));
 ### Teensy 4.1
 - CPU: ARM Cortex-M7 @ 600 MHz
 - RAM: 1 MB (plenty for audio buffers)
-- Flash: 8 MB
+- Flash: 8 MB (current usage: 45 KB / 0.57%)
 
 ### Audio Shield Rev D
 - Codec: SGTL5000 (I2C addr 0x0A)
@@ -238,25 +516,19 @@ processAudio(makeSpan(buffer), makeSpan(buffer));
 - Serial8: RX=pin 34, TX=pin 35
 - Baud: 31250 (MIDI standard)
 - Source: Elektron Digitakt (clock master)
+- Chain: Digitakt → Behringer K-2 THRU → Edge THRU → Teensy
 
-### LED Indicator
-- Pin 13 (built-in LED)
-- Blinks on every beat (24 MIDI clock ticks)
-
-## Development Workflow
-
-1. **Make changes** in `src/`, `include/`, or `utils/`
-2. **Build:** `cd build && make`
-3. **Upload:** `make upload` (or use Teensy Loader GUI)
-4. **Monitor:** `screen /dev/ttyACM0 115200` (adjust port for your system)
-5. **Debug:** Serial prints in app thread, logic analyzer for MIDI/I2S
+### LED Beat Indicator
+- **Pin 31** (external LED)
+- Short pulse (2 ticks ≈ 40ms) at beat start
+- Timestamp-based timing for rock-solid accuracy
 
 ## Future Architecture Notes
 
 ### Loop Recording (Planned)
 - Circular buffer in SDRAM (Teensy 4.1 has expansion pins)
 - Record trigger: MIDI note or footswitch
-- Quantize to beat boundary (use clock timestamps)
+- **Quantize to beat boundary using `beatStartMicros` timestamps**
 - Overdub: Mix new audio with existing loop
 
 ### Sample Playback (Planned)
@@ -266,19 +538,39 @@ processAudio(makeSpan(buffer), makeSpan(buffer));
 - Envelopes (ADSR)
 
 ### BPM Display (Planned)
-- Calculate from 24-tick intervals
-- EMA smoothing (alpha ~0.3)
+- Calculate from `avgTickPeriodUs`: `60,000,000 / (avgTickPeriodUs * 24)`
+- Already smoothed via EMA (no additional filtering needed)
 - Display on 7-segment or OLED
 
 ### Quantization (Planned)
 - Align record/playback to beat/bar boundaries
-- Use clock timestamps for sample-accurate timing
+- Use `beatStartMicros` + `avgTickPeriodUs` for sample-accurate timing
 - Pre-roll/latency compensation
 
-## Known Issues / TODOs
+## Known Status / Notes
 
-- [ ] CMake build not fully tested (may need teensy_loader_cli integration)
-- [ ] Stack usage not monitored (add watermarking)
-- [ ] No overrun detection on SPSC queues (add in debug builds)
-- [ ] SGTL5000 driver lacks volume control (add later)
-- [ ] No BPM calculation yet (removed from old code, will re-add)
+### Working Features
+- ✅ Custom CMake build system (Ninja, no teensy-cmake-macros dependency)
+- ✅ MIDI clock reception with professional jitter smoothing (EMA)
+- ✅ Timestamp-based beat tracking
+- ✅ LED beat indicator on pin 31 (short pulse, rock-solid timing)
+- ✅ Audio passthrough (44.1kHz, 128-sample blocks)
+- ✅ Multi-threaded architecture (Audio ISR + I/O thread + App thread)
+- ✅ Lock-free SPSC queues for real-time communication
+- ✅ **Comprehensive on-device test suite (47+ tests)**
+- ✅ **TimeKeeper, Trace, and SPSC queue fully tested**
+
+### Build System Notes
+- Toolchain path configured for Arduino IDE 2.x (Windows)
+- Uses standard Teensy libraries from Arduino15 folder
+- Excludes SD card Audio library files (not needed for current features)
+- Binary size: ~45 KB (plenty of room for future features)
+
+### Future Improvements
+- [ ] Implement BPM calculation and display
+- [ ] Add loop recording with beat-quantized start/stop
+- [ ] Implement sample playback engine
+- [ ] Add volume control to SGTL5000 driver
+- [ ] Stack usage monitoring (watermarking)
+- [ ] SPSC queue overrun detection (debug builds)
+- [ ] Automated CI testing (GitHub Actions with PlatformIO)

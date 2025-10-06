@@ -2,6 +2,7 @@
 #include <MIDI.h>
 #include <TeensyThreads.h>
 #include "spsc_queue.h"
+#include "trace.h"
 
 /**
  * MIDI I/O Implementation
@@ -66,13 +67,18 @@ static volatile bool transportRunning = false;
  */
 static void onClock() {
     uint32_t timestamp = micros();
+    TRACE(TRACE_MIDI_CLOCK_RECV);
 
     // Push to queue (returns false if full, which we ignore)
     // TRADEOFF: Dropping ticks vs blocking
     // - Dropping is real-time safe (no blocking)
     // - We have 5s buffer, if app stalls that long, we have bigger problems
     // - Future improvement: Count overruns and report as error
-    clockQueue.push(timestamp);
+    if (clockQueue.push(timestamp)) {
+        TRACE(TRACE_MIDI_CLOCK_QUEUED, clockQueue.size());
+    } else {
+        TRACE(TRACE_MIDI_CLOCK_DROPPED);
+    }
 }
 
 /**

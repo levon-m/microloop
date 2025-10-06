@@ -1,5 +1,7 @@
 #include "app_logic.h"
 #include "midi_io.h"
+#include "trace.h"
+#include "timekeeper.h"
 #include <TeensyThreads.h>
 
 /**
@@ -27,18 +29,20 @@
  *    - CONTINUE = resume from pause (keep tick position)
  *    - This matches DAW behavior
  *
- * 4. WHY BUILT-IN LED (PIN 13)?
- *    - Every Teensy has it (no external wiring needed)
- *    - Easy to debug without hardware
- *    - Can change to external LED later
  */
 
 // LED configuration
-static constexpr uint8_t LED_PIN = LED_BUILTIN;  // Pin 13 on Teensy 4.x
+static constexpr uint8_t LED_PIN = 31;
 
 // Beat tracking state
 static uint8_t tickCount = 0;         // Current tick within beat (0-23)
 static bool transportActive = false;  // Is sequencer running?
+
+// Timestamp-based timing state
+static uint32_t beatStartMicros = 0;  // Timestamp of last beat start (tick 0)
+static uint32_t lastTickMicros = 0;   // Timestamp of last tick (for BPM calc)
+static uint32_t avgTickPeriodUs = 20833; // Average period between ticks (~20.8ms @ 120BPM)
+                                          // Updated dynamically via exponential moving average
 
 // Debug output rate limiting
 static uint32_t lastPrint = 0;
@@ -79,24 +83,38 @@ void AppLogic::threadLoop() {
                     /**
                      * START: Reset to beginning
                      * - Reset tick counter (we're at beat 0, tick 0)
+                     * - Reset timestamps (start fresh timing)
+                     * - Reset TimeKeeper (sample 0, beat 0)
                      * - Enable transport
                      * - Turn on LED (start of beat)
                      */
                     tickCount = 0;
+                    beatStartMicros = micros();
+                    lastTickMicros = 0;  // Reset for fresh EMA
                     transportActive = true;
+
+                    // Reset TimeKeeper to beat 0, sample 0
+                    TimeKeeper::reset();
+                    TimeKeeper::setTransportState(TimeKeeper::TransportState::PLAYING);
+
                     digitalWrite(LED_PIN, HIGH);
-                    Serial.println("► START");
+                    TRACE(TRACE_MIDI_START);
+                    Serial.println("▶ START");
                     break;
 
                 case MidiEvent::STOP:
                     /**
                      * STOP: Pause playback
                      * - Disable transport (ignore clock ticks)
+                     * - Update TimeKeeper transport state
                      * - Turn off LED (visual feedback of stopped state)
                      * - Keep tick counter (CONTINUE will resume from here)
                      */
                     transportActive = false;
+                    TimeKeeper::setTransportState(TimeKeeper::TransportState::STOPPED);
+
                     digitalWrite(LED_PIN, LOW);
+                    TRACE(TRACE_MIDI_STOP);
                     Serial.println("■ STOP");
                     break;
 
@@ -104,12 +122,16 @@ void AppLogic::threadLoop() {
                     /**
                      * CONTINUE: Resume from pause
                      * - Enable transport
+                     * - Update TimeKeeper transport state
                      * - Don't reset tick counter (resume from last position)
                      * - Update LED based on current tick position
                      */
                     transportActive = true;
+                    TimeKeeper::setTransportState(TimeKeeper::TransportState::PLAYING);
+
                     // Set LED state based on current position
                     digitalWrite(LED_PIN, (tickCount < 12) ? HIGH : LOW);
+                    TRACE(TRACE_MIDI_CONTINUE);
                     Serial.println("▶ CONTINUE");
                     break;
             }
@@ -137,36 +159,61 @@ void AppLogic::threadLoop() {
             }
 
             /**
-             * BEAT TRACKING LOGIC
+             * TIMESTAMP-BASED BEAT TRACKING
              *
-             * tickCount: 0 → 1 → 2 → ... → 23 → 0 → 1 → ...
-             *                └─── 24 ticks ───┘   └─ next beat
+             * APPROACH:
+             * 1. Calculate tick period (time between ticks) using exponential moving average
+             * 2. Track beat start time (tick 0)
+             * 3. Update LED based on elapsed time from beat start, not just tick count
              *
-             * LED pattern:
-             * - Ticks 0-11: LED ON  (first half of beat)
-             * - Ticks 12-23: LED OFF (second half of beat)
+             * BENEFITS:
+             * - Immune to MIDI jitter (smooths out irregular tick arrival)
+             * - LED timing stays rock-solid even with jittery MIDI
+             * - Foundation for sample-accurate quantization (future)
+             *
+             * MATH:
+             * - MIDI clock: 24 PPQN (Pulses Per Quarter Note)
+             * - At 120 BPM: 24 ticks per beat, 2 beats/sec = 48 ticks/sec
+             * - Tick period: 1/48 = 20.833ms = 20833µs
+             * - Half beat (LED transition): 12 ticks × 20833µs = 250ms
              */
 
-            // Update LED based on tick position
-            // WHY < 12? 50% duty cycle (12 on, 12 off)
-            if (tickCount < 12) {
-                digitalWrite(LED_PIN, HIGH);
-            } else {
-                digitalWrite(LED_PIN, LOW);
+            // Update tick period estimate (exponential moving average)
+            // Alpha = 0.1 (smooth jitter, converge in ~10 ticks)
+            if (lastTickMicros > 0) {
+                uint32_t tickPeriod = clockMicros - lastTickMicros;
+                // Sanity check: 10ms - 50ms range (60-300 BPM)
+                if (tickPeriod >= 10000 && tickPeriod <= 50000) {
+                    avgTickPeriodUs = (avgTickPeriodUs * 9 + tickPeriod) / 10;
+
+                    // Sync TimeKeeper to MIDI clock (converts ticks to samples)
+                    TimeKeeper::syncToMIDIClock(avgTickPeriodUs);
+
+                    TRACE(TRACE_TICK_PERIOD_UPDATE, avgTickPeriodUs / 10);  // Store in units of 10µs to fit in uint16_t
+                }
             }
+            lastTickMicros = clockMicros;
 
-            // Increment tick counter
+            // Increment tick counter (both local and TimeKeeper)
             tickCount++;
+            TimeKeeper::incrementTick();  // Tracks ticks 0-23, auto-advances beat at 24
 
-            // Reset at beat boundary
-            // WHY >= 24? 24 ticks per beat (0-23), so 24 = start of next beat
+            // Reset at beat boundary and capture beat start timestamp
             if (tickCount >= 24) {
                 tickCount = 0;
-                // Future: Increment beat counter here for bar tracking
+                beatStartMicros = clockMicros;
+                digitalWrite(LED_PIN, HIGH);  // Turn on immediately at beat start
+                TRACE(TRACE_BEAT_START);
+                TRACE(TRACE_BEAT_LED_ON);
+                // Beat counter already incremented by TimeKeeper::incrementTick()
             }
 
-            // Future: Use clockMicros for BPM calculation
-            // Example: Store last 24 timestamps, compute average period
+            // Turn off LED after short pulse (2 ticks = ~40ms @ 120 BPM)
+            // Using tick count is simpler and avoids timestamp calculation every tick
+            if (tickCount == 2) {
+                digitalWrite(LED_PIN, LOW);
+                TRACE(TRACE_BEAT_LED_OFF);
+            }
         }
 
         // ========== 3. PERIODIC DEBUG OUTPUT ==========
@@ -184,15 +231,6 @@ void AppLogic::threadLoop() {
         uint32_t now = millis();
         if (now - lastPrint >= PRINT_INTERVAL_MS) {
             lastPrint = now;
-
-            // Status report
-            Serial.print("Transport: ");
-            Serial.print(transportActive ? "RUNNING" : "STOPPED");
-            Serial.print(" | Beat tick: ");
-            Serial.print(tickCount);
-            Serial.print("/24");
-            Serial.print(" | LED: ");
-            Serial.println(digitalRead(LED_PIN) ? "ON" : "OFF");
         }
 
         // ========== 4. YIELD CPU ==========

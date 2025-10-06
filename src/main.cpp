@@ -31,25 +31,37 @@
 #include "SGTL5000.h"
 #include "midi_io.h"
 #include "app_logic.h"
+#include "trace.h"
+#include "timekeeper.h"
+#include "audio_timekeeper.h"
 
 // ========== AUDIO GRAPH ==========
 /**
- * Simple stereo passthrough: I2S Input → I2S Output
+ * Stereo passthrough with TimeKeeper integration
  *
- * WHY THIS TOPOLOGY?
- * - Minimal latency: Direct connection, no processing
- * - Proves audio path works (can hear input at output)
- * - Future: Insert effects/loopers between input and output
+ * TOPOLOGY:
+ *   I2S Input → TimeKeeper → I2S Output
+ *
+ * WHY INSERT TIMEKEEPER?
+ * - Tracks sample position (incremented every audio block)
+ * - Provides sample-accurate timing for quantization
+ * - Zero-copy passthrough (no audio processing overhead)
  *
  * LATENCY:
  * - Audio Library block size: 128 samples
  * - At 44.1kHz: 128/44100 ≈ 2.9ms per block
  * - Total latency: ~6ms (input buffer + output buffer)
+ * - TimeKeeper adds <1µs overhead (negligible)
  */
 AudioInputI2S i2s_in;
+AudioTimeKeeper timekeeper;  // Tracks sample position
 AudioOutputI2S i2s_out;
-AudioConnection patchCord1(i2s_in, 0, i2s_out, 0);  // Left channel
-AudioConnection patchCord2(i2s_in, 1, i2s_out, 1);  // Right channel
+
+// Audio connections
+AudioConnection patchCord1(i2s_in, 0, timekeeper, 0);  // Left in → TimeKeeper
+AudioConnection patchCord2(i2s_in, 1, timekeeper, 1);  // Right in → TimeKeeper
+AudioConnection patchCord3(timekeeper, 0, i2s_out, 0); // TimeKeeper → Left out
+AudioConnection patchCord4(timekeeper, 1, i2s_out, 1); // TimeKeeper → Right out
 
 // Custom SGTL5000 codec driver
 SGTL5000 codec;
@@ -145,6 +157,21 @@ void setup() {
     }
     Serial.println("Audio: OK");
 
+    // ========== TIMEKEEPER SETUP ==========
+    /**
+     * Initialize timing system
+     *
+     * WHAT IT DOES:
+     * - Reset sample counter to 0
+     * - Reset beat/bar counters to 0
+     * - Set default tempo (120 BPM)
+     * - Set transport state to STOPPED
+     *
+     * IMPORTANT: Must initialize before MIDI (so transport events can sync)
+     */
+    TimeKeeper::begin();
+    Serial.println("TimeKeeper: OK");
+
     // ========== MIDI SETUP ==========
     /**
      * Initialize MIDI I/O
@@ -155,7 +182,7 @@ void setup() {
      * - Prepares SPSC queues
      */
     MidiIO::begin();
-    Serial.println("MIDI: OK (DIN on Serial8, RX=pin34, TX=pin35)");
+    Serial.println("MIDI: OK (DIN on Serial8)");
 
     // ========== APP LOGIC SETUP ==========
     /**
@@ -223,34 +250,83 @@ void setup() {
     Serial.println("Threads: Started");
     Serial.println("=== MicroLoop Running ===");
     Serial.println();
+    Serial.println("Commands:");
+    Serial.println("  't' - Dump trace buffer");
+    Serial.println("  'c' - Clear trace buffer");
+    Serial.println("  's' - Show TimeKeeper status");
+    Serial.println();
 }
 
 // ========== MAIN LOOP ==========
 
 void loop() {
     /**
-     * Main loop is EMPTY
+     * Main loop: Low-priority housekeeping and debug commands
      *
-     * WHY?
-     * - All work happens in threads (I/O, App)
-     * - Audio runs in ISR (completely independent)
-     * - Main loop has nothing to do
+     * WHY NOT EMPTY?
+     * - Serial commands for debugging (trace dump, etc.)
+     * - Future: Watchdog, memory monitoring, etc.
      *
-     * ALTERNATIVE DESIGNS:
-     * 1. Run app logic here (blocking, no concurrency)
-     * 2. Use FreeRTOS (more complex, overkill for this project)
-     * 3. Hand-rolled scheduler (reinventing the wheel)
-     *
-     * TeensyThreads is perfect middle ground:
-     * - Simple API (addThread, yield, delay)
-     * - Lightweight (minimal overhead)
-     * - Integrates with Arduino ecosystem
+     * All real-time work happens in threads (I/O, App) and ISRs (Audio)
      */
 
-    // Nothing to do - threads handle everything
-    // We could add low-priority housekeeping here if needed:
-    // - Memory leak detection
-    // - Watchdog feeding
-    // - Over-temperature monitoring
-    // - etc.
+    // Check for serial commands (non-blocking)
+    if (Serial.available()) {
+        char cmd = Serial.read();
+        switch (cmd) {
+            case 't':  // Dump trace buffer
+                Serial.println("\n[Dumping trace buffer...]");
+                Trace::dump();
+                break;
+
+            case 'c':  // Clear trace buffer
+                Serial.println("\n[Clearing trace buffer...]");
+                Trace::clear();
+                Serial.println("Trace buffer cleared.");
+                break;
+
+            case 's':  // Show TimeKeeper status
+                Serial.println("\n=== TimeKeeper Status ===");
+                Serial.print("Sample Position: ");
+                Serial.println((uint32_t)TimeKeeper::getSamplePosition());  // Print low 32 bits
+                Serial.print("Beat: ");
+                Serial.print(TimeKeeper::getBeatNumber());
+                Serial.print(" (Bar ");
+                Serial.print(TimeKeeper::getBarNumber());
+                Serial.print(", Beat ");
+                Serial.print(TimeKeeper::getBeatInBar());
+                Serial.print(", Tick ");
+                Serial.print(TimeKeeper::getTickInBeat());
+                Serial.println(")");
+                Serial.print("BPM: ");
+                Serial.println(TimeKeeper::getBPM(), 2);
+                Serial.print("Samples/Beat: ");
+                Serial.println(TimeKeeper::getSamplesPerBeat());
+                Serial.print("Transport: ");
+                switch (TimeKeeper::getTransportState()) {
+                    case TimeKeeper::TransportState::STOPPED: Serial.println("STOPPED"); break;
+                    case TimeKeeper::TransportState::PLAYING: Serial.println("PLAYING"); break;
+                    case TimeKeeper::TransportState::RECORDING: Serial.println("RECORDING"); break;
+                }
+                Serial.print("Samples to next beat: ");
+                Serial.println(TimeKeeper::samplesToNextBeat());
+                Serial.print("Samples to next bar: ");
+                Serial.println(TimeKeeper::samplesToNextBar());
+                Serial.println("=========================\n");
+                break;
+
+            case '\n':
+            case '\r':
+                // Ignore newlines
+                break;
+
+            default:
+                Serial.print("Unknown command: ");
+                Serial.println(cmd);
+                Serial.println("Commands: 't' (dump trace), 'c' (clear trace), 's' (status)");
+                break;
+        }
+    }
+
+    delay(10);  // Don't hog CPU
 }
