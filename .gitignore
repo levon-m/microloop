@@ -33,3 +33,5 @@ Thumbs.db
 *.ino.cpp
 *.ino.hex
 *.ino.elf
+
+CLAUDE.md
