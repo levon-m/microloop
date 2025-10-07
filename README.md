@@ -1,4 +1,4 @@
-# MicroLoop
+# μLoop: Minimal Live Looper & Sampler
 
 Real-time MIDI-synchronized looper for Teensy 4.1 with professional-grade timing.
 
