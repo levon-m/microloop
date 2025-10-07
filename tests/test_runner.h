@@ -47,6 +47,21 @@ static const char* g_currentTest = nullptr;
     static void test_##name()
 
 /**
+ * Helper functions to print values (handles enums by casting to int)
+ */
+template<typename T>
+typename std::enable_if<std::is_enum<T>::value, void>::type
+printValue(T value) {
+    Serial.print(static_cast<int>(value));
+}
+
+template<typename T>
+typename std::enable_if<!std::is_enum<T>::value, void>::type
+printValue(T value) {
+    Serial.print(value);
+}
+
+/**
  * Assertions
  */
 #define ASSERT_TRUE(condition) \
@@ -75,9 +90,10 @@ static const char* g_currentTest = nullptr;
             Serial.print(":"); \
             Serial.print(__LINE__); \
             Serial.print(" - Expected "); \
-            Serial.print(_expected); \
+            printValue(_expected); \
             Serial.print(", got "); \
-            Serial.println(_actual); \
+            printValue(_actual); \
+            Serial.println(); \
             g_testsFailed++; \
             return; \
         } \
@@ -93,7 +109,8 @@ static const char* g_currentTest = nullptr;
             Serial.print(":"); \
             Serial.print(__LINE__); \
             Serial.print(" - Expected values to differ, both were "); \
-            Serial.println(_actual); \
+            printValue(_actual); \
+            Serial.println(); \
             g_testsFailed++; \
             return; \
         } \
@@ -109,9 +126,10 @@ static const char* g_currentTest = nullptr;
             Serial.print(":"); \
             Serial.print(__LINE__); \
             Serial.print(" - Expected "); \
-            Serial.print(_actual); \
+            printValue(_actual); \
             Serial.print(" < "); \
-            Serial.println(_expected); \
+            printValue(_expected); \
+            Serial.println(); \
             g_testsFailed++; \
             return; \
         } \
@@ -127,9 +145,10 @@ static const char* g_currentTest = nullptr;
             Serial.print(":"); \
             Serial.print(__LINE__); \
             Serial.print(" - Expected "); \
-            Serial.print(_actual); \
+            printValue(_actual); \
             Serial.print(" > "); \
-            Serial.println(_expected); \
+            printValue(_expected); \
+            Serial.println(); \
             g_testsFailed++; \
             return; \
         } \
@@ -146,11 +165,11 @@ static const char* g_currentTest = nullptr;
             Serial.print(":"); \
             Serial.print(__LINE__); \
             Serial.print(" - Expected "); \
-            Serial.print(_actual); \
+            printValue(_actual); \
             Serial.print(" ≈ "); \
-            Serial.print(_expected); \
+            printValue(_expected); \
             Serial.print(" (tolerance "); \
-            Serial.print(tolerance); \
+            printValue(tolerance); \
             Serial.println(")"); \
             g_testsFailed++; \
             return; \

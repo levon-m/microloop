@@ -149,8 +149,13 @@ add_library(app_logic STATIC src/app_logic.cpp)
 target_include_directories(app_logic PUBLIC include)
 target_link_libraries(app_logic teensy_core teensy_threads midi_io microloop_utils)
 
-# Main executable
+# MAIN
 add_executable(microloop.elf src/main.cpp)
+
+# TESTING
+#add_executable(microloop.elf tests/run_tests.cpp)
+
+
 target_link_libraries(microloop.elf
     teensy_core
     audio

@@ -7,21 +7,21 @@
 
 TEST(SPSCQueue_Empty_InitiallyTrue) {
     SPSCQueue<int, 16> queue;
-    ASSERT_TRUE(queue.empty());
-    ASSERT_EQ(queue.size(), 0);
+    ASSERT_TRUE(queue.isEmpty());
+    ASSERT_EQ(queue.size(), 0U);
 }
 
 TEST(SPSCQueue_PushPop_BasicOperation) {
     SPSCQueue<int, 16> queue;
 
     ASSERT_TRUE(queue.push(42));
-    ASSERT_FALSE(queue.empty());
-    ASSERT_EQ(queue.size(), 1);
+    ASSERT_FALSE(queue.isEmpty());
+    ASSERT_EQ(queue.size(), 1U);
 
     int value;
     ASSERT_TRUE(queue.pop(value));
     ASSERT_EQ(value, 42);
-    ASSERT_TRUE(queue.empty());
+    ASSERT_TRUE(queue.isEmpty());
 }
 
 TEST(SPSCQueue_MultiplePushPop_MaintainsOrder) {
@@ -31,7 +31,7 @@ TEST(SPSCQueue_MultiplePushPop_MaintainsOrder) {
         ASSERT_TRUE(queue.push(i));
     }
 
-    ASSERT_EQ(queue.size(), 10);
+    ASSERT_EQ(queue.size(), 10U);
 
     for (int i = 0; i < 10; i++) {
         int value;
@@ -39,7 +39,7 @@ TEST(SPSCQueue_MultiplePushPop_MaintainsOrder) {
         ASSERT_EQ(value, i);
     }
 
-    ASSERT_TRUE(queue.empty());
+    ASSERT_TRUE(queue.isEmpty());
 }
 
 TEST(SPSCQueue_Full_RejectsPush) {
@@ -78,7 +78,7 @@ TEST(SPSCQueue_Wraparound_HandlesCorrectly) {
             ASSERT_EQ(value, cycle * 100 + i);
         }
 
-        ASSERT_TRUE(queue.empty());
+        ASSERT_TRUE(queue.isEmpty());
     }
 }
 
@@ -105,22 +105,22 @@ TEST(SPSCQueue_Struct_WorksWithPOD) {
 TEST(SPSCQueue_Size_AccurateAfterOperations) {
     SPSCQueue<int, 16> queue;
 
-    ASSERT_EQ(queue.size(), 0);
+    ASSERT_EQ(queue.size(), 0U);
 
     queue.push(1);
-    ASSERT_EQ(queue.size(), 1);
+    ASSERT_EQ(queue.size(), 1U);
 
     queue.push(2);
     queue.push(3);
-    ASSERT_EQ(queue.size(), 3);
+    ASSERT_EQ(queue.size(), 3U);
 
     int dummy;
     queue.pop(dummy);
-    ASSERT_EQ(queue.size(), 2);
+    ASSERT_EQ(queue.size(), 2U);
 
     queue.pop(dummy);
     queue.pop(dummy);
-    ASSERT_EQ(queue.size(), 0);
+    ASSERT_EQ(queue.size(), 0U);
 }
 
 TEST(SPSCQueue_Performance_BurstPushPop) {

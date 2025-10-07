@@ -272,12 +272,12 @@ TEST(TimeKeeper_IsOnBeatBoundary_DetectsBeatStart) {
     // At sample 0 (beat 0 start)
     ASSERT_TRUE(TimeKeeper::isOnBeatBoundary());
 
-    // Advance to sample 100 (not on boundary)
-    TimeKeeper::incrementSamples(100);
+    // Advance to sample 200 (outside 128-sample tolerance window)
+    TimeKeeper::incrementSamples(200);
     ASSERT_FALSE(TimeKeeper::isOnBeatBoundary());
 
     // Advance to beat 1 start (sample 22050)
-    TimeKeeper::incrementSamples(21950);
+    TimeKeeper::incrementSamples(21850);
     for (int i = 0; i < 24; i++) {
         TimeKeeper::incrementTick();
     }
