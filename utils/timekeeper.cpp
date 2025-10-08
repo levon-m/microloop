@@ -19,6 +19,7 @@ volatile uint64_t TimeKeeper::s_samplePosition = 0;
 // MIDI timeline
 volatile uint32_t TimeKeeper::s_beatNumber = 0;
 volatile uint32_t TimeKeeper::s_tickInBeat = 0;
+//avoid division by 0, set sensible defaults
 volatile uint32_t TimeKeeper::s_samplesPerBeat = TimeKeeper::DEFAULT_SAMPLES_PER_BEAT;
 
 // Transport state
@@ -97,20 +98,21 @@ void TimeKeeper::syncToMIDIClock(uint32_t tickPeriodUs) {
      *   Fits in uint64_t (max 18 quintillion)
      */
     uint64_t beatPeriodUs = (uint64_t)tickPeriodUs * MIDI_PPQN;
-    uint32_t samplesPerBeat = (beatPeriodUs * SAMPLE_RATE) / 1000000ULL;
+    uint32_t spb = (beatPeriodUs * SAMPLE_RATE) / 1000000ULL;
 
     // Sanity check: Reject absurd tempos (30-300 BPM range)
     // At 30 BPM: samplesPerBeat = 88200
     // At 300 BPM: samplesPerBeat = 8820
-    if (samplesPerBeat >= 8000 && samplesPerBeat <= 100000) {
-        __atomic_store_n(&s_samplesPerBeat, samplesPerBeat, __ATOMIC_RELAXED);
+    if (spb >= 8000 && spb <= 100000) {
+        __atomic_store_n(&s_samplesPerBeat, spb, __ATOMIC_RELAXED);
 
         // Trace sync event with BPM
-        uint32_t bpm = (SAMPLE_RATE * 60) / samplesPerBeat;
+        uint32_t bpm = (SAMPLE_RATE * 60) / spb;
         TRACE(TRACE_TIMEKEEPER_SYNC, bpm);
     }
 }
 
+//exists for testing, will only get calculated/called in syncToMIDIClock()
 void TimeKeeper::setSamplesPerBeat(uint32_t samplesPerBeat) {
     __atomic_store_n(&s_samplesPerBeat, samplesPerBeat, __ATOMIC_RELAXED);
 }
@@ -137,10 +139,11 @@ void TimeKeeper::incrementTick() {
     __atomic_store_n(&s_tickInBeat, tick, __ATOMIC_RELAXED);
 }
 
-void TimeKeeper::advanceToBeat() {
-    __atomic_fetch_add(&s_beatNumber, 1U, __ATOMIC_RELAXED);
-    __atomic_store_n(&s_tickInBeat, 0U, __ATOMIC_RELAXED);
-}
+//uncomment if you need CONTINUE handling or manual beat correction
+//void TimeKeeper::advanceToBeat() {
+//    __atomic_fetch_add(&s_beatNumber, 1U, __ATOMIC_RELAXED);
+//    __atomic_store_n(&s_tickInBeat, 0U, __ATOMIC_RELAXED);
+//}
 
 // ========== TRANSPORT CONTROL ==========
 

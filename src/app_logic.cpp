@@ -41,6 +41,7 @@ static bool transportActive = false;  // Is sequencer running?
 // Timestamp-based timing state
 static uint32_t beatStartMicros = 0;  // Timestamp of last beat start (tick 0)
 static uint32_t lastTickMicros = 0;   // Timestamp of last tick (for BPM calc)
+//initialized to default value so no errors/crashes
 static uint32_t avgTickPeriodUs = 20833; // Average period between ticks (~20.8ms @ 120BPM)
                                           // Updated dynamically via exponential moving average
 
@@ -184,6 +185,8 @@ void AppLogic::threadLoop() {
                 uint32_t tickPeriod = clockMicros - lastTickMicros;
                 // Sanity check: 10ms - 50ms range (60-300 BPM)
                 if (tickPeriod >= 10000 && tickPeriod <= 50000) {
+                    //multiply equation constants by 10 to avoid float math
+                    //alpha = 0.1
                     avgTickPeriodUs = (avgTickPeriodUs * 9 + tickPeriod) / 10;
 
                     // Sync TimeKeeper to MIDI clock (converts ticks to samples)

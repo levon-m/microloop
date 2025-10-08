@@ -299,7 +299,7 @@ private:
     // Transport state
     static volatile TransportState s_transportState;
 
-    // Calibration
+    //avoid division by 0, set sensible defaults
     static constexpr uint32_t DEFAULT_BPM = 120;
     static constexpr uint32_t DEFAULT_SAMPLES_PER_BEAT = (SAMPLE_RATE * 60) / DEFAULT_BPM;  // 22050 @ 120 BPM
 };
