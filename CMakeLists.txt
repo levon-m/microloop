@@ -64,6 +64,9 @@ set(WIRE_LIB "${TEENSY_LIBS}/Wire")
 set(MIDI_LIB "${TEENSY_LIBS}/MIDI/src")
 set(AUDIO_LIB "${TEENSY_LIBS}/Audio")
 set(THREADS_LIB "${TEENSY_LIBS}/TeensyThreads")
+set(SEESAW_LIB "${TEENSY_LIBS}/Adafruit_seesaw_Library")
+set(NEOPIXEL_LIB "${TEENSY_LIBS}/Adafruit_NeoPixel")
+set(BUSIO_LIB "${TEENSY_LIBS}/Adafruit_BusIO")
 
 # Include directories
 include_directories(
@@ -74,7 +77,13 @@ include_directories(
     ${MIDI_LIB}
     ${AUDIO_LIB}
     ${THREADS_LIB}
+    ${SEESAW_LIB}
+    ${NEOPIXEL_LIB}
+    ${BUSIO_LIB}
     ${TEENSY_LIBS}/SPI
+    ${TEENSY_LIBS}/SD/src
+    ${TEENSY_LIBS}/SdFat/src
+    ${TEENSY_LIBS}/SerialFlash
 )
 
 # Teensy core sources (minimal set for now)
@@ -126,6 +135,40 @@ target_link_libraries(audio teensy_core)
 add_library(midi INTERFACE)
 target_include_directories(midi INTERFACE ${MIDI_LIB})
 
+# Adafruit BusIO library (for I2C/SPI abstraction, required by Seesaw)
+# REQUIRED: Dependency of Adafruit Seesaw Library
+if(NOT EXISTS "${BUSIO_LIB}/Adafruit_I2CDevice.cpp")
+    message(FATAL_ERROR "Adafruit BusIO Library NOT found. Download from https://github.com/adafruit/Adafruit_BusIO")
+endif()
+add_library(busio STATIC
+    "${BUSIO_LIB}/Adafruit_I2CDevice.cpp"
+    "${BUSIO_LIB}/Adafruit_SPIDevice.cpp"
+)
+target_include_directories(busio PUBLIC ${BUSIO_LIB})
+target_link_libraries(busio teensy_core wire)
+message(STATUS "Adafruit BusIO Library found")
+
+# Adafruit Seesaw library (for Neokey choke button)
+# REQUIRED: Install via Arduino IDE Library Manager: "Adafruit seesaw Library"
+file(GLOB SEESAW_SOURCES "${SEESAW_LIB}/*.cpp")
+if(NOT SEESAW_SOURCES)
+    message(FATAL_ERROR "Adafruit Seesaw Library NOT found. Install via Arduino IDE: Tools → Manage Libraries → Search 'Adafruit seesaw'")
+endif()
+add_library(seesaw STATIC ${SEESAW_SOURCES})
+target_include_directories(seesaw PUBLIC ${SEESAW_LIB})
+target_link_libraries(seesaw teensy_core wire busio)
+message(STATUS "Adafruit Seesaw Library found")
+
+# Adafruit NeoPixel library (for Neokey LEDs)
+# REQUIRED: Install via Arduino IDE Library Manager: "Adafruit NeoPixel"
+if(NOT EXISTS "${NEOPIXEL_LIB}/Adafruit_NeoPixel.cpp")
+    message(FATAL_ERROR "Adafruit NeoPixel Library NOT found. Install via Arduino IDE: Tools → Manage Libraries → Search 'Adafruit NeoPixel'")
+endif()
+add_library(neopixel STATIC "${NEOPIXEL_LIB}/Adafruit_NeoPixel.cpp")
+target_include_directories(neopixel PUBLIC ${NEOPIXEL_LIB})
+target_link_libraries(neopixel teensy_core)
+message(STATUS "Adafruit NeoPixel Library found")
+
 # Utils library (now has trace.cpp and timekeeper.cpp)
 add_library(microloop_utils STATIC
     utils/trace.cpp
@@ -145,16 +188,19 @@ add_library(midi_io STATIC src/midi_io.cpp)
 target_include_directories(midi_io PUBLIC include)
 target_link_libraries(midi_io teensy_core midi teensy_threads microloop_utils)
 
+add_library(choke_io STATIC src/choke_io.cpp)
+target_include_directories(choke_io PUBLIC include)
+target_link_libraries(choke_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
+
 add_library(app_logic STATIC src/app_logic.cpp)
 target_include_directories(app_logic PUBLIC include)
-target_link_libraries(app_logic teensy_core teensy_threads midi_io microloop_utils)
+target_link_libraries(app_logic teensy_core teensy_threads midi_io choke_io microloop_utils)
 
 # MAIN
 add_executable(microloop.elf src/main.cpp)
 
 # TESTING
 #add_executable(microloop.elf tests/run_tests.cpp)
-
 
 target_link_libraries(microloop.elf
     teensy_core
@@ -164,7 +210,11 @@ target_link_libraries(microloop.elf
     teensy_threads
     sgtl5000
     midi_io
+    choke_io
     app_logic
+    seesaw
+    neopixel
+    busio
     microloop_utils
     m  # Math library
 )

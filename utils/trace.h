@@ -62,8 +62,16 @@ enum TraceEventId : uint16_t {
     TRACE_TIMEKEEPER_BEAT_ADVANCE = 402, // Beat counter advanced (value = new beat number)
     TRACE_TIMEKEEPER_SAMPLE_POS = 403,   // Sample position (value = low 16 bits)
 
-    // User-defined (500+)
-    TRACE_USER = 500,
+    // Choke (500-599)
+    TRACE_CHOKE_BUTTON_PRESS = 500,      // Choke button pressed (value = key index)
+    TRACE_CHOKE_BUTTON_RELEASE = 501,    // Choke button released (value = key index)
+    TRACE_CHOKE_ENGAGE = 502,            // Choke engaged (muting audio)
+    TRACE_CHOKE_RELEASE = 503,           // Choke released (unmuting audio)
+    TRACE_CHOKE_FADE_START = 504,        // Fade started (value = target gain * 100)
+    TRACE_CHOKE_FADE_COMPLETE = 505,     // Fade completed
+
+    // User-defined (600+)
+    TRACE_USER = 600,
 };
 
 #if TRACE_ENABLED
@@ -171,6 +179,12 @@ public:
             case TRACE_TIMEKEEPER_TRANSPORT: return "TIMEKEEPER_TRANSPORT";
             case TRACE_TIMEKEEPER_BEAT_ADVANCE: return "TIMEKEEPER_BEAT_ADVANCE";
             case TRACE_TIMEKEEPER_SAMPLE_POS: return "TIMEKEEPER_SAMPLE_POS";
+            case TRACE_CHOKE_BUTTON_PRESS: return "CHOKE_BUTTON_PRESS";
+            case TRACE_CHOKE_BUTTON_RELEASE: return "CHOKE_BUTTON_RELEASE";
+            case TRACE_CHOKE_ENGAGE: return "CHOKE_ENGAGE";
+            case TRACE_CHOKE_RELEASE: return "CHOKE_RELEASE";
+            case TRACE_CHOKE_FADE_START: return "CHOKE_FADE_START";
+            case TRACE_CHOKE_FADE_COMPLETE: return "CHOKE_FADE_COMPLETE";
             default: return "UNKNOWN";
         }
     }
