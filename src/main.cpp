@@ -223,9 +223,10 @@ void setup() {
      * Initialize Neokey 1x4 button input
      *
      * WHAT IT DOES:
+     * - Initializes Wire2 (I2C bus 2: SDA2=pin 25, SCL2=pin 24)
      * - Initializes Seesaw I2C communication
      * - Configures key 0 for interrupt-on-change
-     * - Sets up INT pin on Teensy (pin 23)
+     * - Sets up INT pin on Teensy (pin 33)
      * - Sets initial LED state (green = unmuted)
      */
     if (!ChokeIO::begin()) {
@@ -236,7 +237,7 @@ void setup() {
             delay(100);
         }
     }
-    Serial.println("Choke I/O: OK (Neokey on I2C 0x30)");
+    Serial.println("Choke I/O: OK (Neokey on I2C 0x30 / Wire2)");
 
     // ========== THREAD CREATION ==========
     /**

@@ -8,6 +8,7 @@
 #include <Adafruit_NeoKey_1x4.h>
 #include <seesaw_neopixel.h>
 #include <TeensyThreads.h>
+#include <Wire.h>
 
 /**
  * HARDWARE CONFIGURATION
@@ -30,8 +31,9 @@ static constexpr uint32_t DEBOUNCE_MS = 50;  // Ignore events within 50ms of las
 
 /**
  * Neokey object (Seesaw-based I2C device)
+ * Initialize with Wire2 bus (SDA2=pin 25, SCL2=pin 24)
  */
-static Adafruit_NeoKey_1x4 neokey;
+static Adafruit_NeoKey_1x4 neokey(NEOKEY_I2C_ADDR, &Wire2);
 
 /**
  * Lock-free event queue (I/O thread → App thread)
@@ -53,7 +55,12 @@ bool ChokeIO::begin() {
     // Configure INT pin (input with pull-up, active LOW)
     pinMode(INT_PIN, INPUT_PULLUP);
 
+    // Initialize Wire2 (I2C bus 2: SDA2=pin 25, SCL2=pin 24)
+    Wire2.begin();
+    Wire2.setClock(400000);  // 400kHz I2C speed
+
     // Initialize Neokey (Seesaw I2C communication)
+    // Note: Wire2 bus was specified in constructor
     if (!neokey.begin(NEOKEY_I2C_ADDR)) {
         Serial.println("ERROR: Neokey not detected on I2C!");
         return false;
@@ -71,7 +78,7 @@ bool ChokeIO::begin() {
     neokey.pixels.setPixelColor(CHOKE_KEY, LED_COLOR_UNMUTED);
     neokey.pixels.show();
 
-    Serial.println("ChokeIO: Neokey initialized (I2C 0x30, INT on pin 33)");
+    Serial.println("ChokeIO: Neokey initialized (I2C 0x30 on Wire2, INT on pin 33)");
     return true;
 }
 
