@@ -27,7 +27,7 @@ static constexpr uint8_t LED_BRIGHTNESS = 255;            // Full brightness
 /**
  * DEBOUNCE CONFIGURATION
  */
-static constexpr uint32_t DEBOUNCE_MS = 50;  // Ignore events within 50ms of last toggle
+static constexpr uint32_t DEBOUNCE_MS = 20;  // Minimum time between events (reduced for responsiveness)
 
 /**
  * Neokey object (Seesaw-based I2C device)
@@ -97,49 +97,40 @@ void ChokeIO::threadLoop() {
      */
 
     for (;;) {
-        // Fast check: Is INT pin LOW? (button activity detected)
-        if (digitalRead(INT_PIN) == LOW) {
-            // Activity detected! Read button states via I2C
-            uint32_t buttons = neokey.read();  // Read all 4 keys (bitmask)
+        // Read button state directly every loop iteration
+        // This ensures we always stay in sync with hardware
+        uint32_t buttons = neokey.read();
+        bool keyPressed = (buttons & (1 << CHOKE_KEY)) != 0;
 
-            // Extract key 0 state (bit 0 = key 0)
-            // Note: Seesaw returns 1 = pressed, 0 = released
-            bool keyPressed = (buttons & (1 << CHOKE_KEY)) != 0;
-
-            // Debounce: Ignore rapid toggles within 50ms
+        // Detect state change
+        if (keyPressed != lastKeyState) {
             uint32_t now = millis();
-            if (now - lastEventTime < DEBOUNCE_MS) {
-                // Too soon after last event, ignore
-                threads.yield();
-                continue;
-            }
 
-            // Detect edge (state change)
-            if (keyPressed != lastKeyState) {
+            // Simple time-based debouncing: Only send event if enough time passed
+            if (now - lastEventTime >= DEBOUNCE_MS) {
+                // Update state and timestamp
                 lastKeyState = keyPressed;
                 lastEventTime = now;
 
-                // Generate event
+                // Send event
                 if (keyPressed) {
-                    // Key pressed → engage choke
                     eventQueue.push(ChokeEvent::BUTTON_PRESS);
                     TRACE(TRACE_CHOKE_BUTTON_PRESS, CHOKE_KEY);
                     TRACE(TRACE_CHOKE_ENGAGE);
                 } else {
-                    // Key released → release choke
                     eventQueue.push(ChokeEvent::BUTTON_RELEASE);
                     TRACE(TRACE_CHOKE_BUTTON_RELEASE, CHOKE_KEY);
                     TRACE(TRACE_CHOKE_RELEASE);
                 }
+            } else {
+                // Within debounce period, but still update our tracking state
+                // to stay in sync with hardware (prevents state desync)
+                lastKeyState = keyPressed;
             }
-
-            // Clear interrupt flag (read clears it automatically on Seesaw)
-            // INT pin will go HIGH again after we've read the state
         }
 
-        // Yield to other threads (cooperative multitasking)
-        // If no activity, we'll check INT pin again in ~10ms
-        threads.delay(10);
+        // Small delay to limit I2C traffic and give other threads time
+        threads.delay(5);
     }
 }
 
