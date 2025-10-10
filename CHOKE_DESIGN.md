@@ -29,9 +29,9 @@ The **Choke** feature provides a live-performance audio mute function for MicroL
 |------------|------------|----------|
 | VCC        | 3.3V       | Power (3.3V regulated) |
 | GND        | GND        | Ground |
-| SDA        | Pin 18     | I2C Data (SDA0/Wire) |
-| SCL        | Pin 19     | I2C Clock (SCL0/Wire) |
-| INT        | Pin 23     | Interrupt (active LOW) |
+| SDA        | Pin 25     | I2C Data (SDA2/Wire2) |
+| SCL        | Pin 24     | I2C Clock (SCL2/Wire2) |
+| INT        | Pin 33     | Interrupt (active LOW) |
 
 **Notes:**
 - Neokey requires 3.3V power (Teensy native voltage, no level shifting needed)
@@ -558,10 +558,10 @@ Serial: t    # Dump
 
 **Possible causes:**
 1. **Wiring issue:**
-   - Check SDA/SCL connections (pins 18/19)
+   - Check SDA/SCL connections (pins 25/24)
    - Check 3.3V power (not 5V!)
    - Check ground connection
-   - Check INT pin connection (pin 23)
+   - Check INT pin connection (pin 33)
 
 2. **I2C address conflict:**
    - Default is 0x30, check with I2C scanner

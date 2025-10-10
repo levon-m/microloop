@@ -7,8 +7,8 @@
  *
  * HARDWARE:
  * - Adafruit Neokey 1x4 QT (Seesaw-based, I2C address 0x30)
- * - Connected to Wire (SDA=pin 18, SCL=pin 19)
- * - INT pin → Teensy pin 23 (optional, for wake-on-press)
+ * - Connected to Wire2 (SDA2=pin 25, SCL2=pin 24)
+ * - INT pin → Teensy pin 33 (optional, for wake-on-press)
  *
  * ARCHITECTURE:
  * - Dedicated I/O thread (high priority, like MIDI I/O)

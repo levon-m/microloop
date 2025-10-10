@@ -13,7 +13,7 @@
  * HARDWARE CONFIGURATION
  */
 static constexpr uint8_t NEOKEY_I2C_ADDR = 0x30;  // Default Neokey address
-static constexpr uint8_t INT_PIN = 23;             // Teensy pin for Neokey INT
+static constexpr uint8_t INT_PIN = 33;             // Teensy pin for Neokey INT
 static constexpr uint8_t CHOKE_KEY = 0;            // Key 0 (leftmost) is choke button
 
 /**
@@ -71,7 +71,7 @@ bool ChokeIO::begin() {
     neokey.pixels.setPixelColor(CHOKE_KEY, LED_COLOR_UNMUTED);
     neokey.pixels.show();
 
-    Serial.println("ChokeIO: Neokey initialized (I2C 0x30, INT on pin 23)");
+    Serial.println("ChokeIO: Neokey initialized (I2C 0x30, INT on pin 33)");
     return true;
 }
 
