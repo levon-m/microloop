@@ -1,41 +1,9 @@
-/**
- * bitmaps.h - Bitmap storage for 128x64 OLED display
- *
- * PURPOSE:
- * Central storage for all display bitmaps in PROGMEM (flash memory).
- * Each bitmap is 1024 bytes (128x64 pixels, 1 bit per pixel).
- *
- * FORMAT:
- * - LCDAssistant horizontal bytes format
- * - 128 pixels wide × 64 pixels tall = 1024 bytes
- * - Each byte represents 8 vertical pixels
- * - White pixel = 1, Black pixel = 0
- *
- * ADDING NEW BITMAPS:
- * 1. Create 128x64 image in image editor
- * 2. Convert with LCDAssistant (Byte orientation: Horizontal, Size: 128x64)
- * 3. Add PROGMEM array below
- * 4. Add entry to bitmapRegistry in display_io.cpp
- * 5. Add BitmapID enum in display_io.h
- *
- * MEMORY USAGE:
- * - Each bitmap: 1024 bytes in PROGMEM (flash, not RAM)
- * - 20 bitmaps: ~20 KB flash (0.25% of 8MB Teensy 4.1 flash)
- * - No RAM overhead (bitmaps stay in flash until drawn)
- */
-
 #pragma once
 
 #include <Arduino.h>
 
-// =============================================================================
-// DEFAULT / IDLE BITMAPS
-// =============================================================================
+// each bitmap is 1024 bytes in PROGMEM (flash, not RAM)
 
-/**
- * Default/Idle bitmap - Shown on startup and when system is idle
- * Custom user bitmap: MicroLoop logo/branding
- */
 static const uint8_t PROGMEM bitmap_default[1024] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x3F, 0xF8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0xE0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -103,14 +71,6 @@ static const uint8_t PROGMEM bitmap_default[1024] = {
     0x00, 0x1C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0xFC, 0x00, 0x00,
 };
 
-// =============================================================================
-// CHOKE / MUTE BITMAPS
-// =============================================================================
-
-/**
- * Choke active bitmap - Shown when choke button is pressed
- * Custom user bitmap: "MICROLOOP" text with visual indicators
- */
 static const uint8_t PROGMEM bitmap_choke_active[1024] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,

@@ -11,6 +11,7 @@
  * - 10ms linear crossfade (441 samples @ 44.1kHz)
  * - Lock-free control (atomic bool for thread safety)
  * - Zero-copy passthrough when not fading
+ * - Inherits from AudioEffectBase (multi-effect architecture)
  *
  * USAGE IN AUDIO GRAPH:
  *   AudioInputI2S i2s_in;
@@ -25,10 +26,16 @@
  *   AudioConnection c5(choke, 0, i2s_out, 0);
  *   AudioConnection c6(choke, 1, i2s_out, 1);
  *
- * CONTROL API:
- *   choke.engage();   // Start fade to silence (mute)
- *   choke.release();  // Start fade to full volume (unmute)
- *   choke.isChoked(); // Query current state
+ * CONTROL API (NEW - AudioEffectBase interface):
+ *   choke.enable();     // Start fade to silence (mute)
+ *   choke.disable();    // Start fade to full volume (unmute)
+ *   choke.toggle();     // Toggle choke on/off
+ *   choke.isEnabled();  // Query current state
+ *
+ * LEGACY API (Backward compatible, will be removed in Phase 5):
+ *   choke.engage();      // Same as enable()
+ *   choke.releaseChoke(); // Same as disable()
+ *   choke.isChoked();    // Same as isEnabled()
  *
  * PERFORMANCE:
  * - Passthrough: ~50 CPU cycles (memcpy + atomic read)
@@ -36,41 +43,112 @@
  * - Total: <1% of 600MHz CPU
  *
  * THREAD SAFETY:
- * - engage()/release() can be called from any thread
+ * - enable()/disable()/toggle() can be called from any thread
  * - Uses atomic operations for lock-free state updates
  * - Audio ISR reads state atomically, applies gain
  */
 
 #pragma once
 
-#include <Audio.h>
+#include "audio_effect_base.h"
 #include <atomic>
 
-class AudioEffectChoke : public AudioStream {
+class AudioEffectChoke : public AudioEffectBase {
 public:
     /**
      * Constructor
      * Creates stereo choke effect (2 inputs, 2 outputs)
      */
-    AudioEffectChoke() : AudioStream(2, inputQueueArray) {
+    AudioEffectChoke() : AudioEffectBase(2) {  // Call base with 2 inputs (stereo)
         m_targetGain = 1.0f;      // Start unmuted
         m_currentGain = 1.0f;
-        m_isChoked.store(false, std::memory_order_relaxed);
+        m_isEnabled.store(false, std::memory_order_relaxed);  // Start disabled (unmuted)
+    }
+
+    // ========================================================================
+    // AUDIOEFFECTBASE INTERFACE (NEW)
+    // ========================================================================
+
+    /**
+     * Enable effect (start fade to silence / mute)
+     *
+     * Thread-safe: Can be called from any thread
+     * Effect: Audio fades to silence over 10ms
+     *
+     * Note: For choke, "enabled" means "muted" (choke is engaged)
+     */
+    void enable() override {
+        m_targetGain = 0.0f;  // Mute
+        m_isEnabled.store(true, std::memory_order_release);
     }
 
     /**
-     * Engage choke (start fade to silence)
+     * Disable effect (start fade to full volume / unmute)
+     *
+     * Thread-safe: Can be called from any thread
+     * Effect: Audio fades to full volume over 10ms
+     *
+     * Note: For choke, "disabled" means "unmuted" (choke is released)
+     */
+    void disable() override {
+        m_targetGain = 1.0f;  // Unmute
+        m_isEnabled.store(false, std::memory_order_release);
+    }
+
+    /**
+     * Toggle effect on/off
+     *
+     * Thread-safe: Can be called from any thread
+     * Effect: If muted, unmute; if unmuted, mute
+     */
+    void toggle() override {
+        if (isEnabled()) {
+            disable();
+        } else {
+            enable();
+        }
+    }
+
+    /**
+     * Check if effect is enabled
+     *
+     * Thread-safe: Can be called from any thread
+     *
+     * @return true if choked (muted), false if unmuted
+     */
+    bool isEnabled() const override {
+        return m_isEnabled.load(std::memory_order_acquire);
+    }
+
+    /**
+     * Get effect name
+     *
+     * @return "Choke"
+     */
+    const char* getName() const override {
+        return "Choke";
+    }
+
+    // ========================================================================
+    // LEGACY API (BACKWARD COMPATIBLE - will be removed in Phase 5)
+    // ========================================================================
+
+    /**
+     * LEGACY: Engage choke (start fade to silence)
+     *
+     * @deprecated Use enable() instead
      *
      * Thread-safe: Can be called from any thread
      * Effect: Audio fades to silence over 10ms
      */
     void engage() {
-        m_targetGain = 0.0f;  // Mute
-        m_isChoked.store(true, std::memory_order_release);
+        enable();  // Forward to new interface
     }
 
     /**
-     * Release choke (start fade to full volume)
+     * LEGACY: Release choke (start fade to full volume)
+     *
+     * @deprecated Use disable() instead
      *
      * Thread-safe: Can be called from any thread
      * Effect: Audio fades to full volume over 10ms
@@ -78,17 +156,18 @@ public:
      * Note: Named releaseChoke() to avoid conflict with AudioStream::release()
      */
     void releaseChoke() {
-        m_targetGain = 1.0f;  // Unmute
-        m_isChoked.store(false, std::memory_order_release);
+        disable();  // Forward to new interface
     }
 
     /**
-     * Query choke state
+     * LEGACY: Query choke state
+     *
+     * @deprecated Use isEnabled() instead
      *
      * @return true if choked (muted or fading to mute)
      */
     bool isChoked() const {
-        return m_isChoked.load(std::memory_order_acquire);
+        return isEnabled();  // Forward to new interface
     }
 
     /**
@@ -153,9 +232,6 @@ private:
         }
     }
 
-    // Audio queue storage (required by AudioStream)
-    audio_block_t* inputQueueArray[2];
-
     // Fade parameters
     static constexpr float FADE_TIME_MS = 10.0f;  // 10ms crossfade
     static constexpr float FADE_SAMPLES = (FADE_TIME_MS / 1000.0f) * 44100.0f;  // 441 samples
@@ -164,6 +240,7 @@ private:
     float m_currentGain;  // Current gain (ramped smoothly)
     float m_targetGain;   // Target gain (0.0 = mute, 1.0 = full volume)
 
-    // Choke state (atomic for lock-free cross-thread access)
-    std::atomic<bool> m_isChoked;
+    // Effect state (atomic for lock-free cross-thread access)
+    // Note: For choke, enabled=true means muted, enabled=false means unmuted
+    std::atomic<bool> m_isEnabled;
 };

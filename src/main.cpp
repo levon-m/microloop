@@ -34,6 +34,7 @@
 #include "choke_io.h"
 #include "display_io.h"
 #include "audio_choke.h"
+#include "effect_manager.h"
 #include "trace.h"
 #include "timekeeper.h"
 #include "audio_timekeeper.h"
@@ -274,6 +275,33 @@ void setup() {
     } else {
         Serial.println("Display: OK (SSD1306 on I2C 0x3C / Wire1)");
     }
+
+    // ========== EFFECT MANAGER SETUP ==========
+    /**
+     * Register effects in global registry
+     *
+     * WHAT IT DOES:
+     * - Registers choke effect with EffectManager
+     * - Enables polymorphic control via Command system (future)
+     *
+     * WHY HERE?
+     * - After all hardware initialized (codec, Neokey, display)
+     * - Before threads start (no race conditions)
+     * - Effect objects are global (exist in main.cpp scope)
+     *
+     * NOTE: Registration failure is FATAL (system won't work correctly)
+     */
+    if (!EffectManager::registerEffect(EffectID::CHOKE, &choke)) {
+        Serial.println("FATAL: Failed to register choke effect!");
+        while (1) {
+            // Blink LED rapidly to indicate error
+            digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+            delay(100);
+        }
+    }
+    Serial.print("Effect Manager: Registered ");
+    Serial.print(EffectManager::getNumEffects());
+    Serial.println(" effect(s)");
 
     // ========== THREAD CREATION ==========
     /**

@@ -230,9 +230,13 @@ add_library(display_io STATIC src/display_io.cpp)
 target_include_directories(display_io PUBLIC include)
 target_link_libraries(display_io teensy_core teensy_threads ssd1306 gfx wire microloop_utils)
 
+add_library(effect_manager STATIC src/effect_manager.cpp)
+target_include_directories(effect_manager PUBLIC include)
+target_link_libraries(effect_manager teensy_core audio)
+
 add_library(app_logic STATIC src/app_logic.cpp)
 target_include_directories(app_logic PUBLIC include)
-target_link_libraries(app_logic teensy_core teensy_threads midi_io choke_io display_io microloop_utils)
+target_link_libraries(app_logic teensy_core teensy_threads midi_io choke_io display_io effect_manager microloop_utils)
 
 # MAIN
 add_executable(microloop.elf src/main.cpp)
@@ -252,6 +256,7 @@ target_link_libraries(microloop.elf
     choke_io
     display_io
     app_logic
+    effect_manager
     seesaw
     neopixel
     busio
