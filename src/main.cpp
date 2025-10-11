@@ -31,37 +31,44 @@
 #include "SGTL5000.h"
 #include "midi_io.h"
 #include "app_logic.h"
+#include "choke_io.h"
+#include "audio_choke.h"
 #include "trace.h"
 #include "timekeeper.h"
 #include "audio_timekeeper.h"
 
 // ========== AUDIO GRAPH ==========
 /**
- * Stereo passthrough with TimeKeeper integration
+ * Stereo audio chain with TimeKeeper and Choke effect
  *
  * TOPOLOGY:
- *   I2S Input → TimeKeeper → I2S Output
+ *   I2S Input → TimeKeeper → Choke → I2S Output
  *
- * WHY INSERT TIMEKEEPER?
- * - Tracks sample position (incremented every audio block)
- * - Provides sample-accurate timing for quantization
- * - Zero-copy passthrough (no audio processing overhead)
+ * SIGNAL FLOW:
+ * 1. I2S Input: Line-in from audio shield (stereo)
+ * 2. TimeKeeper: Sample position tracking (zero-latency passthrough)
+ * 3. Choke: Smooth mute effect with 10ms crossfade
+ * 4. I2S Output: Line-out/headphone (stereo)
  *
  * LATENCY:
  * - Audio Library block size: 128 samples
  * - At 44.1kHz: 128/44100 ≈ 2.9ms per block
  * - Total latency: ~6ms (input buffer + output buffer)
- * - TimeKeeper adds <1µs overhead (negligible)
+ * - TimeKeeper overhead: <1µs (negligible)
+ * - Choke overhead: ~50 cycles passthrough, ~2000 cycles fading
  */
 AudioInputI2S i2s_in;
 AudioTimeKeeper timekeeper;  // Tracks sample position
+AudioEffectChoke choke;      // Smooth mute effect
 AudioOutputI2S i2s_out;
 
-// Audio connections
-AudioConnection patchCord1(i2s_in, 0, timekeeper, 0);  // Left in → TimeKeeper
-AudioConnection patchCord2(i2s_in, 1, timekeeper, 1);  // Right in → TimeKeeper
-AudioConnection patchCord3(timekeeper, 0, i2s_out, 0); // TimeKeeper → Left out
-AudioConnection patchCord4(timekeeper, 1, i2s_out, 1); // TimeKeeper → Right out
+// Audio connections (stereo L+R)
+AudioConnection patchCord1(i2s_in, 0, timekeeper, 0);   // Left in → TimeKeeper
+AudioConnection patchCord2(i2s_in, 1, timekeeper, 1);   // Right in → TimeKeeper
+AudioConnection patchCord3(timekeeper, 0, choke, 0);    // TimeKeeper → Choke (L)
+AudioConnection patchCord4(timekeeper, 1, choke, 1);    // TimeKeeper → Choke (R)
+AudioConnection patchCord5(choke, 0, i2s_out, 0);       // Choke → Left out
+AudioConnection patchCord6(choke, 1, i2s_out, 1);       // Choke → Right out
 
 // Custom SGTL5000 codec driver
 SGTL5000 codec;
@@ -84,6 +91,21 @@ void ioThreadEntry() {
 }
 
 /**
+ * Choke I/O Thread: Neokey button polling
+ *
+ * PRIORITY: High (responsive to button presses)
+ * STACK: 2048 bytes (enough for I2C library + Seesaw)
+ *
+ * WHY SEPARATE THREAD?
+ * - Decouples I2C latency from app logic and MIDI
+ * - Hybrid interrupt approach: Fast response, low CPU
+ * - Matches architecture pattern (I/O threads for external inputs)
+ */
+void chokeThreadEntry() {
+    ChokeIO::threadLoop();  // Never returns
+}
+
+/**
  * App Thread: Application logic and UI
  *
  * PRIORITY: Normal (can afford to be slower)
@@ -91,7 +113,7 @@ void ioThreadEntry() {
  *
  * WHY SEPARATE THREAD?
  * - App logic can be bursty (UI updates, calculations)
- * - Isolation: App bugs won't crash MIDI I/O
+ * - Isolation: App bugs won't crash MIDI I/O or Choke I/O
  * - Easier to reason about: Clear separation of concerns
  */
 void appThreadEntry() {
@@ -196,6 +218,27 @@ void setup() {
     AppLogic::begin();
     Serial.println("App Logic: OK");
 
+    // ========== CHOKE I/O SETUP ==========
+    /**
+     * Initialize Neokey 1x4 button input
+     *
+     * WHAT IT DOES:
+     * - Initializes Wire2 (I2C bus 2: SDA2=pin 25, SCL2=pin 24)
+     * - Initializes Seesaw I2C communication
+     * - Configures key 0 for interrupt-on-change
+     * - Sets up INT pin on Teensy (pin 33)
+     * - Sets initial LED state (green = unmuted)
+     */
+    if (!ChokeIO::begin()) {
+        Serial.println("ERROR: Choke I/O init failed!");
+        while (1) {
+            // Blink LED rapidly to indicate error
+            digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+            delay(100);
+        }
+    }
+    Serial.println("Choke I/O: OK (Neokey on I2C 0x30 / Wire2)");
+
     // ========== THREAD CREATION ==========
     /**
      * TeensyThreads: Cooperative multithreading
@@ -217,9 +260,10 @@ void setup() {
      * 3. If overflow, increase by 1KB and repeat
      */
     int ioThreadId = threads.addThread(ioThreadEntry, 2048);
+    int chokeThreadId = threads.addThread(chokeThreadEntry, 2048);
     int appThreadId = threads.addThread(appThreadEntry, 3072);
 
-    if (ioThreadId < 0 || appThreadId < 0) {
+    if (ioThreadId < 0 || chokeThreadId < 0 || appThreadId < 0) {
         Serial.println("ERROR: Thread creation failed!");
         while (1);  // Halt
     }

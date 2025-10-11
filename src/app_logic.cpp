@@ -1,8 +1,13 @@
 #include "app_logic.h"
 #include "midi_io.h"
+#include "choke_io.h"
+#include "audio_choke.h"
 #include "trace.h"
 #include "timekeeper.h"
 #include <TeensyThreads.h>
+
+// External reference to choke audio effect (defined in main.cpp)
+extern AudioEffectChoke choke;
 
 /**
  * Application Logic Implementation
@@ -64,13 +69,40 @@ void AppLogic::threadLoop() {
      * APP THREAD MAIN LOOP
      *
      * EXECUTION ORDER (matters!):
-     * 1. Process transport events (START/STOP affects LED state)
-     * 2. Process clock ticks (update beat position, drive LED)
-     * 3. Periodic debug output
-     * 4. Yield CPU
+     * 1. Process choke events (button press/release)
+     * 2. Process transport events (START/STOP affects LED state)
+     * 3. Process clock ticks (update beat position, drive LED)
+     * 4. Periodic debug output
+     * 5. Yield CPU
      */
     for (;;) {
-        // ========== 1. DRAIN TRANSPORT EVENTS ==========
+        // ========== 1. DRAIN CHOKE EVENTS ==========
+        /**
+         * WHY PROCESS CHOKE FIRST?
+         * - Button response should be immediate (user perception)
+         * - Choke is independent of MIDI transport state
+         * - Processing early minimizes latency
+         */
+        ChokeEvent chokeEvent;
+        while (ChokeIO::popEvent(chokeEvent)) {
+            switch (chokeEvent) {
+                case ChokeEvent::BUTTON_PRESS:
+                    // Button pressed → engage choke (mute audio)
+                    choke.engage();
+                    ChokeIO::setLED(true);  // Red LED
+                    Serial.println("🔇 Choke ENGAGED");
+                    break;
+
+                case ChokeEvent::BUTTON_RELEASE:
+                    // Button released → release choke (unmute audio)
+                    choke.releaseChoke();
+                    ChokeIO::setLED(false);  // Green LED
+                    Serial.println("🔊 Choke RELEASED");
+                    break;
+            }
+        }
+
+        // ========== 2. DRAIN TRANSPORT EVENTS ==========
         /**
          * WHY DRAIN COMPLETELY?
          * - Events are rare (only on start/stop)
@@ -138,7 +170,7 @@ void AppLogic::threadLoop() {
             }
         }
 
-        // ========== 2. DRAIN CLOCK TICKS ==========
+        // ========== 3. DRAIN CLOCK TICKS ==========
         /**
          * WHY DRAIN COMPLETELY (NOT JUST ONE)?
          * - If app thread stalls, ticks pile up in queue
@@ -219,7 +251,7 @@ void AppLogic::threadLoop() {
             }
         }
 
-        // ========== 3. PERIODIC DEBUG OUTPUT ==========
+        // ========== 4. PERIODIC DEBUG OUTPUT ==========
         /**
          * WHY RATE LIMIT SERIAL OUTPUT?
          * - Serial.print is SLOW (~100-500µs per call)
@@ -236,7 +268,7 @@ void AppLogic::threadLoop() {
             lastPrint = now;
         }
 
-        // ========== 4. YIELD CPU ==========
+        // ========== 5. YIELD CPU ==========
         /**
          * WHY 2ms DELAY?
          * - MIDI clocks arrive every ~20ms at 120 BPM
