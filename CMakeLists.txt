@@ -67,8 +67,8 @@ set(THREADS_LIB "${TEENSY_LIBS}/TeensyThreads")
 set(SEESAW_LIB "${TEENSY_LIBS}/Adafruit_seesaw_Library")
 set(NEOPIXEL_LIB "${TEENSY_LIBS}/Adafruit_NeoPixel")
 set(BUSIO_LIB "${TEENSY_LIBS}/Adafruit_BusIO")
-set(SSD1306_LIB "${TEENSY_LIBS}/Adafruit_SSD1306")
-set(GFX_LIB "${TEENSY_LIBS}/Adafruit_GFX_Library")
+set(SSD1306_LIB "${TEENSY_LIBS}/Adafruit_SSD1306-2.5.15")
+set(GFX_LIB "${TEENSY_LIBS}/Adafruit-GFX-Library-1.12.3")
 
 # Include directories
 include_directories(
@@ -111,6 +111,13 @@ add_library(wire STATIC
 )
 target_include_directories(wire PUBLIC ${WIRE_LIB})
 target_link_libraries(wire teensy_core)
+
+# SPI library (required by SSD1306)
+add_library(spi STATIC
+    ${TEENSY_LIBS}/SPI/SPI.cpp
+)
+target_include_directories(spi PUBLIC ${TEENSY_LIBS}/SPI)
+target_link_libraries(spi teensy_core)
 
 # TeensyThreads library
 add_library(teensy_threads STATIC
@@ -193,7 +200,7 @@ if(NOT EXISTS "${SSD1306_LIB}/Adafruit_SSD1306.cpp")
 endif()
 add_library(ssd1306 STATIC "${SSD1306_LIB}/Adafruit_SSD1306.cpp")
 target_include_directories(ssd1306 PUBLIC ${SSD1306_LIB})
-target_link_libraries(ssd1306 teensy_core wire gfx)
+target_link_libraries(ssd1306 teensy_core wire spi gfx)
 message(STATUS "Adafruit SSD1306 Library found")
 
 # Utils library (now has trace.cpp and timekeeper.cpp)
@@ -237,6 +244,7 @@ target_link_libraries(microloop.elf
     teensy_core
     audio
     wire
+    spi
     midi
     teensy_threads
     sgtl5000

@@ -9,6 +9,7 @@ The MicroLoop display system uses 128x64 monochrome bitmaps stored in PROGMEM to
 **LCDAssistant** - Free bitmap converter for monochrome displays
 - Download: http://en.radzio.dxp.pl/bitmap_converter/
 - Windows only (works in Wine on Mac/Linux)
+- **Note:** This is the ONLY tool you need - no Arduino IDE required!
 
 ## Creating Bitmaps
 
