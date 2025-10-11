@@ -1,6 +1,7 @@
 #include "app_logic.h"
 #include "midi_io.h"
 #include "choke_io.h"
+#include "display_io.h"
 #include "audio_choke.h"
 #include "trace.h"
 #include "timekeeper.h"
@@ -90,6 +91,7 @@ void AppLogic::threadLoop() {
                     // Button pressed → engage choke (mute audio)
                     choke.engage();
                     ChokeIO::setLED(true);  // Red LED
+                    DisplayIO::showChoke();  // Show choke bitmap
                     Serial.println("🔇 Choke ENGAGED");
                     break;
 
@@ -97,6 +99,7 @@ void AppLogic::threadLoop() {
                     // Button released → release choke (unmute audio)
                     choke.releaseChoke();
                     ChokeIO::setLED(false);  // Green LED
+                    DisplayIO::showDefault();  // Return to default bitmap
                     Serial.println("🔊 Choke RELEASED");
                     break;
             }

@@ -67,6 +67,8 @@ set(THREADS_LIB "${TEENSY_LIBS}/TeensyThreads")
 set(SEESAW_LIB "${TEENSY_LIBS}/Adafruit_seesaw_Library")
 set(NEOPIXEL_LIB "${TEENSY_LIBS}/Adafruit_NeoPixel")
 set(BUSIO_LIB "${TEENSY_LIBS}/Adafruit_BusIO")
+set(SSD1306_LIB "${TEENSY_LIBS}/Adafruit_SSD1306")
+set(GFX_LIB "${TEENSY_LIBS}/Adafruit_GFX_Library")
 
 # Include directories
 include_directories(
@@ -80,6 +82,8 @@ include_directories(
     ${SEESAW_LIB}
     ${NEOPIXEL_LIB}
     ${BUSIO_LIB}
+    ${SSD1306_LIB}
+    ${GFX_LIB}
     ${TEENSY_LIBS}/SPI
     ${TEENSY_LIBS}/SD/src
     ${TEENSY_LIBS}/SdFat/src
@@ -169,6 +173,29 @@ target_include_directories(neopixel PUBLIC ${NEOPIXEL_LIB})
 target_link_libraries(neopixel teensy_core)
 message(STATUS "Adafruit NeoPixel Library found")
 
+# Adafruit GFX library (for graphics primitives, required by SSD1306)
+# REQUIRED: Install via Arduino IDE Library Manager: "Adafruit GFX Library"
+if(NOT EXISTS "${GFX_LIB}/Adafruit_GFX.cpp")
+    message(FATAL_ERROR "Adafruit GFX Library NOT found. Install via Arduino IDE: Tools → Manage Libraries → Search 'Adafruit GFX'")
+endif()
+add_library(gfx STATIC
+    "${GFX_LIB}/Adafruit_GFX.cpp"
+    "${GFX_LIB}/glcdfont.c"
+)
+target_include_directories(gfx PUBLIC ${GFX_LIB})
+target_link_libraries(gfx teensy_core)
+message(STATUS "Adafruit GFX Library found")
+
+# Adafruit SSD1306 library (for OLED display)
+# REQUIRED: Install via Arduino IDE Library Manager: "Adafruit SSD1306"
+if(NOT EXISTS "${SSD1306_LIB}/Adafruit_SSD1306.cpp")
+    message(FATAL_ERROR "Adafruit SSD1306 Library NOT found. Install via Arduino IDE: Tools → Manage Libraries → Search 'Adafruit SSD1306'")
+endif()
+add_library(ssd1306 STATIC "${SSD1306_LIB}/Adafruit_SSD1306.cpp")
+target_include_directories(ssd1306 PUBLIC ${SSD1306_LIB})
+target_link_libraries(ssd1306 teensy_core wire gfx)
+message(STATUS "Adafruit SSD1306 Library found")
+
 # Utils library (now has trace.cpp and timekeeper.cpp)
 add_library(microloop_utils STATIC
     utils/trace.cpp
@@ -192,9 +219,13 @@ add_library(choke_io STATIC src/choke_io.cpp)
 target_include_directories(choke_io PUBLIC include)
 target_link_libraries(choke_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
 
+add_library(display_io STATIC src/display_io.cpp)
+target_include_directories(display_io PUBLIC include)
+target_link_libraries(display_io teensy_core teensy_threads ssd1306 gfx wire microloop_utils)
+
 add_library(app_logic STATIC src/app_logic.cpp)
 target_include_directories(app_logic PUBLIC include)
-target_link_libraries(app_logic teensy_core teensy_threads midi_io choke_io microloop_utils)
+target_link_libraries(app_logic teensy_core teensy_threads midi_io choke_io display_io microloop_utils)
 
 # MAIN
 add_executable(microloop.elf src/main.cpp)
@@ -211,10 +242,13 @@ target_link_libraries(microloop.elf
     sgtl5000
     midi_io
     choke_io
+    display_io
     app_logic
     seesaw
     neopixel
     busio
+    ssd1306
+    gfx
     microloop_utils
     m  # Math library
 )

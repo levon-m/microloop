@@ -32,6 +32,7 @@
 #include "midi_io.h"
 #include "app_logic.h"
 #include "choke_io.h"
+#include "display_io.h"
 #include "audio_choke.h"
 #include "trace.h"
 #include "timekeeper.h"
@@ -103,6 +104,22 @@ void ioThreadEntry() {
  */
 void chokeThreadEntry() {
     ChokeIO::threadLoop();  // Never returns
+}
+
+/**
+ * Display I/O Thread: OLED display updates
+ *
+ * PRIORITY: Lower (visual feedback, not time-critical)
+ * STACK: 2048 bytes (enough for I2C library + Adafruit GFX)
+ *
+ * WHY SEPARATE THREAD?
+ * - Display updates are slow (~20-30ms for full screen)
+ * - Decouples display latency from audio/MIDI/choke
+ * - Command queue allows async updates
+ * - Future menu system won't block other threads
+ */
+void displayThreadEntry() {
+    DisplayIO::threadLoop();  // Never returns
 }
 
 /**
@@ -239,6 +256,25 @@ void setup() {
     }
     Serial.println("Choke I/O: OK (Neokey on I2C 0x30 / Wire2)");
 
+    // ========== DISPLAY SETUP ==========
+    /**
+     * Initialize OLED Display
+     *
+     * WHAT IT DOES:
+     * - Initializes Wire1 (I2C bus 1: SDA1=pin 17, SCL1=pin 16)
+     * - Initializes SSD1306 display (I2C 0x3C)
+     * - Clears display
+     * - Shows default bitmap
+     *
+     * NOTE: Display initialization failure is non-fatal (optional peripheral)
+     */
+    if (!DisplayIO::begin()) {
+        Serial.println("WARNING: Display init failed (will continue without display)");
+        // Continue anyway - display is optional for basic functionality
+    } else {
+        Serial.println("Display: OK (SSD1306 on I2C 0x3C / Wire1)");
+    }
+
     // ========== THREAD CREATION ==========
     /**
      * TeensyThreads: Cooperative multithreading
@@ -261,9 +297,10 @@ void setup() {
      */
     int ioThreadId = threads.addThread(ioThreadEntry, 2048);
     int chokeThreadId = threads.addThread(chokeThreadEntry, 2048);
+    int displayThreadId = threads.addThread(displayThreadEntry, 2048);
     int appThreadId = threads.addThread(appThreadEntry, 3072);
 
-    if (ioThreadId < 0 || chokeThreadId < 0 || appThreadId < 0) {
+    if (ioThreadId < 0 || chokeThreadId < 0 || displayThreadId < 0 || appThreadId < 0) {
         Serial.println("ERROR: Thread creation failed!");
         while (1);  // Halt
     }
