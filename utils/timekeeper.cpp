@@ -25,6 +25,9 @@ volatile uint32_t TimeKeeper::s_samplesPerBeat = TimeKeeper::DEFAULT_SAMPLES_PER
 // Transport state
 volatile TimeKeeper::TransportState TimeKeeper::s_transportState = TransportState::STOPPED;
 
+// Beat notification
+volatile bool TimeKeeper::s_beatFlag = false;
+
 // ========== INITIALIZATION ==========
 
 void TimeKeeper::begin() {
@@ -125,6 +128,10 @@ void TimeKeeper::incrementTick() {
      * This is called from app thread only, so we don't need atomics
      * for the read-modify-write of tickInBeat. But we use atomics
      * for beatNumber since audio ISR may read it concurrently.
+     *
+     * BEAT FLAG:
+     * When beat advances, we set s_beatFlag for external consumers
+     * (e.g., beat LED). This provides perfect beat visualization.
      */
     uint32_t tick = __atomic_load_n(&s_tickInBeat, __ATOMIC_RELAXED);
     tick++;
@@ -133,6 +140,10 @@ void TimeKeeper::incrementTick() {
         // New beat started
         tick = 0;
         uint32_t newBeat = __atomic_fetch_add(&s_beatNumber, 1U, __ATOMIC_RELAXED) + 1;
+
+        // Set beat flag for external beat indicators (LED, display, etc.)
+        __atomic_store_n(&s_beatFlag, true, __ATOMIC_RELEASE);
+
         TRACE(TRACE_TIMEKEEPER_BEAT_ADVANCE, newBeat & 0xFFFF);
     }
 
@@ -283,4 +294,26 @@ bool TimeKeeper::isOnBarBoundary() {
     if (getBeatInBar() != 0) return false;
 
     return isOnBeatBoundary();
+}
+
+// ========== BEAT NOTIFICATION API ==========
+
+bool TimeKeeper::pollBeatFlag() {
+    /**
+     * Test-and-clear beat flag
+     *
+     * OPERATION: Atomic exchange with false
+     * - Returns current flag value
+     * - Sets flag to false atomically
+     * - Never misses a beat (flag stays set until consumed)
+     *
+     * PERFORMANCE:
+     * - Single atomic instruction (~20-30 CPU cycles)
+     * - Memory ordering: acquire-release (ensures visibility)
+     *
+     * USAGE:
+     * Called from App thread every 2ms to check for beat boundaries.
+     * If returns true, beat has occurred since last check.
+     */
+    return __atomic_exchange_n(&s_beatFlag, false, __ATOMIC_ACQ_REL);
 }

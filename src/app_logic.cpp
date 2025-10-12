@@ -14,43 +14,47 @@ extern AudioEffectChoke choke;
 /**
  * Application Logic Implementation
  *
- * FEATURE: LED Beat Indicator
- * - Blinks LED on every beat (24 clock ticks)
- * - LED on for first 12 ticks, off for last 12 ticks (50% duty cycle)
+ * FEATURE: LED Beat Indicator (TimeKeeper-based)
+ * - Blinks LED on every beat using TimeKeeper's atomic beat flag
+ * - LED on at beat start (tick 0), off after 2 ticks (~40ms @ 120 BPM)
  * - Pauses on MIDI STOP, resumes on START/CONTINUE
+ * - Sample-accurate beat tracking (foundation for loop quantization)
  *
  * KEY DESIGN DECISIONS:
  *
- * 1. WHY COUNT TO 24 (NOT 23)?
- *    - MIDI clock: 24 PPQN (Pulses Per Quarter Note)
- *    - Tick 0-23 = one beat, tick 24 starts next beat
- *    - We reset counter when tickCount reaches 24
+ * 1. WHY TIMEKEEPER BEAT FLAG?
+ *    - Single source of timing truth (MIDI clock ↔ audio samples)
+ *    - Sample-accurate beat boundaries (±128 samples ≈ ±2.9ms)
+ *    - Atomic operations for lock-free cross-thread communication
+ *    - Never misses a beat (flag persists until polled)
  *
- * 2. WHY 50% DUTY CYCLE?
- *    - Clear visual feedback (on-off pattern)
+ * 2. WHY SHORT PULSE (2 ticks ≈ 40ms)?
+ *    - Clear visual feedback without distraction
  *    - Easy to see beat at a glance
- *    - Alternative: Short pulse (10% duty) - harder to see
+ *    - Short enough to not interfere with performance
  *
- * 3. WHY RESET ON START (NOT CONTINUE)?
- *    - START = sequencer reset to beginning (tick 0)
- *    - CONTINUE = resume from pause (keep tick position)
- *    - This matches DAW behavior
+ * 3. WHY POLL BEAT FLAG IN APP THREAD?
+ *    - TimeKeeper::incrementTick() sets flag when beat advances
+ *    - App thread polls every 2ms (low latency)
+ *    - LED control separated from MIDI clock processing
+ *    - Clean separation of concerns
  *
  */
 
 // LED configuration
 static constexpr uint8_t LED_PIN = 31;
 
-// Beat tracking state
-static uint8_t tickCount = 0;         // Current tick within beat (0-23)
+// Transport state
 static bool transportActive = false;  // Is sequencer running?
 
-// Timestamp-based timing state
-static uint32_t beatStartMicros = 0;  // Timestamp of last beat start (tick 0)
+// MIDI clock timing state (for TimeKeeper sync)
 static uint32_t lastTickMicros = 0;   // Timestamp of last tick (for BPM calc)
 //initialized to default value so no errors/crashes
 static uint32_t avgTickPeriodUs = 20833; // Average period between ticks (~20.8ms @ 120BPM)
                                           // Updated dynamically via exponential moving average
+
+// LED beat indicator state
+static uint8_t ledBeatTick = 0xFF;  // Tick when LED was turned on (0xFF = LED off)
 
 // Debug output rate limiting
 static uint32_t lastPrint = 0;
@@ -62,7 +66,6 @@ void AppLogic::begin() {
     digitalWrite(LED_PIN, LOW);  // Start with LED off
 
     // Initialize state
-    tickCount = 0;
     transportActive = false;
 }
 
@@ -141,22 +144,23 @@ void AppLogic::threadLoop() {
                 case MidiEvent::START:
                     /**
                      * START: Reset to beginning
-                     * - Reset tick counter (we're at beat 0, tick 0)
                      * - Reset timestamps (start fresh timing)
-                     * - Reset TimeKeeper (sample 0, beat 0)
+                     * - Reset TimeKeeper (sample 0, beat 0, tick 0)
                      * - Enable transport
-                     * - Turn on LED (start of beat)
+                     * - Turn on LED immediately (we're at beat 0, tick 0)
                      */
-                    tickCount = 0;
-                    beatStartMicros = micros();
                     lastTickMicros = 0;  // Reset for fresh EMA
                     transportActive = true;
 
-                    // Reset TimeKeeper to beat 0, sample 0
+                    // Reset TimeKeeper to beat 0, sample 0, tick 0
                     TimeKeeper::reset();
                     TimeKeeper::setTransportState(TimeKeeper::TransportState::PLAYING);
 
+                    // Turn on LED for beat 0 (first beat starts immediately)
                     digitalWrite(LED_PIN, HIGH);
+                    ledBeatTick = 0;  // Mark LED on at tick 0
+                    TRACE(TRACE_BEAT_LED_ON);
+
                     TRACE(TRACE_MIDI_START);
                     Serial.println("▶ START");
                     break;
@@ -167,12 +171,13 @@ void AppLogic::threadLoop() {
                      * - Disable transport (ignore clock ticks)
                      * - Update TimeKeeper transport state
                      * - Turn off LED (visual feedback of stopped state)
-                     * - Keep tick counter (CONTINUE will resume from here)
+                     * - Reset LED state machine
                      */
                     transportActive = false;
                     TimeKeeper::setTransportState(TimeKeeper::TransportState::STOPPED);
 
                     digitalWrite(LED_PIN, LOW);
+                    ledBeatTick = 0xFF;  // Reset LED state machine
                     TRACE(TRACE_MIDI_STOP);
                     Serial.println("■ STOP");
                     break;
@@ -182,14 +187,12 @@ void AppLogic::threadLoop() {
                      * CONTINUE: Resume from pause
                      * - Enable transport
                      * - Update TimeKeeper transport state
-                     * - Don't reset tick counter (resume from last position)
-                     * - Update LED based on current tick position
+                     * - TimeKeeper maintains beat/tick position across STOP/CONTINUE
+                     * - LED will update automatically based on TimeKeeper state
                      */
                     transportActive = true;
                     TimeKeeper::setTransportState(TimeKeeper::TransportState::PLAYING);
 
-                    // Set LED state based on current position
-                    digitalWrite(LED_PIN, (tickCount < 12) ? HIGH : LOW);
                     TRACE(TRACE_MIDI_CONTINUE);
                     Serial.println("▶ CONTINUE");
                     break;
@@ -218,23 +221,23 @@ void AppLogic::threadLoop() {
             }
 
             /**
-             * TIMESTAMP-BASED BEAT TRACKING
+             * MIDI CLOCK TO TIMEKEEPER SYNC
              *
              * APPROACH:
              * 1. Calculate tick period (time between ticks) using exponential moving average
-             * 2. Track beat start time (tick 0)
-             * 3. Update LED based on elapsed time from beat start, not just tick count
+             * 2. Sync TimeKeeper with tick period (converts to samples per beat)
+             * 3. TimeKeeper handles all beat/bar tracking and sample-accurate timing
              *
              * BENEFITS:
-             * - Immune to MIDI jitter (smooths out irregular tick arrival)
-             * - LED timing stays rock-solid even with jittery MIDI
-             * - Foundation for sample-accurate quantization (future)
+             * - TimeKeeper provides single source of timing truth
+             * - Sample-accurate beat tracking (for future loop quantization)
+             * - LED driven by TimeKeeper beat flag (perfect accuracy)
              *
              * MATH:
              * - MIDI clock: 24 PPQN (Pulses Per Quarter Note)
              * - At 120 BPM: 24 ticks per beat, 2 beats/sec = 48 ticks/sec
              * - Tick period: 1/48 = 20.833ms = 20833µs
-             * - Half beat (LED transition): 12 ticks × 20833µs = 250ms
+             * - TimeKeeper converts to samples: 22050 samples/beat @ 120 BPM
              */
 
             // Update tick period estimate (exponential moving average)
@@ -255,24 +258,54 @@ void AppLogic::threadLoop() {
             }
             lastTickMicros = clockMicros;
 
-            // Increment tick counter (both local and TimeKeeper)
-            tickCount++;
-            TimeKeeper::incrementTick();  // Tracks ticks 0-23, auto-advances beat at 24
+            // Increment TimeKeeper tick counter
+            // TimeKeeper tracks ticks 0-23, auto-advances beat at 24, sets beat flag
+            TimeKeeper::incrementTick();
+        }
 
-            // Reset at beat boundary and capture beat start timestamp
-            if (tickCount >= 24) {
-                tickCount = 0;
-                beatStartMicros = clockMicros;
-                digitalWrite(LED_PIN, HIGH);  // Turn on immediately at beat start
-                TRACE(TRACE_BEAT_START);
-                TRACE(TRACE_BEAT_LED_ON);
-                // Beat counter already incremented by TimeKeeper::incrementTick()
+        // ========== 3A. TIMEKEEPER BEAT LED CONTROL ==========
+        /**
+         * WHY POLL BEAT FLAG HERE (NOT IN CLOCK LOOP)?
+         * - TimeKeeper::incrementTick() sets atomic beat flag when beat advances
+         * - We poll once per main loop (every 2ms) to check for beat boundaries
+         * - Flag stays set until cleared (never miss a beat)
+         * - LED timing driven by TimeKeeper's sample-accurate beat tracking
+         *
+         * LED PULSE PATTERN:
+         * - Turn ON at beat start (tick 0)
+         * - Turn OFF after 2 ticks (~40ms @ 120 BPM)
+         * - State machine prevents race condition between beat flag and tick queries
+         *
+         * STATE MACHINE:
+         * - ledBeatTick = 0xFF → LED off, waiting for beat
+         * - ledBeatTick = 0 → LED on, turned on at tick 0
+         * - When current tick advances 2+ ticks from ledBeatTick → turn LED off
+         */
+        uint32_t currentTick = TimeKeeper::getTickInBeat();
+
+        // Check for new beat
+        if (TimeKeeper::pollBeatFlag()) {
+            // Beat boundary crossed - turn on LED and record tick
+            digitalWrite(LED_PIN, HIGH);
+            ledBeatTick = 0;  // Record that LED was turned on at tick 0
+            TRACE(TRACE_BEAT_LED_ON);
+        }
+
+        // Turn off LED after pulse duration (if LED is currently on)
+        if (ledBeatTick != 0xFF) {
+            // Calculate tick delta (handle wraparound: tick 23 → tick 0)
+            uint8_t tickDelta;
+            if (currentTick >= ledBeatTick) {
+                tickDelta = currentTick - ledBeatTick;
+            } else {
+                // Wraparound case (shouldn't happen with ledBeatTick=0, but be safe)
+                tickDelta = (24 - ledBeatTick) + currentTick;
             }
 
-            // Turn off LED after short pulse (2 ticks = ~40ms @ 120 BPM)
-            // Using tick count is simpler and avoids timestamp calculation every tick
-            if (tickCount == 2) {
+            // Turn off after 2 ticks (~40ms @ 120 BPM)
+            if (tickDelta >= 2) {
                 digitalWrite(LED_PIN, LOW);
+                ledBeatTick = 0xFF;  // Mark LED as off
                 TRACE(TRACE_BEAT_LED_OFF);
             }
         }

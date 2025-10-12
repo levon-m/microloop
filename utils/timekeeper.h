@@ -285,6 +285,32 @@ public:
      */
     static bool isOnBarBoundary();
 
+    // ========== BEAT NOTIFICATION API ==========
+
+    /**
+     * Check and clear beat boundary flag (for external beat indicators)
+     *
+     * Thread-safe: Can be called from any thread
+     * Real-time safe: Wait-free (atomic exchange)
+     *
+     * @return true if beat boundary crossed since last check
+     *
+     * USAGE:
+     * This flag is set by TimeKeeper::incrementTick() when beat advances,
+     * and cleared by consumer (e.g., App thread for LED control).
+     *
+     * Example:
+     *   if (TimeKeeper::pollBeatFlag()) {
+     *       digitalWrite(LED_PIN, HIGH);  // Turn on LED at beat
+     *   }
+     *
+     * BENEFITS:
+     * - Never misses a beat (flag stays set until consumed)
+     * - Zero-latency notification from incrementTick()
+     * - Perfect accuracy (same beat grid as quantization)
+     */
+    static bool pollBeatFlag();
+
 private:
     // ========== STATE (all volatile for cross-thread visibility) ==========
 
@@ -298,6 +324,9 @@ private:
 
     // Transport state
     static volatile TransportState s_transportState;
+
+    // Beat notification (for external beat indicators like LED)
+    static volatile bool s_beatFlag;  // Set by incrementTick(), cleared by pollBeatFlag()
 
     //avoid division by 0, set sensible defaults
     static constexpr uint32_t DEFAULT_BPM = 120;
