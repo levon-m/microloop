@@ -66,6 +66,7 @@ struct BitmapData {
  */
 static const BitmapData bitmapRegistry[] = {
     { bitmap_default, DISPLAY_WIDTH, DISPLAY_HEIGHT },        // BitmapID::DEFAULT
+    { bitmap_freeze_active, DISPLAY_WIDTH, DISPLAY_HEIGHT },  // BitmapID::FREEZE_ACTIVE
     { bitmap_choke_active, DISPLAY_WIDTH, DISPLAY_HEIGHT },   // BitmapID::CHOKE_ACTIVE
     // Add more bitmaps here as needed
 };

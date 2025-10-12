@@ -60,6 +60,9 @@ static uint64_t ledOffSample = 0;  // Sample position when LED should turn off (
 static uint32_t lastPrint = 0;
 static constexpr uint32_t PRINT_INTERVAL_MS = 1000;  // Print status every 1s
 
+// Display priority state (tracks last activated effect)
+static EffectID lastActivatedEffect = EffectID::NONE;
+
 void AppLogic::begin() {
     // Configure LED pin
     pinMode(LED_PIN, OUTPUT);
@@ -104,16 +107,36 @@ void AppLogic::threadLoop() {
                     if (effect) {
                         bool enabled = effect->isEnabled();
 
-                        // Update LED (Key 0 = choke)
+                        // Update LED
                         InputIO::setLED(cmd.targetEffect, enabled);
 
-                        // Update display (choke-specific for now)
-                        if (cmd.targetEffect == EffectID::CHOKE) {
-                            if (enabled) {
-                                DisplayIO::showChoke();
-                            } else {
-                                DisplayIO::showDefault();
-                            }
+                        // Track last activated effect for display priority
+                        if (enabled) {
+                            lastActivatedEffect = cmd.targetEffect;
+                        }
+
+                        // Update display with priority system
+                        // Show the most recently activated effect, or default if none active
+                        AudioEffectBase* freezeEffect = EffectManager::getEffect(EffectID::FREEZE);
+                        AudioEffectBase* chokeEffect = EffectManager::getEffect(EffectID::CHOKE);
+
+                        bool freezeActive = freezeEffect && freezeEffect->isEnabled();
+                        bool chokeActive = chokeEffect && chokeEffect->isEnabled();
+
+                        if (lastActivatedEffect == EffectID::FREEZE && freezeActive) {
+                            DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+                        } else if (lastActivatedEffect == EffectID::CHOKE && chokeActive) {
+                            DisplayIO::showChoke();
+                        } else if (freezeActive) {
+                            // Freeze is active but not last activated (show it anyway)
+                            DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+                        } else if (chokeActive) {
+                            // Choke is active but not last activated (show it anyway)
+                            DisplayIO::showChoke();
+                        } else {
+                            // No effects active - show default
+                            DisplayIO::showDefault();
+                            lastActivatedEffect = EffectID::NONE;
                         }
 
                         // Debug output

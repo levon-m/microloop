@@ -56,13 +56,14 @@ enum class DisplayCommand : uint8_t {
  * Add new IDs here as you create more bitmaps
  */
 enum class BitmapID : uint8_t {
-    DEFAULT = 0,        // Default/idle screen
-    CHOKE_ACTIVE = 1,   // Choke engaged indicator
+    DEFAULT = 0,          // Default/idle screen
+    FREEZE_ACTIVE = 1,    // Freeze engaged indicator
+    CHOKE_ACTIVE = 2,     // Choke engaged indicator
     // Future bitmaps:
-    // MENU_MAIN = 2,
-    // MENU_LOOP = 3,
-    // MENU_SAMPLE = 4,
-    // BPM_DISPLAY = 5,
+    // MENU_MAIN = 3,
+    // MENU_LOOP = 4,
+    // MENU_SAMPLE = 5,
+    // BPM_DISPLAY = 6,
     // etc.
 };
 

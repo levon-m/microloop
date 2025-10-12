@@ -33,6 +33,7 @@
 #include "app_logic.h"
 #include "input_io.h"
 #include "display_io.h"
+#include "audio_freeze.h"
 #include "audio_choke.h"
 #include "effect_manager.h"
 #include "trace.h"
@@ -41,36 +42,46 @@
 
 // ========== AUDIO GRAPH ==========
 /**
- * Stereo audio chain with TimeKeeper and Choke effect
+ * Stereo audio chain with TimeKeeper, Freeze, and Choke effects
  *
  * TOPOLOGY:
- *   I2S Input → TimeKeeper → Choke → I2S Output
+ *   I2S Input → TimeKeeper → Freeze → Choke → I2S Output
  *
  * SIGNAL FLOW:
  * 1. I2S Input: Line-in from audio shield (stereo)
  * 2. TimeKeeper: Sample position tracking (zero-latency passthrough)
- * 3. Choke: Smooth mute effect with 10ms crossfade
- * 4. I2S Output: Line-out/headphone (stereo)
+ * 3. Freeze: Circular buffer capture/loop (50ms default)
+ * 4. Choke: Smooth mute effect with 10ms crossfade
+ * 5. I2S Output: Line-out/headphone (stereo)
+ *
+ * EFFECT ORDERING RATIONALE:
+ * - Freeze before Choke: Allows freezing audio, then muting it
+ * - When both active: Freeze captures audio, Choke mutes the frozen output
+ * - When Choke released (Freeze still held): Frozen audio becomes audible
  *
  * LATENCY:
  * - Audio Library block size: 128 samples
  * - At 44.1kHz: 128/44100 ≈ 2.9ms per block
  * - Total latency: ~6ms (input buffer + output buffer)
  * - TimeKeeper overhead: <1µs (negligible)
+ * - Freeze overhead: ~300 cycles (circular buffer operations)
  * - Choke overhead: ~50 cycles passthrough, ~2000 cycles fading
  */
 AudioInputI2S i2s_in;
 AudioTimeKeeper timekeeper;  // Tracks sample position
+AudioEffectFreeze freeze;    // Circular buffer freeze effect
 AudioEffectChoke choke;      // Smooth mute effect
 AudioOutputI2S i2s_out;
 
 // Audio connections (stereo L+R)
 AudioConnection patchCord1(i2s_in, 0, timekeeper, 0);   // Left in → TimeKeeper
 AudioConnection patchCord2(i2s_in, 1, timekeeper, 1);   // Right in → TimeKeeper
-AudioConnection patchCord3(timekeeper, 0, choke, 0);    // TimeKeeper → Choke (L)
-AudioConnection patchCord4(timekeeper, 1, choke, 1);    // TimeKeeper → Choke (R)
-AudioConnection patchCord5(choke, 0, i2s_out, 0);       // Choke → Left out
-AudioConnection patchCord6(choke, 1, i2s_out, 1);       // Choke → Right out
+AudioConnection patchCord3(timekeeper, 0, freeze, 0);   // TimeKeeper → Freeze (L)
+AudioConnection patchCord4(timekeeper, 1, freeze, 1);   // TimeKeeper → Freeze (R)
+AudioConnection patchCord5(freeze, 0, choke, 0);        // Freeze → Choke (L)
+AudioConnection patchCord6(freeze, 1, choke, 1);        // Freeze → Choke (R)
+AudioConnection patchCord7(choke, 0, i2s_out, 0);       // Choke → Left out
+AudioConnection patchCord8(choke, 1, i2s_out, 1);       // Choke → Right out
 
 // Custom SGTL5000 codec driver
 SGTL5000 codec;
@@ -282,8 +293,8 @@ void setup() {
      * Register effects in global registry
      *
      * WHAT IT DOES:
-     * - Registers choke effect with EffectManager
-     * - Enables polymorphic control via Command system (future)
+     * - Registers freeze and choke effects with EffectManager
+     * - Enables polymorphic control via Command system
      *
      * WHY HERE?
      * - After all hardware initialized (codec, Neokey, display)
@@ -292,6 +303,14 @@ void setup() {
      *
      * NOTE: Registration failure is FATAL (system won't work correctly)
      */
+    if (!EffectManager::registerEffect(EffectID::FREEZE, &freeze)) {
+        Serial.println("FATAL: Failed to register freeze effect!");
+        while (1) {
+            // Blink LED rapidly to indicate error
+            digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+            delay(100);
+        }
+    }
     if (!EffectManager::registerEffect(EffectID::CHOKE, &choke)) {
         Serial.println("FATAL: Failed to register choke effect!");
         while (1) {
