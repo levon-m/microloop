@@ -62,8 +62,9 @@ static uint32_t lastEventTime[NUM_KEYS] = {0, 0, 0, 0};
  * - NONE command = no-op (for disabled keys or ignored releases)
  *
  * CURRENT MAPPING:
- * - Key 0: Choke (momentary - ENABLE on press, DISABLE on release)
- * - Keys 1-3: Reserved (NONE commands, ready for future effects)
+ * - Key 0: Reserved (NONE commands, ready for future effect)
+ * - Key 1: Choke (momentary - ENABLE on press, DISABLE on release)
+ * - Keys 2-3: Reserved (NONE commands, ready for future effects)
  */
 struct ButtonMapping {
     uint8_t keyIndex;           // Which physical key (0-3)
@@ -72,18 +73,18 @@ struct ButtonMapping {
 };
 
 static const ButtonMapping buttonMappings[] = {
-    // Key 0: Choke (momentary behavior)
+    // Key 0: Reserved for future feature (currently disabled)
     {
         .keyIndex = 0,
-        .pressCommand = Command(CommandType::EFFECT_ENABLE, EffectID::CHOKE),
-        .releaseCommand = Command(CommandType::EFFECT_DISABLE, EffectID::CHOKE)
-    },
-
-    // Key 1: Delay toggle (future - currently disabled)
-    {
-        .keyIndex = 1,
         .pressCommand = Command(CommandType::NONE, EffectID::NONE),
         .releaseCommand = Command(CommandType::NONE, EffectID::NONE)
+    },
+
+    // Key 1: Choke (momentary behavior)
+    {
+        .keyIndex = 1,
+        .pressCommand = Command(CommandType::EFFECT_ENABLE, EffectID::CHOKE),
+        .releaseCommand = Command(CommandType::EFFECT_DISABLE, EffectID::CHOKE)
     },
 
     // Key 2: Reverb toggle (future - currently disabled)
@@ -131,10 +132,10 @@ bool InputIO::begin() {
     // This makes INT pin go LOW when any key state changes
     neokey.enableKeypadInterrupt();
 
-    // Set initial LED states (Key 0 = green/unmuted, others = off for now)
+    // Set initial LED states (Key 1 = green/unmuted, others = off for now)
     neokey.pixels.setBrightness(LED_BRIGHTNESS);
-    neokey.pixels.setPixelColor(0, LED_COLOR_GREEN);  // Key 0: Choke unmuted
-    neokey.pixels.setPixelColor(1, 0x000000);         // Key 1: Off (reserved)
+    neokey.pixels.setPixelColor(0, 0x000000);         // Key 0: Off (reserved)
+    neokey.pixels.setPixelColor(1, LED_COLOR_GREEN);  // Key 1: Choke unmuted
     neokey.pixels.setPixelColor(2, 0x000000);         // Key 2: Off (reserved)
     neokey.pixels.setPixelColor(3, 0x000000);         // Key 3: Off (reserved)
     neokey.pixels.show();
@@ -209,10 +210,10 @@ void InputIO::setLED(EffectID effectID, bool enabled) {
      * Map EffectID to key index
      *
      * ASSUMPTION: Each effect is assigned to a specific key
-     * - CHOKE → Key 0
-     * - DELAY → Key 1 (future)
-     * - REVERB → Key 2 (future)
-     * - GAIN → Key 3 (future)
+     * - CHOKE → Key 1
+     * - DELAY → Key 2 (future)
+     * - REVERB → Key 3 (future)
+     * - Key 0 → Reserved (future)
      */
     uint8_t keyIndex = 0;
     uint32_t enabledColor = LED_COLOR_RED;
@@ -220,25 +221,25 @@ void InputIO::setLED(EffectID effectID, bool enabled) {
 
     switch (effectID) {
         case EffectID::CHOKE:
-            keyIndex = 0;
+            keyIndex = 1;
             enabledColor = LED_COLOR_RED;
             disabledColor = LED_COLOR_GREEN;
             break;
 
         case EffectID::DELAY:
-            keyIndex = 1;
+            keyIndex = 2;
             enabledColor = LED_COLOR_BLUE;
             disabledColor = LED_COLOR_GREEN;
             break;
 
         case EffectID::REVERB:
-            keyIndex = 2;
+            keyIndex = 3;
             enabledColor = LED_COLOR_PURPLE;
             disabledColor = LED_COLOR_GREEN;
             break;
 
         case EffectID::GAIN:
-            keyIndex = 3;
+            keyIndex = 0;
             enabledColor = LED_COLOR_YELLOW;
             disabledColor = LED_COLOR_GREEN;
             break;

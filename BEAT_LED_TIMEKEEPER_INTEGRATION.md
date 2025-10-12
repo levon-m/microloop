@@ -616,6 +616,99 @@ static uint32_t getBeatNumber();          // "What beat am I on?"
 
 ---
 
+## LED OFF Timing: Tick-Based vs Sample-Based
+
+**Question:** Why use tick-based timing for LED OFF instead of TimeKeeper's sample-accurate timing?
+
+### Current Implementation (Tick-Based) ✅
+
+**Approach:**
+- LED ON: Triggered by beat flag (sample-accurate)
+- LED OFF: 2 ticks later (~40ms @ 120 BPM)
+- Precision: ±20ms (one tick period @ 120 BPM)
+
+**Code:**
+```cpp
+if (TimeKeeper::pollBeatFlag()) {
+    digitalWrite(LED_PIN, HIGH);
+    ledBeatTick = 0;  // Record beat start
+}
+
+uint8_t tickDelta = currentTick - ledBeatTick;
+if (tickDelta >= 2) {
+    digitalWrite(LED_PIN, LOW);
+    ledBeatTick = 0xFF;
+}
+```
+
+**Pros:**
+- ✅ Simple state machine (one byte: `ledBeatTick`)
+- ✅ No extra math (just tick delta)
+- ✅ Good enough precision for human vision (~40ms pulse is plenty visible)
+- ✅ Matches MIDI timing domain (ticks are what we're visualizing)
+- ✅ No 64-bit arithmetic needed
+
+**Cons:**
+- ⚠️ Less precise (~20ms granularity vs ~2.9ms with samples)
+- ⚠️ LED OFF timing can jitter slightly with MIDI jitter (imperceptible to humans)
+
+### Alternative: Sample-Based (Overkill) ⚖️
+
+**Approach:**
+```cpp
+if (TimeKeeper::pollBeatFlag()) {
+    digitalWrite(LED_PIN, HIGH);
+    uint32_t samplesPerBeat = TimeKeeper::getSamplesPerBeat();
+    ledOffSample = TimeKeeper::getSamplePosition() + (samplesPerBeat / 16);  // 1/16th note
+}
+
+if (TimeKeeper::getSamplePosition() >= ledOffSample && ledOn) {
+    digitalWrite(LED_PIN, LOW);
+    ledOn = false;
+}
+```
+
+**Pros:**
+- ✅ Sample-accurate OFF timing (±2.9ms)
+- ✅ Immune to MIDI jitter (uses sample timeline)
+- ✅ Could do sub-tick durations (e.g., 1/32nd note pulse)
+
+**Cons:**
+- ⚠️ Requires 64-bit sample position storage (`uint64_t ledOffSample`)
+- ⚠️ More math: `getSamplePosition() + (samplesPerBeat / 16)`
+- ⚠️ Overkill for LED (human eye can't perceive ~20ms jitter)
+- ⚠️ Mixes timing domains (beat detection in MIDI ticks, duration in samples)
+
+### The Real Reason: LED is Not Critical
+
+**For LED visualization:** Tick precision is fine
+- 40ms pulse vs 35ms pulse? Human can't tell
+- ±20ms jitter? Imperceptible at 120 BPM
+- LED is visual feedback, not audio-critical
+
+**For loop recording:** Sample precision is CRITICAL
+- Quantize to exact sample boundary
+- ±128 samples = ±2.9ms matters for tight loops
+- Must use `samplesToNextBeat()`, not ticks
+
+### When You'd Want Sample-Based LED
+
+If you were doing:
+- **Gate outputs** for modular synths (need sample-accurate triggers)
+- **Visual metronome** with sub-tick resolution (e.g., 1/16th or 1/32nd notes)
+- **Latency compensation** (measuring LED-to-ear delay)
+- **MIDI clock out** (sample-accurate MIDI transmission)
+
+For a simple beat indicator? **Tick-based is perfect** - simpler code, easier to understand, and the precision is already overkill for human perception.
+
+### Conclusion
+
+**The current implementation is the right trade-off:**
+- Sample-accurate beat **detection** (where it matters - never miss a beat)
+- Tick-based pulse **duration** (where it doesn't - human vision is slow)
+
+---
+
 ## Comparison Matrix
 
 | Feature | Option 1 (Polling) | Option 2 (Atomic Flag) | Option 3 (Callback) |
