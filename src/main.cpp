@@ -32,6 +32,7 @@
 #include "midi_io.h"
 #include "app_logic.h"
 #include "choke_io.h"
+#include "input_io.h"
 #include "display_io.h"
 #include "audio_choke.h"
 #include "effect_manager.h"
@@ -93,7 +94,7 @@ void ioThreadEntry() {
 }
 
 /**
- * Choke I/O Thread: Neokey button polling
+ * Choke I/O Thread: Neokey button polling (LEGACY - will be removed in Phase 3)
  *
  * PRIORITY: High (responsive to button presses)
  * STACK: 2048 bytes (enough for I2C library + Seesaw)
@@ -105,6 +106,22 @@ void ioThreadEntry() {
  */
 void chokeThreadEntry() {
     ChokeIO::threadLoop();  // Never returns
+}
+
+/**
+ * Input I/O Thread: Generic command-based input handling (NEW - Phase 2)
+ *
+ * PRIORITY: High (responsive to button presses)
+ * STACK: 2048 bytes (enough for I2C library + Seesaw)
+ *
+ * WHY SEPARATE THREAD?
+ * - Decouples I2C latency from app logic and MIDI
+ * - Emits generic Commands (not choke-specific events)
+ * - Table-driven button mappings (easy to reconfigure)
+ * - Will replace ChokeIO in Phase 3
+ */
+void inputThreadEntry() {
+    InputIO::threadLoop();  // Never returns
 }
 
 /**
@@ -236,9 +253,9 @@ void setup() {
     AppLogic::begin();
     Serial.println("App Logic: OK");
 
-    // ========== CHOKE I/O SETUP ==========
+    // ========== CHOKE I/O SETUP (LEGACY - Phase 2 dual system) ==========
     /**
-     * Initialize Neokey 1x4 button input
+     * Initialize Neokey 1x4 button input (OLD SYSTEM)
      *
      * WHAT IT DOES:
      * - Initializes Wire2 (I2C bus 2: SDA2=pin 25, SCL2=pin 24)
@@ -246,6 +263,8 @@ void setup() {
      * - Configures key 0 for interrupt-on-change
      * - Sets up INT pin on Teensy (pin 33)
      * - Sets initial LED state (green = unmuted)
+     *
+     * NOTE: This will be removed in Phase 3 (replaced by InputIO)
      */
     if (!ChokeIO::begin()) {
         Serial.println("ERROR: Choke I/O init failed!");
@@ -255,7 +274,34 @@ void setup() {
             delay(100);
         }
     }
-    Serial.println("Choke I/O: OK (Neokey on I2C 0x30 / Wire2)");
+    Serial.println("Choke I/O (old): OK (Neokey on I2C 0x30 / Wire2)");
+
+    // ========== INPUT I/O SETUP (NEW - Phase 2 dual system) ==========
+    /**
+     * Initialize generic input system (NEW SYSTEM)
+     *
+     * WHAT IT DOES:
+     * - Same hardware as ChokeIO, but emits Commands (not ChokeEvents)
+     * - Table-driven button mappings (easy to reconfigure)
+     * - Supports multiple effects (not just choke)
+     *
+     * WHY DUAL SYSTEM?
+     * - Both ChokeIO and InputIO run in parallel during Phase 2
+     * - Allows testing new system without breaking existing functionality
+     * - Will remove ChokeIO in Phase 3 after validation
+     *
+     * NOTE: InputIO shares same Wire2 bus as ChokeIO, but both init
+     * safely (begin() is idempotent for I2C)
+     */
+    if (!InputIO::begin()) {
+        Serial.println("ERROR: Input I/O init failed!");
+        while (1) {
+            // Blink LED rapidly to indicate error
+            digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+            delay(100);
+        }
+    }
+    Serial.println("Input I/O (new): OK (Neokey on I2C 0x30 / Wire2)");
 
     // ========== DISPLAY SETUP ==========
     /**
@@ -322,13 +368,17 @@ void setup() {
      * 1. Start conservative (2-3KB)
      * 2. Monitor stack usage (future: stack watermarking)
      * 3. If overflow, increase by 1KB and repeat
+     *
+     * PHASE 2 NOTE: Both ChokeIO and InputIO threads run in parallel
+     * Will remove ChokeIO thread in Phase 3 after validation
      */
     int ioThreadId = threads.addThread(ioThreadEntry, 2048);
-    int chokeThreadId = threads.addThread(chokeThreadEntry, 2048);
+    int chokeThreadId = threads.addThread(chokeThreadEntry, 2048);    // LEGACY (Phase 2)
+    int inputThreadId = threads.addThread(inputThreadEntry, 2048);    // NEW (Phase 2)
     int displayThreadId = threads.addThread(displayThreadEntry, 2048);
     int appThreadId = threads.addThread(appThreadEntry, 3072);
 
-    if (ioThreadId < 0 || chokeThreadId < 0 || displayThreadId < 0 || appThreadId < 0) {
+    if (ioThreadId < 0 || chokeThreadId < 0 || inputThreadId < 0 || displayThreadId < 0 || appThreadId < 0) {
         Serial.println("ERROR: Thread creation failed!");
         while (1);  // Halt
     }

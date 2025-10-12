@@ -226,6 +226,10 @@ add_library(choke_io STATIC src/choke_io.cpp)
 target_include_directories(choke_io PUBLIC include)
 target_link_libraries(choke_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
 
+add_library(input_io STATIC src/input_io.cpp)
+target_include_directories(input_io PUBLIC include)
+target_link_libraries(input_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
+
 add_library(display_io STATIC src/display_io.cpp)
 target_include_directories(display_io PUBLIC include)
 target_link_libraries(display_io teensy_core teensy_threads ssd1306 gfx wire microloop_utils)
@@ -254,6 +258,7 @@ target_link_libraries(microloop.elf
     sgtl5000
     midi_io
     choke_io
+    input_io
     display_io
     app_logic
     effect_manager

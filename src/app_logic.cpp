@@ -1,8 +1,10 @@
 #include "app_logic.h"
 #include "midi_io.h"
 #include "choke_io.h"
+#include "input_io.h"
 #include "display_io.h"
 #include "audio_choke.h"
+#include "effect_manager.h"
 #include "trace.h"
 #include "timekeeper.h"
 #include <TeensyThreads.h>
@@ -77,12 +79,15 @@ void AppLogic::threadLoop() {
      * 5. Yield CPU
      */
     for (;;) {
-        // ========== 1. DRAIN CHOKE EVENTS ==========
+        // ========== 1. DRAIN CHOKE EVENTS (OLD SYSTEM - Phase 2) ==========
         /**
          * WHY PROCESS CHOKE FIRST?
          * - Button response should be immediate (user perception)
          * - Choke is independent of MIDI transport state
          * - Processing early minimizes latency
+         *
+         * NOTE: This is the OLD system (ChokeEvent enums)
+         * Will be removed in Phase 3 after InputIO validation
          */
         ChokeEvent chokeEvent;
         while (ChokeIO::popEvent(chokeEvent)) {
@@ -92,7 +97,7 @@ void AppLogic::threadLoop() {
                     choke.engage();
                     ChokeIO::setLED(true);  // Red LED
                     DisplayIO::showChoke();  // Show choke bitmap
-                    Serial.println("🔇 Choke ENGAGED");
+                    // Serial output removed to reduce App thread latency (Phase 2 dual system)
                     break;
 
                 case ChokeEvent::BUTTON_RELEASE:
@@ -100,8 +105,61 @@ void AppLogic::threadLoop() {
                     choke.releaseChoke();
                     ChokeIO::setLED(false);  // Green LED
                     DisplayIO::showDefault();  // Return to default bitmap
-                    Serial.println("🔊 Choke RELEASED");
+                    // Serial output removed to reduce App thread latency (Phase 2 dual system)
                     break;
+            }
+        }
+
+        // ========== 1.5. DRAIN COMMANDS (NEW SYSTEM - Phase 2) ==========
+        /**
+         * WHY PROCESS COMMANDS?
+         * - Generic command dispatch via EffectManager
+         * - Table-driven button mappings (no hardcoded switches)
+         * - Supports multiple effects (not just choke)
+         *
+         * NOTE: This is the NEW system (Command structs)
+         * Runs in parallel with OLD system during Phase 2 for validation
+         */
+        Command cmd;
+        while (InputIO::popCommand(cmd)) {
+            // Execute command via EffectManager
+            if (EffectManager::executeCommand(cmd)) {
+                // Command executed successfully
+
+                // Update visual feedback (LED, display)
+                if (cmd.type == CommandType::EFFECT_TOGGLE ||
+                    cmd.type == CommandType::EFFECT_ENABLE ||
+                    cmd.type == CommandType::EFFECT_DISABLE) {
+
+                    AudioEffectBase* effect = EffectManager::getEffect(cmd.targetEffect);
+                    if (effect) {
+                        bool enabled = effect->isEnabled();
+
+                        // Update LED (Key 0 = choke)
+                        InputIO::setLED(cmd.targetEffect, enabled);
+
+                        // Update display (choke-specific for now)
+                        if (cmd.targetEffect == EffectID::CHOKE) {
+                            if (enabled) {
+                                DisplayIO::showChoke();
+                            } else {
+                                DisplayIO::showDefault();
+                            }
+                        }
+
+                        // Debug output
+                        Serial.print("[NEW] ");
+                        Serial.print(effect->getName());
+                        Serial.println(enabled ? " ENABLED" : " DISABLED");
+                    }
+                }
+            } else {
+                // Command failed (effect not found, invalid params, etc.)
+                Serial.print("[NEW] ERROR: Command failed (type=");
+                Serial.print(static_cast<uint8_t>(cmd.type));
+                Serial.print(", effect=");
+                Serial.print(static_cast<uint8_t>(cmd.targetEffect));
+                Serial.println(")");
             }
         }
 
