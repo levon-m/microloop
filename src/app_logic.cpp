@@ -1,6 +1,5 @@
 #include "app_logic.h"
 #include "midi_io.h"
-#include "choke_io.h"
 #include "input_io.h"
 #include "display_io.h"
 #include "audio_choke.h"
@@ -79,46 +78,13 @@ void AppLogic::threadLoop() {
      * 5. Yield CPU
      */
     for (;;) {
-        // ========== 1. DRAIN CHOKE EVENTS (OLD SYSTEM - Phase 2) ==========
-        /**
-         * WHY PROCESS CHOKE FIRST?
-         * - Button response should be immediate (user perception)
-         * - Choke is independent of MIDI transport state
-         * - Processing early minimizes latency
-         *
-         * NOTE: This is the OLD system (ChokeEvent enums)
-         * Will be removed in Phase 3 after InputIO validation
-         */
-        ChokeEvent chokeEvent;
-        while (ChokeIO::popEvent(chokeEvent)) {
-            switch (chokeEvent) {
-                case ChokeEvent::BUTTON_PRESS:
-                    // Button pressed → engage choke (mute audio)
-                    choke.engage();
-                    ChokeIO::setLED(true);  // Red LED
-                    DisplayIO::showChoke();  // Show choke bitmap
-                    // Serial output removed to reduce App thread latency (Phase 2 dual system)
-                    break;
-
-                case ChokeEvent::BUTTON_RELEASE:
-                    // Button released → release choke (unmute audio)
-                    choke.releaseChoke();
-                    ChokeIO::setLED(false);  // Green LED
-                    DisplayIO::showDefault();  // Return to default bitmap
-                    // Serial output removed to reduce App thread latency (Phase 2 dual system)
-                    break;
-            }
-        }
-
-        // ========== 1.5. DRAIN COMMANDS (NEW SYSTEM - Phase 2) ==========
+        // ========== 1. DRAIN COMMANDS ==========
         /**
          * WHY PROCESS COMMANDS?
          * - Generic command dispatch via EffectManager
          * - Table-driven button mappings (no hardcoded switches)
          * - Supports multiple effects (not just choke)
-         *
-         * NOTE: This is the NEW system (Command structs)
-         * Runs in parallel with OLD system during Phase 2 for validation
+         * - Decouples input from DSP operations
          */
         Command cmd;
         while (InputIO::popCommand(cmd)) {
@@ -148,14 +114,13 @@ void AppLogic::threadLoop() {
                         }
 
                         // Debug output
-                        Serial.print("[NEW] ");
                         Serial.print(effect->getName());
                         Serial.println(enabled ? " ENABLED" : " DISABLED");
                     }
                 }
             } else {
                 // Command failed (effect not found, invalid params, etc.)
-                Serial.print("[NEW] ERROR: Command failed (type=");
+                Serial.print("ERROR: Command failed (type=");
                 Serial.print(static_cast<uint8_t>(cmd.type));
                 Serial.print(", effect=");
                 Serial.print(static_cast<uint8_t>(cmd.targetEffect));

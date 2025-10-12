@@ -222,10 +222,6 @@ add_library(midi_io STATIC src/midi_io.cpp)
 target_include_directories(midi_io PUBLIC include)
 target_link_libraries(midi_io teensy_core midi teensy_threads microloop_utils)
 
-add_library(choke_io STATIC src/choke_io.cpp)
-target_include_directories(choke_io PUBLIC include)
-target_link_libraries(choke_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
-
 add_library(input_io STATIC src/input_io.cpp)
 target_include_directories(input_io PUBLIC include)
 target_link_libraries(input_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
@@ -240,7 +236,7 @@ target_link_libraries(effect_manager teensy_core audio)
 
 add_library(app_logic STATIC src/app_logic.cpp)
 target_include_directories(app_logic PUBLIC include)
-target_link_libraries(app_logic teensy_core teensy_threads midi_io choke_io display_io effect_manager microloop_utils)
+target_link_libraries(app_logic teensy_core teensy_threads midi_io input_io display_io effect_manager microloop_utils)
 
 # MAIN
 add_executable(microloop.elf src/main.cpp)
@@ -257,7 +253,6 @@ target_link_libraries(microloop.elf
     teensy_threads
     sgtl5000
     midi_io
-    choke_io
     input_io
     display_io
     app_logic
