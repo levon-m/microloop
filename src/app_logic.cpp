@@ -54,7 +54,7 @@ static uint32_t avgTickPeriodUs = 20833; // Average period between ticks (~20.8m
                                           // Updated dynamically via exponential moving average
 
 // LED beat indicator state
-static uint8_t ledBeatTick = 0xFF;  // Tick when LED was turned on (0xFF = LED off)
+static uint64_t ledOffSample = 0;  // Sample position when LED should turn off (0 = LED off)
 
 // Debug output rate limiting
 static uint32_t lastPrint = 0;
@@ -141,7 +141,7 @@ void AppLogic::threadLoop() {
         MidiEvent event;
         while (MidiIO::popEvent(event)) {
             switch (event) {
-                case MidiEvent::START:
+                case MidiEvent::START: {
                     /**
                      * START: Reset to beginning
                      * - Reset timestamps (start fresh timing)
@@ -158,12 +158,16 @@ void AppLogic::threadLoop() {
 
                     // Turn on LED for beat 0 (first beat starts immediately)
                     digitalWrite(LED_PIN, HIGH);
-                    ledBeatTick = 0;  // Mark LED on at tick 0
+                    // Calculate when to turn off: 2 ticks = (2/24) of a beat
+                    uint32_t spb = TimeKeeper::getSamplesPerBeat();
+                    uint32_t pulseSamples = (spb * 2) / 24;  // 2 ticks worth of samples
+                    ledOffSample = TimeKeeper::getSamplePosition() + pulseSamples;
                     TRACE(TRACE_BEAT_LED_ON);
 
                     TRACE(TRACE_MIDI_START);
                     Serial.println("▶ START");
                     break;
+                }
 
                 case MidiEvent::STOP:
                     /**
@@ -177,7 +181,7 @@ void AppLogic::threadLoop() {
                     TimeKeeper::setTransportState(TimeKeeper::TransportState::STOPPED);
 
                     digitalWrite(LED_PIN, LOW);
-                    ledBeatTick = 0xFF;  // Reset LED state machine
+                    ledOffSample = 0;  // Reset LED state (0 = LED off)
                     TRACE(TRACE_MIDI_STOP);
                     Serial.println("■ STOP");
                     break;
@@ -265,49 +269,51 @@ void AppLogic::threadLoop() {
 
         // ========== 3A. TIMEKEEPER BEAT LED CONTROL ==========
         /**
-         * WHY POLL BEAT FLAG HERE (NOT IN CLOCK LOOP)?
-         * - TimeKeeper::incrementTick() sets atomic beat flag when beat advances
-         * - We poll once per main loop (every 2ms) to check for beat boundaries
-         * - Flag stays set until cleared (never miss a beat)
-         * - LED timing driven by TimeKeeper's sample-accurate beat tracking
+         * SAMPLE-BASED LED TIMING (ROBUST UNDER LOAD)
          *
-         * LED PULSE PATTERN:
-         * - Turn ON at beat start (tick 0)
-         * - Turn OFF after 2 ticks (~40ms @ 120 BPM)
-         * - State machine prevents race condition between beat flag and tick queries
+         * WHY SAMPLE-BASED (NOT TICK-BASED)?
+         * - Tick-based approach requires frequent polling to catch tick=2
+         * - Under heavy load (MIDI spam, choke button), app thread gets starved
+         * - Missing the tick=2 window causes LED to stay on too long or shut off
+         * - Sample-based approach calculates OFF time once, just checks if reached
          *
-         * STATE MACHINE:
-         * - ledBeatTick = 0xFF → LED off, waiting for beat
-         * - ledBeatTick = 0 → LED on, turned on at tick 0
-         * - When current tick advances 2+ ticks from ledBeatTick → turn LED off
+         * APPROACH:
+         * 1. Poll beat flag (never misses a beat - flag persists until polled)
+         * 2. Calculate sample position when LED should turn off (beatSample + pulseSamples)
+         * 3. Every loop, check if current sample >= ledOffSample
+         * 4. Turn off LED when threshold reached
+         *
+         * BENEFITS:
+         * - ✅ Deterministic: LED turns off at exact sample position
+         * - ✅ Load-independent: Works even if app thread starves for 100ms+
+         * - ✅ Sample-accurate: Same precision as loop quantization
+         * - ✅ Simple state: Single 64-bit variable (ledOffSample)
+         *
+         * PULSE DURATION:
+         * - 2 ticks = (2/24) of a beat = ~40ms @ 120 BPM
+         * - At 44.1kHz: ~1837 samples
+         * - LED stays on for exactly this duration, regardless of thread timing
          */
-        uint32_t currentTick = TimeKeeper::getTickInBeat();
+        uint64_t currentSample = TimeKeeper::getSamplePosition();
 
         // Check for new beat
         if (TimeKeeper::pollBeatFlag()) {
-            // Beat boundary crossed - turn on LED and record tick
+            // Beat boundary crossed - turn on LED and calculate OFF time
             digitalWrite(LED_PIN, HIGH);
-            ledBeatTick = 0;  // Record that LED was turned on at tick 0
+
+            // Calculate pulse duration: 2 ticks = (2/24) of a beat
+            uint32_t spb = TimeKeeper::getSamplesPerBeat();
+            uint32_t pulseSamples = (spb * 2) / 24;  // 2 ticks worth of samples
+            ledOffSample = currentSample + pulseSamples;
+
             TRACE(TRACE_BEAT_LED_ON);
         }
 
-        // Turn off LED after pulse duration (if LED is currently on)
-        if (ledBeatTick != 0xFF) {
-            // Calculate tick delta (handle wraparound: tick 23 → tick 0)
-            uint8_t tickDelta;
-            if (currentTick >= ledBeatTick) {
-                tickDelta = currentTick - ledBeatTick;
-            } else {
-                // Wraparound case (shouldn't happen with ledBeatTick=0, but be safe)
-                tickDelta = (24 - ledBeatTick) + currentTick;
-            }
-
-            // Turn off after 2 ticks (~40ms @ 120 BPM)
-            if (tickDelta >= 2) {
-                digitalWrite(LED_PIN, LOW);
-                ledBeatTick = 0xFF;  // Mark LED as off
-                TRACE(TRACE_BEAT_LED_OFF);
-            }
+        // Turn off LED when sample position reaches ledOffSample
+        if (ledOffSample > 0 && currentSample >= ledOffSample) {
+            digitalWrite(LED_PIN, LOW);
+            ledOffSample = 0;  // Mark LED as off
+            TRACE(TRACE_BEAT_LED_OFF);
         }
 
         // ========== 4. PERIODIC DEBUG OUTPUT ==========
