@@ -69,6 +69,7 @@ set(NEOPIXEL_LIB "${TEENSY_LIBS}/Adafruit_NeoPixel")
 set(BUSIO_LIB "${TEENSY_LIBS}/Adafruit_BusIO")
 set(SSD1306_LIB "${TEENSY_LIBS}/Adafruit_SSD1306-2.5.15")
 set(GFX_LIB "${TEENSY_LIBS}/Adafruit-GFX-Library-1.12.3")
+set(MCP23017_LIB "${TEENSY_LIBS}/Adafruit-MCP23017-Arduino-Library-2.3.2/src")
 
 # Include directories
 include_directories(
@@ -84,6 +85,7 @@ include_directories(
     ${BUSIO_LIB}
     ${SSD1306_LIB}
     ${GFX_LIB}
+    ${MCP23017_LIB}
     ${TEENSY_LIBS}/SPI
     ${TEENSY_LIBS}/SD/src
     ${TEENSY_LIBS}/SdFat/src
@@ -146,17 +148,19 @@ target_link_libraries(audio teensy_core)
 add_library(midi INTERFACE)
 target_include_directories(midi INTERFACE ${MIDI_LIB})
 
-# Adafruit BusIO library (for I2C/SPI abstraction, required by Seesaw)
-# REQUIRED: Dependency of Adafruit Seesaw Library
+# Adafruit BusIO library (for I2C/SPI abstraction, required by Seesaw and MCP23017)
+# REQUIRED: Dependency of Adafruit Seesaw Library and MCP23017 Library
 if(NOT EXISTS "${BUSIO_LIB}/Adafruit_I2CDevice.cpp")
     message(FATAL_ERROR "Adafruit BusIO Library NOT found. Download from https://github.com/adafruit/Adafruit_BusIO")
 endif()
 add_library(busio STATIC
     "${BUSIO_LIB}/Adafruit_I2CDevice.cpp"
     "${BUSIO_LIB}/Adafruit_SPIDevice.cpp"
+    "${BUSIO_LIB}/Adafruit_BusIO_Register.cpp"
+    "${BUSIO_LIB}/Adafruit_GenericDevice.cpp"
 )
 target_include_directories(busio PUBLIC ${BUSIO_LIB})
-target_link_libraries(busio teensy_core wire)
+target_link_libraries(busio teensy_core wire spi)
 message(STATUS "Adafruit BusIO Library found")
 
 # Adafruit Seesaw library (for Neokey choke button)
@@ -203,6 +207,19 @@ target_include_directories(ssd1306 PUBLIC ${SSD1306_LIB})
 target_link_libraries(ssd1306 teensy_core wire spi gfx)
 message(STATUS "Adafruit SSD1306 Library found")
 
+# Adafruit MCP23017 library (for encoder I/O expander)
+# REQUIRED: Install via Arduino IDE Library Manager: "Adafruit MCP23017 Arduino Library"
+if(NOT EXISTS "${MCP23017_LIB}/Adafruit_MCP23X17.cpp")
+    message(FATAL_ERROR "Adafruit MCP23017 Library NOT found. Install via Arduino IDE: Tools → Manage Libraries → Search 'Adafruit MCP23017'")
+endif()
+add_library(mcp23017 STATIC
+    "${MCP23017_LIB}/Adafruit_MCP23X17.cpp"
+    "${MCP23017_LIB}/Adafruit_MCP23XXX.cpp"
+)
+target_include_directories(mcp23017 PUBLIC ${MCP23017_LIB})
+target_link_libraries(mcp23017 teensy_core wire busio)
+message(STATUS "Adafruit MCP23017 Library found")
+
 # Utils library (now has trace.cpp and timekeeper.cpp)
 add_library(microloop_utils STATIC
     utils/trace.cpp
@@ -237,10 +254,17 @@ add_library(app_logic STATIC src/app_logic.cpp)
 target_include_directories(app_logic PUBLIC include)
 target_link_libraries(app_logic teensy_core teensy_threads midi_io input_io display_io effect_manager microloop_utils)
 
-# MAIN
-add_executable(microloop.elf src/main.cpp)
+add_library(encoder_test STATIC src/encoder_test.cpp)
+target_include_directories(encoder_test PUBLIC include)
+target_link_libraries(encoder_test teensy_core wire mcp23017 busio)
 
-# TESTING
+# MAIN
+#add_executable(microloop.elf src/main.cpp)
+
+# ENCODER TEST
+add_executable(microloop.elf tests/test_encoders_main.cpp)
+
+# UNIT TESTING
 #add_executable(microloop.elf tests/run_tests.cpp)
 
 target_link_libraries(microloop.elf
@@ -260,6 +284,8 @@ target_link_libraries(microloop.elf
     busio
     ssd1306
     gfx
+    mcp23017
+    encoder_test
     microloop_utils
     m  # Math library
 )
