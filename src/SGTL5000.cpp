@@ -39,16 +39,21 @@ bool SGTL5000::enable() {
   && write(CHIP_SSS_CTRL, 0x0010) //Route signals: ADC -> I2S OUT/IN -> DAC. DAC_SELECT = I2S_IN, I2S_SELECT = ADC for simple loopback
 
   //Analog reference & outputs power up, safety and to reduce pops, straight from NXP example
-  && write(CHIP_REF_CTRL, 0x004E) //Set ref ground (VAG) near VDDA/2, and modest bias current
-  && write(CHIP_LINE_OUT_CTRL, 0x0322) //Line out reference & bias current (for 3.3 V VDDIO, 10k load)
-  && write(CHIP_REF_CTRL, 0x004F) //Slow ramp to reduce pops
+  //&& write(CHIP_REF_CTRL, 0x004E) //Set ref ground (VAG) near VDDA/2, and modest bias current
+  && write(CHIP_REF_CTRL, 0x01E1)
+  //&& write(CHIP_LINE_OUT_CTRL, 0x0322) //Line out reference & bias current (for 3.3 V VDDIO, 10k load)
+  && write(CHIP_LINE_OUT_CTRL, 0x031E)
+  //&& write(CHIP_REF_CTRL, 0x004F) //Slow ramp to reduce pops
   && write(CHIP_SHORT_CTRL, 0x1106) //Headphone/center short detect trip levels (optional safety)
 
   && write(CHIP_ANA_POWER, 0x6AFF) //Power analog blocks: LINEOUT, HP, ADC, DAC, VAG
   && write(CHIP_DIG_POWER, 0x0073) //Power digital blocks: I2S IN/OUT, DAP, DAC, ADC
 
   //Select inputs, unmute in pop-safe order
+  && write(CHIP_LINE_OUT_VOL, 0x0F0F)
   && modify(CHIP_ANA_CTRL, 0x0004, 0x0004) //SELECT_ADC = LINEIN, keep HP/LO muted for now
+  && modify(CHIP_ANA_ADC_CTRL, 0x00CC, 0x00FF) // +12 dB both channels
+  && modify(CHIP_ANA_ADC_CTRL, 0x0000, 0x0100) // clear ADC_VOL_M6DB (-6 dB) bit
   && write(CHIP_DAC_VOL, 0x3C3C) //DAC L/R = 0 dB
   && write(CHIP_ANA_HP_CTRL, 0x1818) //Analog L/R = 0 dB
   && modify(CHIP_ADCDAC_CTRL, 0x0000, 0x000C) //Unmute DAC_MUTE_LEFT and DAC_MUTE_RIGHT
