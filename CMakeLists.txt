@@ -214,9 +214,8 @@ target_include_directories(microloop_utils PUBLIC
 target_link_libraries(microloop_utils teensy_core)
 
 # Project libraries
-add_library(sgtl5000 STATIC src/SGTL5000.cpp)
-target_include_directories(sgtl5000 PUBLIC include)
-target_link_libraries(sgtl5000 teensy_core wire)
+# Note: Custom SGTL5000 driver backed up as SGTL5000_CUSTOM_BACKUP.cpp/.h
+# Using Teensy Audio Library's AudioControlSGTL5000 instead
 
 add_library(midi_io STATIC src/midi_io.cpp)
 target_include_directories(midi_io PUBLIC include)
@@ -251,7 +250,6 @@ target_link_libraries(microloop.elf
     spi
     midi
     teensy_threads
-    sgtl5000
     midi_io
     input_io
     display_io

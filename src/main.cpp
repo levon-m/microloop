@@ -28,7 +28,6 @@
 #include <Arduino.h>
 #include <Audio.h>
 #include <TeensyThreads.h>
-#include "SGTL5000.h"
 #include "midi_io.h"
 #include "app_logic.h"
 #include "input_io.h"
@@ -39,6 +38,9 @@
 #include "trace.h"
 #include "timekeeper.h"
 #include "audio_timekeeper.h"
+
+// Note: Custom SGTL5000 driver backed up as SGTL5000_CUSTOM_BACKUP.h/.cpp
+// Using Teensy Audio Library's AudioControlSGTL5000 instead
 
 // ========== AUDIO GRAPH ==========
 /**
@@ -83,8 +85,8 @@ AudioConnection patchCord6(freeze, 1, choke, 1);        // Freeze → Choke (R)
 AudioConnection patchCord7(choke, 0, i2s_out, 0);       // Choke → Left out
 AudioConnection patchCord8(choke, 1, i2s_out, 1);       // Choke → Right out
 
-// Custom SGTL5000 codec driver
-SGTL5000 codec;
+// Teensy Audio Library SGTL5000 control
+AudioControlSGTL5000 codec;
 
 // ========== THREAD ENTRY POINTS ==========
 
@@ -185,19 +187,15 @@ void setup() {
     AudioMemory(12);
 
     /**
-     * Initialize codec
+     * Initialize codec using Teensy Audio Library
      *
      * WHAT IT DOES:
      * - Configures I2C communication
      * - Sets up I2S (44.1kHz, 16-bit, slave mode)
      * - Powers up analog/digital blocks
-     * - Unmutes headphone/line outputs
+     * - Configures line-in and line-out routing
      *
-     * WHY CUSTOM DRIVER?
-     * - Audio Library's driver is bloated (~10KB)
-     * - We only need basic functionality
-     * - Better understanding of hardware
-     * - Easier to add custom features later
+     * NOTE: Using Audio Library's AudioControlSGTL5000 (custom driver backed up)
      */
     if (!codec.enable()) {
         Serial.println("ERROR: Codec init failed!");
@@ -207,7 +205,17 @@ void setup() {
             delay(100);
         }
     }
-    Serial.println("Audio: OK");
+
+    // Configure for line-in and line-out operation
+    // IMPORTANT: Use MOTU M4 **REAR LINE INPUTS 3-4** (not front combo jacks!)
+    codec.inputSelect(AUDIO_INPUT_LINEIN);  // Use line-in (not mic)
+    codec.lineInLevel(0);  // Line-in gain: 0-15 (0 = 3.12V p-p, lowest gain to prevent clipping)
+    codec.lineOutLevel(13);  // Line-out level: 13-31 (13 = 1.31V p-p, standard line level)
+    codec.unmuteLineout();  // Unmute line-out
+    codec.volume(0.3);  // Headphone volume (0.0-1.0) - start low to avoid clipping
+    codec.unmuteHeadphone();  // Unmute headphone (for testing)
+
+    Serial.println("Audio: OK (using Teensy Audio Library SGTL5000)");
 
     // ========== TIMEKEEPER SETUP ==========
     /**
