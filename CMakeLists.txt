@@ -254,15 +254,15 @@ add_library(app_logic STATIC src/app_logic.cpp)
 target_include_directories(app_logic PUBLIC include)
 target_link_libraries(app_logic teensy_core teensy_threads midi_io input_io display_io effect_manager microloop_utils)
 
-add_library(encoder_test STATIC src/encoder_test.cpp)
-target_include_directories(encoder_test PUBLIC include)
-target_link_libraries(encoder_test teensy_core wire mcp23017 busio)
+add_library(encoder_io STATIC src/encoder_io.cpp)
+target_include_directories(encoder_io PUBLIC include)
+target_link_libraries(encoder_io teensy_core wire mcp23017 busio)
 
 # MAIN
-#add_executable(microloop.elf src/main.cpp)
+add_executable(microloop.elf src/main.cpp)
 
 # ENCODER TEST
-add_executable(microloop.elf tests/test_encoders_main.cpp)
+#add_executable(microloop.elf tests/test_encoders_main.cpp)
 
 # UNIT TESTING
 #add_executable(microloop.elf tests/run_tests.cpp)
@@ -285,7 +285,7 @@ target_link_libraries(microloop.elf
     ssd1306
     gfx
     mcp23017
-    encoder_test
+    encoder_io
     microloop_utils
     m  # Math library
 )

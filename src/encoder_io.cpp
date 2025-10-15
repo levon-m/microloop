@@ -1,6 +1,6 @@
-#include "encoder_test.h"
+#include "encoder_io.h"
 
-namespace EncoderTest {
+namespace EncoderIO {
 
 // MCP23017 instance
 static Adafruit_MCP23X17 mcp;
@@ -74,11 +74,8 @@ bool begin() {
 
     // Initialize MCP23017
     if (!mcp.begin_I2C(0x20, &Wire)) {
-        Serial.println("ERROR: MCP23017 not found on Wire @ 0x20");
         return false;
     }
-
-    Serial.println("MCP23017: Found on Wire @ 0x20");
 
     // Configure all encoder pins as inputs with pull-ups
     for (int i = 0; i < 4; i++) {
@@ -113,12 +110,6 @@ bool begin() {
     pinMode(INT_PIN, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(INT_PIN), encoderISR, FALLING);
 
-    Serial.println("Encoders: Initialized (4 encoders with buttons)");
-    Serial.println("Interrupt-driven mode: Fast response to encoder changes");
-    Serial.println("Turn encoders or press buttons to test...");
-    Serial.println("Format: ENC[N] CW/CCW/PRESS (position)");
-    Serial.println();
-
     return true;
 }
 
@@ -144,21 +135,6 @@ void update() {
 
                 if (dir != 0) {
                     encoders[i].position += dir;
-
-                    // Print direction (every 4 steps = 1 detent on most encoders)
-                    // We'll print on every step for debugging, but note the detent position
-                    const char* dirStr = (dir > 0) ? "CW" : "CCW";
-                    int32_t detents = encoders[i].position / 4; // Typical encoder has 4 steps per detent
-
-                    Serial.print("ENC");
-                    Serial.print(i + 1);
-                    Serial.print(" ");
-                    Serial.print(dirStr);
-                    Serial.print(" (pos=");
-                    Serial.print(encoders[i].position);
-                    Serial.print(", detents=");
-                    Serial.print(detents);
-                    Serial.println(")");
                 }
 
                 encoders[i].lastState = currState;
@@ -173,13 +149,6 @@ void update() {
                 if ((timestamp - encoders[i].lastDebounceTime) > DEBOUNCE_TIME_MS) {
                     encoders[i].buttonPressed = true;
                     encoders[i].lastDebounceTime = timestamp;
-
-                    Serial.print("ENC");
-                    Serial.print(i + 1);
-                    Serial.print(" PRESS");
-                    Serial.print(" (pos=");
-                    Serial.print(encoders[i].position);
-                    Serial.println(")");
                 }
             }
 
@@ -208,4 +177,4 @@ void resetPosition(uint8_t encoderNum) {
     }
 }
 
-} // namespace EncoderTest
+} // namespace EncoderIO

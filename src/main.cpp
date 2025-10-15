@@ -32,6 +32,7 @@
 #include "app_logic.h"
 #include "input_io.h"
 #include "display_io.h"
+#include "encoder_io.h"
 #include "audio_freeze.h"
 #include "audio_choke.h"
 #include "effect_manager.h"
@@ -296,6 +297,36 @@ void setup() {
         Serial.println("Display: OK (SSD1306 on I2C 0x3C / Wire1)");
     }
 
+    // ========== ENCODER SETUP ==========
+    /**
+     * Initialize 4 Rotary Encoders with Push Buttons
+     *
+     * WHAT IT DOES:
+     * - Initializes Wire (I2C bus 0: SDA=pin 18, SCL=pin 19) - shared with Audio Shield
+     * - Initializes MCP23017 I2C GPIO expander (I2C 0x20)
+     * - Configures interrupt-driven ISR state capture for zero missed steps
+     * - Uses hardware INTCAP registers for race-free reading
+     *
+     * HARDWARE:
+     * - MCP23017 on Wire @ 0x20
+     * - INTA (or INTB) → Teensy Pin 36 (mirror mode, only need one)
+     * - Encoder 1: A=GPA4, B=GPA3, SW=GPA2
+     * - Encoder 2: A=GPB0, B=GPB1, SW=GPB2
+     * - Encoder 3: A=GPB3, B=GPB4, SW=GPB5
+     * - Encoder 4: A=GPA7, B=GPA6, SW=GPA5
+     *
+     * NOTE: Encoder initialization failure is FATAL (needed for menu navigation)
+     */
+    if (!EncoderIO::begin()) {
+        Serial.println("ERROR: Encoder I/O init failed!");
+        while (1) {
+            // Blink LED rapidly to indicate error
+            digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+            delay(100);
+        }
+    }
+    Serial.println("Encoder I/O: OK (MCP23017 on I2C 0x20 / Wire, ISR capture mode)");
+
     // ========== EFFECT MANAGER SETUP ==========
     /**
      * Register effects in global registry
@@ -402,10 +433,14 @@ void loop() {
      *
      * WHY NOT EMPTY?
      * - Serial commands for debugging (trace dump, etc.)
+     * - Encoder event processing (drains ISR queue)
      * - Future: Watchdog, memory monitoring, etc.
      *
      * All real-time work happens in threads (I/O, App) and ISRs (Audio)
      */
+
+    // Process encoder events (drains queue from ISR)
+    EncoderIO::update();
 
     // Check for serial commands (non-blocking)
     if (Serial.available()) {
