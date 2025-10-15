@@ -59,11 +59,19 @@ enum class BitmapID : uint8_t {
     DEFAULT = 0,          // Default/idle screen
     FREEZE_ACTIVE = 1,    // Freeze engaged indicator
     CHOKE_ACTIVE = 2,     // Choke engaged indicator
+    QUANT_32 = 3,         // Quantization: 1/32 note
+    QUANT_16 = 4,         // Quantization: 1/16 note
+    QUANT_8 = 5,          // Quantization: 1/8 note
+    QUANT_4 = 6,          // Quantization: 1/4 note
+    CHOKE_LENGTH_FREE = 7,   // Choke length: Free mode
+    CHOKE_LENGTH_QUANT = 8,  // Choke length: Quantized mode
+    CHOKE_ONSET_FREE = 9,    // Choke onset: Free mode
+    CHOKE_ONSET_QUANT = 10,  // Choke onset: Quantized mode
     // Future bitmaps:
-    // MENU_MAIN = 3,
-    // MENU_LOOP = 4,
-    // MENU_SAMPLE = 5,
-    // BPM_DISPLAY = 6,
+    // MENU_MAIN = 11,
+    // MENU_LOOP = 12,
+    // MENU_SAMPLE = 13,
+    // BPM_DISPLAY = 14,
     // etc.
 };
 

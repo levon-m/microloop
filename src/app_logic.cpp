@@ -2,6 +2,7 @@
 #include "midi_io.h"
 #include "input_io.h"
 #include "display_io.h"
+#include "encoder_io.h"
 #include "audio_choke.h"
 #include "effect_manager.h"
 #include "trace.h"
@@ -63,6 +64,82 @@ static constexpr uint32_t PRINT_INTERVAL_MS = 1000;  // Print status every 1s
 // Display priority state (tracks last activated effect)
 static EffectID lastActivatedEffect = EffectID::NONE;
 
+// ========== GLOBAL QUANTIZATION STATE ==========
+// Default quantization: 1/16 note
+static Quantization globalQuantization = Quantization::QUANT_16;
+
+// Encoder 4 state tracking (for global quantization menu)
+static int32_t lastEncoder4Position = 0;      // Last raw position (for detecting movement)
+static int32_t encoder4Accumulator = 0;       // Accumulated steps since last turn
+static bool encoder4WasTouched = false;       // Tracks if encoder was recently touched
+static uint32_t encoder4ReleaseTime = 0;      // Time when encoder was released
+static constexpr uint32_t ENCODER_DISPLAY_COOLDOWN_MS = 2000;  // 2 second cooldown before returning to default
+
+// ========== CHOKE MENU STATE ==========
+// Encoder 3 state tracking (for choke length menu)
+static int32_t lastEncoder3Position = 0;      // Last raw position (for detecting movement)
+static int32_t encoder3Accumulator = 0;       // Accumulated steps since last turn
+static bool encoder3WasTouched = false;       // Tracks if encoder was recently touched
+static uint32_t encoder3ReleaseTime = 0;      // Time when encoder was released
+
+// Helper function to convert Quantization to BitmapID
+static BitmapID quantizationToBitmap(Quantization quant) {
+    switch (quant) {
+        case Quantization::QUANT_32: return BitmapID::QUANT_32;
+        case Quantization::QUANT_16: return BitmapID::QUANT_16;
+        case Quantization::QUANT_8:  return BitmapID::QUANT_8;
+        case Quantization::QUANT_4:  return BitmapID::QUANT_4;
+        default: return BitmapID::QUANT_16;  // Default fallback
+    }
+}
+
+// Helper function to get quantization name string
+static const char* quantizationName(Quantization quant) {
+    switch (quant) {
+        case Quantization::QUANT_32: return "1/32";
+        case Quantization::QUANT_16: return "1/16";
+        case Quantization::QUANT_8:  return "1/8";
+        case Quantization::QUANT_4:  return "1/4";
+        default: return "1/16";
+    }
+}
+
+// Helper function to convert ChokeLength to BitmapID
+static BitmapID chokeLengthToBitmap(ChokeLength length) {
+    switch (length) {
+        case ChokeLength::FREE:      return BitmapID::CHOKE_LENGTH_FREE;
+        case ChokeLength::QUANTIZED: return BitmapID::CHOKE_LENGTH_QUANT;
+        default: return BitmapID::CHOKE_LENGTH_FREE;  // Default fallback
+    }
+}
+
+// Helper function to get choke length name string
+static const char* chokeLengthName(ChokeLength length) {
+    switch (length) {
+        case ChokeLength::FREE:      return "Free";
+        case ChokeLength::QUANTIZED: return "Quantized";
+        default: return "Free";
+    }
+}
+
+// Helper function to calculate quantized duration in samples
+static uint32_t calculateQuantizedDuration(Quantization quant) {
+    uint32_t samplesPerBeat = TimeKeeper::getSamplesPerBeat();
+
+    switch (quant) {
+        case Quantization::QUANT_32:
+            return samplesPerBeat / 8;  // 1/32 note = 1/8 of a beat
+        case Quantization::QUANT_16:
+            return samplesPerBeat / 4;  // 1/16 note = 1/4 of a beat
+        case Quantization::QUANT_8:
+            return samplesPerBeat / 2;  // 1/8 note = 1/2 of a beat
+        case Quantization::QUANT_4:
+            return samplesPerBeat;      // 1/4 note = 1 full beat
+        default:
+            return samplesPerBeat / 4;  // Default: 1/16 note
+    }
+}
+
 void AppLogic::begin() {
     // Configure LED pin
     pinMode(LED_PIN, OUTPUT);
@@ -70,6 +147,10 @@ void AppLogic::begin() {
 
     // Initialize state
     transportActive = false;
+
+    // Initialize encoder positions
+    lastEncoder3Position = EncoderIO::getPosition(2);  // Encoder 3 is index 2
+    lastEncoder4Position = EncoderIO::getPosition(3);  // Encoder 4 is index 3
 }
 
 void AppLogic::threadLoop() {
@@ -94,6 +175,61 @@ void AppLogic::threadLoop() {
          */
         Command cmd;
         while (InputIO::popCommand(cmd)) {
+            // ========== CHOKE QUANTIZED MODE LOGIC ==========
+            /**
+             * SPECIAL HANDLING FOR CHOKE EFFECT IN QUANTIZED MODE
+             *
+             * In QUANTIZED mode:
+             * - Button press: Engage choke AND schedule auto-release
+             * - Button release: Ignored (choke releases after quantized duration)
+             *
+             * In FREE mode:
+             * - Button press: Engage choke
+             * - Button release: Release choke immediately
+             */
+            if (cmd.targetEffect == EffectID::CHOKE) {
+                ChokeLength lengthMode = choke.getLengthMode();
+
+                if (lengthMode == ChokeLength::QUANTIZED) {
+                    // Quantized mode: Only handle button press, ignore release
+                    if (cmd.type == CommandType::EFFECT_ENABLE ||
+                        cmd.type == CommandType::EFFECT_TOGGLE) {
+
+                        // Engage choke
+                        choke.enable();
+
+                        // Calculate quantized duration in samples
+                        uint32_t durationSamples = calculateQuantizedDuration(globalQuantization);
+
+                        // Schedule auto-release
+                        uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
+                        choke.scheduleRelease(releaseSample);
+
+                        // Update visual feedback
+                        bool enabled = choke.isEnabled();
+                        InputIO::setLED(cmd.targetEffect, enabled);
+
+                        if (enabled) {
+                            lastActivatedEffect = cmd.targetEffect;
+                            DisplayIO::showChoke();
+                        }
+
+                        // Debug output
+                        Serial.print("Choke ENGAGED (Quantized, duration=");
+                        Serial.print(quantizationName(globalQuantization));
+                        Serial.println(")");
+
+                        // Skip normal command processing
+                        continue;
+                    } else if (cmd.type == CommandType::EFFECT_DISABLE) {
+                        // Button release in quantized mode: Ignore
+                        Serial.println("Choke button released (ignored in Quantized mode)");
+                        continue;
+                    }
+                }
+                // FREE mode: Fall through to normal command processing
+            }
+
             // Execute command via EffectManager
             if (EffectManager::executeCommand(cmd)) {
                 // Command executed successfully
@@ -154,7 +290,276 @@ void AppLogic::threadLoop() {
             }
         }
 
-        // ========== 2. DRAIN TRANSPORT EVENTS ==========
+        // ========== 2. HANDLE ENCODER 4 (QUANTIZATION MENU) ==========
+        /**
+         * ENCODER 4 QUANTIZATION MENU
+         *
+         * DESIGN:
+         * - Encoder 4 controls global quantization setting
+         * - Options: 1/32, 1/16 (default), 1/8, 1/4
+         * - 2 detents = 1 "turn" (allows "peeking" without changing value)
+         * - Display shows quantization bitmap while encoder is touched
+         * - 2 second cooldown after release before returning to default display
+         *
+         * DETENT CALCULATION:
+         * - Most encoders: 4 quadrature steps per physical detent
+         * - 2 detents = 8 steps (allows slight touch without changing)
+         * - Direction: CW = increase (1/32 → 1/16 → 1/8 → 1/4), CCW = decrease
+         */
+
+        // Process encoder events (update positions)
+        EncoderIO::update();
+
+        // Get current encoder 4 position (raw steps)
+        int32_t currentEncoder4Position = EncoderIO::getPosition(3);  // Encoder 4 is index 3
+        int32_t encoder4Delta = currentEncoder4Position - lastEncoder4Position;
+
+        // Check if encoder was touched (position changed)
+        if (encoder4Delta != 0) {
+            // Encoder is being touched - show quantization bitmap immediately
+            if (!encoder4WasTouched) {
+                encoder4WasTouched = true;
+                // Show current quantization bitmap
+                DisplayIO::showBitmap(quantizationToBitmap(globalQuantization));
+            }
+
+            // Reset the release timer since encoder is still being touched
+            encoder4ReleaseTime = 0;
+
+            // Accumulate steps for turn detection
+            encoder4Accumulator += encoder4Delta;
+
+            // Calculate turns based on detents (2 detents = 1 turn)
+            // Typical encoder: 4 steps per detent, so 8 steps = 2 detents = 1 turn
+            int32_t turns = encoder4Accumulator / 8;  // 8 steps = 2 detents
+
+            // Update quantization if we've crossed a turn boundary
+            if (turns != 0) {
+                // Map quantization to integer index (0-3)
+                int8_t currentIndex = static_cast<int8_t>(globalQuantization);
+                int8_t newIndex = currentIndex + turns;
+
+                // Clamp to valid range (0-3)
+                if (newIndex < 0) newIndex = 0;
+                if (newIndex > 3) newIndex = 3;
+
+                // Update quantization if changed
+                if (newIndex != currentIndex) {
+                    Quantization newQuant = static_cast<Quantization>(newIndex);
+                    globalQuantization = newQuant;
+
+                    // Update display to show new quantization
+                    DisplayIO::showBitmap(quantizationToBitmap(newQuant));
+
+                    // Serial output for debugging
+                    Serial.print("Global Quantization: ");
+                    Serial.println(quantizationName(newQuant));
+
+                    // Reset accumulator to prevent "unwinding" at boundaries
+                    encoder4Accumulator = 0;
+                } else {
+                    // Hit a boundary (clamped) - reset accumulator to prevent buildup
+                    encoder4Accumulator = 0;
+                }
+            }
+
+            // Always update last position so we can detect when encoder stops moving
+            lastEncoder4Position = currentEncoder4Position;
+        } else {
+            // Encoder not being touched
+            if (encoder4WasTouched) {
+                // Encoder was just released - start cooldown timer
+                encoder4WasTouched = false;
+                encoder4ReleaseTime = millis();
+            }
+        }
+
+        // Handle display cooldown (return to default after 2 seconds of inactivity)
+        if (!encoder4WasTouched && encoder4ReleaseTime > 0) {
+            uint32_t now = millis();
+            if (now - encoder4ReleaseTime >= ENCODER_DISPLAY_COOLDOWN_MS) {
+                // Cooldown expired - return to default display (unless effect is active)
+                encoder4ReleaseTime = 0;  // Clear cooldown
+
+                // Check if any effects are active (use same priority logic as effect system)
+                AudioEffectBase* freezeEffect = EffectManager::getEffect(EffectID::FREEZE);
+                AudioEffectBase* chokeEffect = EffectManager::getEffect(EffectID::CHOKE);
+
+                bool freezeActive = freezeEffect && freezeEffect->isEnabled();
+                bool chokeActive = chokeEffect && chokeEffect->isEnabled();
+
+                if (lastActivatedEffect == EffectID::FREEZE && freezeActive) {
+                    DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+                } else if (lastActivatedEffect == EffectID::CHOKE && chokeActive) {
+                    DisplayIO::showChoke();
+                } else if (freezeActive) {
+                    DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+                } else if (chokeActive) {
+                    DisplayIO::showChoke();
+                } else {
+                    DisplayIO::showDefault();
+                }
+            }
+        }
+
+        // ========== 2A. HANDLE ENCODER 3 (CHOKE LENGTH MENU) ==========
+        /**
+         * ENCODER 3 CHOKE LENGTH MENU
+         *
+         * DESIGN:
+         * - Encoder 3 controls choke length parameter
+         * - Options: FREE (default), QUANTIZED
+         * - 2 detents = 1 "turn" (allows "peeking" without changing value)
+         * - Display shows choke length bitmap while encoder is touched
+         * - 2 second cooldown after release before returning to default display
+         *
+         * CHOKE LENGTH:
+         * - FREE: Release immediately when button released
+         * - QUANTIZED: Auto-release after global quantization duration
+         *
+         * DETENT CALCULATION:
+         * - Most encoders: 4 quadrature steps per physical detent
+         * - 2 detents = 8 steps (allows slight touch without changing)
+         * - Direction: CW = QUANTIZED, CCW = FREE
+         */
+
+        // Get current encoder 3 position (raw steps)
+        int32_t currentEncoder3Position = EncoderIO::getPosition(2);  // Encoder 3 is index 2
+        int32_t encoder3Delta = currentEncoder3Position - lastEncoder3Position;
+
+        // Check if encoder was touched (position changed)
+        if (encoder3Delta != 0) {
+            // Encoder is being touched - show choke length bitmap immediately
+            if (!encoder3WasTouched) {
+                encoder3WasTouched = true;
+                // Show current choke length bitmap
+                DisplayIO::showBitmap(chokeLengthToBitmap(choke.getLengthMode()));
+            }
+
+            // Reset the release timer since encoder is still being touched
+            encoder3ReleaseTime = 0;
+
+            // Accumulate steps for turn detection
+            encoder3Accumulator += encoder3Delta;
+
+            // Calculate turns based on detents (2 detents = 1 turn)
+            // Typical encoder: 4 steps per detent, so 8 steps = 2 detents = 1 turn
+            int32_t turns = encoder3Accumulator / 8;  // 8 steps = 2 detents
+
+            // Update choke length if we've crossed a turn boundary
+            if (turns != 0) {
+                // Update LENGTH parameter
+                int8_t currentIndex = static_cast<int8_t>(choke.getLengthMode());
+                int8_t newIndex = currentIndex + turns;
+
+                // Clamp to valid range (0-1)
+                if (newIndex < 0) newIndex = 0;
+                if (newIndex > 1) newIndex = 1;
+
+                // Update choke length if changed
+                if (newIndex != currentIndex) {
+                    ChokeLength newLength = static_cast<ChokeLength>(newIndex);
+                    choke.setLengthMode(newLength);
+
+                    // Update display to show new value
+                    DisplayIO::showBitmap(chokeLengthToBitmap(newLength));
+
+                    // Serial output for debugging
+                    Serial.print("Choke Length: ");
+                    Serial.println(chokeLengthName(newLength));
+
+                    // Reset accumulator to prevent "unwinding" at boundaries
+                    encoder3Accumulator = 0;
+                } else {
+                    // Hit a boundary (clamped) - reset accumulator to prevent buildup
+                    encoder3Accumulator = 0;
+                }
+            }
+
+            // Always update last position so we can detect when encoder stops moving
+            lastEncoder3Position = currentEncoder3Position;
+        } else {
+            // Encoder not being touched
+            if (encoder3WasTouched) {
+                // Encoder was just released - start cooldown timer
+                encoder3WasTouched = false;
+                encoder3ReleaseTime = millis();
+            }
+        }
+
+        // Handle display cooldown (return to default after 2 seconds of inactivity)
+        if (!encoder3WasTouched && encoder3ReleaseTime > 0) {
+            uint32_t now = millis();
+            if (now - encoder3ReleaseTime >= ENCODER_DISPLAY_COOLDOWN_MS) {
+                // Cooldown expired - return to default display (unless effect is active)
+                encoder3ReleaseTime = 0;  // Clear cooldown
+
+                // Check if any effects are active (use same priority logic as effect system)
+                AudioEffectBase* freezeEffect = EffectManager::getEffect(EffectID::FREEZE);
+                AudioEffectBase* chokeEffect = EffectManager::getEffect(EffectID::CHOKE);
+
+                bool freezeActive = freezeEffect && freezeEffect->isEnabled();
+                bool chokeActive = chokeEffect && chokeEffect->isEnabled();
+
+                if (lastActivatedEffect == EffectID::FREEZE && freezeActive) {
+                    DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+                } else if (lastActivatedEffect == EffectID::CHOKE && chokeActive) {
+                    DisplayIO::showChoke();
+                } else if (freezeActive) {
+                    DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+                } else if (chokeActive) {
+                    DisplayIO::showChoke();
+                } else {
+                    DisplayIO::showDefault();
+                }
+            }
+        }
+
+        // ========== 2B. MONITOR CHOKE AUTO-RELEASE (QUANTIZED MODE) ==========
+        /**
+         * QUANTIZED CHOKE AUTO-RELEASE DISPLAY UPDATE
+         *
+         * PROBLEM:
+         * - In QUANTIZED mode, choke auto-releases in audio ISR (not via button)
+         * - Display shows choke bitmap until button press or encoder timeout
+         * - Desired: Display should update immediately when choke auto-releases
+         *
+         * SOLUTION:
+         * - Poll choke state every loop iteration
+         * - If choke was active (lastActivatedEffect == CHOKE) but now disabled,
+         *   update display to show default (or other active effects)
+         *
+         * PERFORMANCE:
+         * - Single atomic read (isEnabled()) every 2ms
+         * - Negligible overhead (~10 CPU cycles)
+         */
+        if (lastActivatedEffect == EffectID::CHOKE && choke.getLengthMode() == ChokeLength::QUANTIZED) {
+            // In quantized mode with choke as last activated effect
+            // Check if choke auto-released
+            if (!choke.isEnabled()) {
+                // Choke has auto-released - update display
+                AudioEffectBase* freezeEffect = EffectManager::getEffect(EffectID::FREEZE);
+                bool freezeActive = freezeEffect && freezeEffect->isEnabled();
+
+                if (freezeActive) {
+                    // Show freeze if active
+                    DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+                    lastActivatedEffect = EffectID::FREEZE;
+                } else {
+                    // No effects active - show default
+                    DisplayIO::showDefault();
+                    lastActivatedEffect = EffectID::NONE;
+                }
+
+                // Update LED to reflect disabled state
+                InputIO::setLED(EffectID::CHOKE, false);
+
+                // Debug output
+                Serial.println("Choke auto-released (Quantized mode)");
+            }
+        }
+
+        // ========== 3. DRAIN TRANSPORT EVENTS ==========
         /**
          * WHY DRAIN COMPLETELY?
          * - Events are rare (only on start/stop)
@@ -371,4 +776,16 @@ void AppLogic::threadLoop() {
          */
         threads.delay(2);
     }
+}
+
+// =============================================================================
+// GLOBAL QUANTIZATION API
+// =============================================================================
+
+Quantization AppLogic::getGlobalQuantization() {
+    return globalQuantization;
+}
+
+void AppLogic::setGlobalQuantization(Quantization quant) {
+    globalQuantization = quant;
 }

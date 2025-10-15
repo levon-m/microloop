@@ -65,9 +65,17 @@ struct BitmapData {
  * 3. Add registry entry here (order matters!)
  */
 static const BitmapData bitmapRegistry[] = {
-    { bitmap_default, DISPLAY_WIDTH, DISPLAY_HEIGHT },        // BitmapID::DEFAULT
-    { bitmap_freeze_active, DISPLAY_WIDTH, DISPLAY_HEIGHT },  // BitmapID::FREEZE_ACTIVE
-    { bitmap_choke_active, DISPLAY_WIDTH, DISPLAY_HEIGHT },   // BitmapID::CHOKE_ACTIVE
+    { bitmap_default, DISPLAY_WIDTH, DISPLAY_HEIGHT },            // BitmapID::DEFAULT
+    { bitmap_freeze_active, DISPLAY_WIDTH, DISPLAY_HEIGHT },      // BitmapID::FREEZE_ACTIVE
+    { bitmap_choke_active, DISPLAY_WIDTH, DISPLAY_HEIGHT },       // BitmapID::CHOKE_ACTIVE
+    { bitmap_quant_32, DISPLAY_WIDTH, DISPLAY_HEIGHT },           // BitmapID::QUANT_32
+    { bitmap_quant_16, DISPLAY_WIDTH, DISPLAY_HEIGHT },           // BitmapID::QUANT_16
+    { bitmap_quant_8, DISPLAY_WIDTH, DISPLAY_HEIGHT },            // BitmapID::QUANT_8
+    { bitmap_quant_4, DISPLAY_WIDTH, DISPLAY_HEIGHT },            // BitmapID::QUANT_4
+    { bitmap_choke_length_free, DISPLAY_WIDTH, DISPLAY_HEIGHT },  // BitmapID::CHOKE_LENGTH_FREE
+    { bitmap_choke_length_quant, DISPLAY_WIDTH, DISPLAY_HEIGHT }, // BitmapID::CHOKE_LENGTH_QUANT
+    { bitmap_choke_onset_free, DISPLAY_WIDTH, DISPLAY_HEIGHT },   // BitmapID::CHOKE_ONSET_FREE
+    { bitmap_choke_onset_quant, DISPLAY_WIDTH, DISPLAY_HEIGHT },  // BitmapID::CHOKE_ONSET_QUANT
     // Add more bitmaps here as needed
 };
 
