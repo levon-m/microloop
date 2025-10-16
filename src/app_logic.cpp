@@ -239,12 +239,26 @@ static uint32_t samplesToNextQuantizedBoundary(Quantization quant) {
     // Calculate subdivision size
     uint32_t subdivisionSamples = calculateQuantizedDuration(quant);
 
+    // Special case: If quantization is >= 1 beat (1/4 note or larger),
+    // wait for NEXT beat start, not the end of current beat
+    if (subdivisionSamples >= samplesPerBeat) {
+        // Next beat boundary
+        uint64_t nextBeatSample = (beatNumber + 1) * samplesPerBeat;
+        return nextBeatSample - currentSample;
+    }
+
+    // For subdivisions smaller than a beat (1/8, 1/16, 1/32):
     // Find which subdivision we're in within the current beat
     uint32_t sampleWithinBeat = currentSample - currentBeatSample;
     uint32_t currentSubdivision = sampleWithinBeat / subdivisionSamples;
 
-    // Calculate next subdivision boundary
+    // Calculate next subdivision boundary within this beat
     uint64_t nextBoundarySample = currentBeatSample + ((currentSubdivision + 1) * subdivisionSamples);
+
+    // If we've passed the last subdivision in this beat, wrap to next beat
+    if (nextBoundarySample >= (currentBeatSample + samplesPerBeat)) {
+        nextBoundarySample = (beatNumber + 1) * samplesPerBeat;
+    }
 
     // Return samples until next boundary
     return nextBoundarySample - currentSample;
@@ -622,7 +636,160 @@ void AppLogic::threadLoop() {
             }
         }
 
-        // ========== 2A. HANDLE ENCODER 3 (CHOKE PARAMETER MENU) ==========
+        // ========== 2A. HANDLE ENCODER 1 (FREEZE PARAMETER MENU) ==========
+        /**
+         * ENCODER 1 FREEZE PARAMETER MENU WITH CYCLING
+         * (Identical to encoder 3 logic, but for FREEZE effect)
+         */
+
+        // Check for encoder 1 button press (parameter cycling)
+        if (EncoderIO::getButton(0)) {  // Encoder 1 is index 0
+            // Cycle to next parameter on button press
+            if (currentFreezeParameter == FreezeParameter::LENGTH) {
+                currentFreezeParameter = FreezeParameter::ONSET;
+                Serial.println("Freeze Parameter: ONSET");
+            } else {
+                currentFreezeParameter = FreezeParameter::LENGTH;
+                Serial.println("Freeze Parameter: LENGTH");
+            }
+
+            // Show bitmap for current parameter/value
+            if (currentFreezeParameter == FreezeParameter::LENGTH) {
+                DisplayIO::showBitmap(freezeLengthToBitmap(freeze.getLengthMode()));
+            } else {  // ONSET
+                DisplayIO::showBitmap(freezeOnsetToBitmap(freeze.getOnsetMode()));
+            }
+
+            // Mark encoder as touched and reset timers
+            encoder1WasTouched = true;
+            encoder1ReleaseTime = 0;
+        }
+
+        // Get current encoder 1 position (raw steps)
+        int32_t currentEncoder1Position = EncoderIO::getPosition(0);  // Encoder 1 is index 0
+        int32_t encoder1Delta = currentEncoder1Position - lastEncoder1Position;
+
+        // Check if encoder was touched (position changed)
+        if (encoder1Delta != 0) {
+            // Encoder is being touched - show current parameter bitmap immediately
+            if (!encoder1WasTouched) {
+                encoder1WasTouched = true;
+                // Show current parameter bitmap based on currentFreezeParameter
+                if (currentFreezeParameter == FreezeParameter::LENGTH) {
+                    DisplayIO::showBitmap(freezeLengthToBitmap(freeze.getLengthMode()));
+                } else {  // ONSET
+                    DisplayIO::showBitmap(freezeOnsetToBitmap(freeze.getOnsetMode()));
+                }
+            }
+
+            // Reset the release timer since encoder is still being touched
+            encoder1ReleaseTime = 0;
+
+            // Accumulate steps for turn detection
+            encoder1Accumulator += encoder1Delta;
+
+            // Calculate turns based on detents (2 detents = 1 turn)
+            int32_t turns = encoder1Accumulator / 8;  // 8 steps = 2 detents
+
+            // Update parameter if we've crossed a turn boundary
+            if (turns != 0) {
+                if (currentFreezeParameter == FreezeParameter::LENGTH) {
+                    // Update LENGTH parameter
+                    int8_t currentIndex = static_cast<int8_t>(freeze.getLengthMode());
+                    int8_t newIndex = currentIndex + turns;
+
+                    // Clamp to valid range (0-1)
+                    if (newIndex < 0) newIndex = 0;
+                    if (newIndex > 1) newIndex = 1;
+
+                    // Update freeze length if changed
+                    if (newIndex != currentIndex) {
+                        FreezeLength newLength = static_cast<FreezeLength>(newIndex);
+                        freeze.setLengthMode(newLength);
+
+                        // Update display to show new value
+                        DisplayIO::showBitmap(freezeLengthToBitmap(newLength));
+
+                        // Serial output for debugging
+                        Serial.print("Freeze Length: ");
+                        Serial.println(freezeLengthName(newLength));
+
+                        // Reset accumulator to prevent "unwinding" at boundaries
+                        encoder1Accumulator = 0;
+                    } else {
+                        // Hit a boundary (clamped) - reset accumulator to prevent buildup
+                        encoder1Accumulator = 0;
+                    }
+                } else {  // ONSET parameter
+                    // Update ONSET parameter
+                    int8_t currentIndex = static_cast<int8_t>(freeze.getOnsetMode());
+                    int8_t newIndex = currentIndex + turns;
+
+                    // Clamp to valid range (0-1)
+                    if (newIndex < 0) newIndex = 0;
+                    if (newIndex > 1) newIndex = 1;
+
+                    // Update freeze onset if changed
+                    if (newIndex != currentIndex) {
+                        FreezeOnset newOnset = static_cast<FreezeOnset>(newIndex);
+                        freeze.setOnsetMode(newOnset);
+
+                        // Update display to show new value
+                        DisplayIO::showBitmap(freezeOnsetToBitmap(newOnset));
+
+                        // Serial output for debugging
+                        Serial.print("Freeze Onset: ");
+                        Serial.println(freezeOnsetName(newOnset));
+
+                        // Reset accumulator to prevent "unwinding" at boundaries
+                        encoder1Accumulator = 0;
+                    } else {
+                        // Hit a boundary (clamped) - reset accumulator to prevent buildup
+                        encoder1Accumulator = 0;
+                    }
+                }
+            }
+
+            // Always update last position so we can detect when encoder stops moving
+            lastEncoder1Position = currentEncoder1Position;
+        } else {
+            // Encoder not being touched
+            if (encoder1WasTouched) {
+                // Encoder was just released - start cooldown timer
+                encoder1WasTouched = false;
+                encoder1ReleaseTime = millis();
+            }
+        }
+
+        // Handle display cooldown (return to default after 2 seconds of inactivity)
+        if (!encoder1WasTouched && encoder1ReleaseTime > 0) {
+            uint32_t now = millis();
+            if (now - encoder1ReleaseTime >= ENCODER_DISPLAY_COOLDOWN_MS) {
+                // Cooldown expired - return to default display (unless effect is active)
+                encoder1ReleaseTime = 0;  // Clear cooldown
+
+                // Check if any effects are active (use same priority logic as effect system)
+                AudioEffectBase* freezeEffect = EffectManager::getEffect(EffectID::FREEZE);
+                AudioEffectBase* chokeEffect = EffectManager::getEffect(EffectID::CHOKE);
+
+                bool freezeActive = freezeEffect && freezeEffect->isEnabled();
+                bool chokeActive = chokeEffect && chokeEffect->isEnabled();
+
+                if (lastActivatedEffect == EffectID::FREEZE && freezeActive) {
+                    DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+                } else if (lastActivatedEffect == EffectID::CHOKE && chokeActive) {
+                    DisplayIO::showChoke();
+                } else if (freezeActive) {
+                    DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+                } else if (chokeActive) {
+                    DisplayIO::showChoke();
+                } else {
+                    DisplayIO::showDefault();
+                }
+            }
+        }
+
+        // ========== 2B. HANDLE ENCODER 3 (CHOKE PARAMETER MENU) ==========
         /**
          * ENCODER 3 CHOKE PARAMETER MENU WITH CYCLING
          *
@@ -889,6 +1056,79 @@ void AppLogic::threadLoop() {
 
                 // Debug output
                 Serial.println("Choke auto-released (Quantized mode)");
+            }
+        }
+
+        // ========== 2D. MONITOR FREEZE SCHEDULED ONSET (QUANTIZED ONSET MODE) ==========
+        /**
+         * QUANTIZED FREEZE ONSET MONITORING
+         * (Identical to CHOKE monitoring, but for FREEZE effect)
+         *
+         * PURPOSE:
+         * - Check if scheduled freeze onset sample has been reached
+         * - Engage freeze at exact quantized boundary
+         * - Handle both length modes after onset fires
+         */
+        if (scheduledFreezeOnsetSample > 0) {
+            uint64_t currentSample = TimeKeeper::getSamplePosition();
+            if (currentSample >= scheduledFreezeOnsetSample) {
+                // Time to engage freeze
+                freeze.enable();
+
+                // Check length mode for auto-release scheduling
+                FreezeLength lengthMode = freeze.getLengthMode();
+                if (lengthMode == FreezeLength::QUANTIZED) {
+                    // QUANTIZED LENGTH: Schedule auto-release
+                    uint32_t durationSamples = calculateQuantizedDuration(globalQuantization);
+                    uint64_t releaseSample = currentSample + durationSamples;
+                    freeze.scheduleRelease(releaseSample);
+
+                    Serial.print("Freeze ENGAGED at scheduled onset (Quantized length=");
+                    Serial.print(quantizationName(globalQuantization));
+                    Serial.println(")");
+                } else {
+                    // FREE LENGTH: Manual release
+                    Serial.println("Freeze ENGAGED at scheduled onset (Free length)");
+                }
+
+                // Update visual feedback
+                InputIO::setLED(EffectID::FREEZE, true);
+                lastActivatedEffect = EffectID::FREEZE;
+                DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+
+                // Clear scheduled onset
+                scheduledFreezeOnsetSample = 0;
+            }
+        }
+
+        // ========== 2E. MONITOR FREEZE AUTO-RELEASE (QUANTIZED MODE) ==========
+        /**
+         * QUANTIZED FREEZE AUTO-RELEASE DISPLAY UPDATE
+         * (Identical to CHOKE monitoring, but for FREEZE effect)
+         */
+        if (lastActivatedEffect == EffectID::FREEZE && freeze.getLengthMode() == FreezeLength::QUANTIZED) {
+            // In quantized mode with freeze as last activated effect
+            // Check if freeze auto-released
+            if (!freeze.isEnabled()) {
+                // Freeze has auto-released - update display
+                AudioEffectBase* chokeEffect = EffectManager::getEffect(EffectID::CHOKE);
+                bool chokeActive = chokeEffect && chokeEffect->isEnabled();
+
+                if (chokeActive) {
+                    // Show choke if active
+                    DisplayIO::showChoke();
+                    lastActivatedEffect = EffectID::CHOKE;
+                } else {
+                    // No effects active - show default
+                    DisplayIO::showDefault();
+                    lastActivatedEffect = EffectID::NONE;
+                }
+
+                // Update LED to reflect disabled state
+                InputIO::setLED(EffectID::FREEZE, false);
+
+                // Debug output
+                Serial.println("Freeze auto-released (Quantized mode)");
             }
         }
 
