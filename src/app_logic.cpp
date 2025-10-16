@@ -227,41 +227,9 @@ static uint32_t calculateQuantizedDuration(Quantization quant) {
     }
 }
 
-// Helper function to calculate samples to next quantized boundary
+// Helper function to calculate samples to next quantized boundary (for ONSET)
 static uint32_t samplesToNextQuantizedBoundary(Quantization quant) {
-    uint32_t samplesPerBeat = TimeKeeper::getSamplesPerBeat();
-    uint64_t currentSample = TimeKeeper::getSamplePosition();
-
-    // Get the current beat start sample
-    uint32_t beatNumber = TimeKeeper::getBeatNumber();
-    uint64_t currentBeatSample = beatNumber * samplesPerBeat;
-
-    // Calculate subdivision size
-    uint32_t subdivisionSamples = calculateQuantizedDuration(quant);
-
-    // Special case: If quantization is >= 1 beat (1/4 note or larger),
-    // wait for NEXT beat start, not the end of current beat
-    if (subdivisionSamples >= samplesPerBeat) {
-        // Next beat boundary
-        uint64_t nextBeatSample = (beatNumber + 1) * samplesPerBeat;
-        return nextBeatSample - currentSample;
-    }
-
-    // For subdivisions smaller than a beat (1/8, 1/16, 1/32):
-    // Find which subdivision we're in within the current beat
-    uint32_t sampleWithinBeat = currentSample - currentBeatSample;
-    uint32_t currentSubdivision = sampleWithinBeat / subdivisionSamples;
-
-    // Calculate next subdivision boundary within this beat
-    uint64_t nextBoundarySample = currentBeatSample + ((currentSubdivision + 1) * subdivisionSamples);
-
-    // If we've passed the last subdivision in this beat, wrap to next beat
-    if (nextBoundarySample >= (currentBeatSample + samplesPerBeat)) {
-        nextBoundarySample = (beatNumber + 1) * samplesPerBeat;
-    }
-
-    // Return samples until next boundary
-    return nextBoundarySample - currentSample;
+    return TimeKeeper::samplesToNextBeat();
 }
 
 void AppLogic::begin() {
@@ -325,31 +293,16 @@ void AppLogic::threadLoop() {
                 ChokeLength lengthMode = choke.getLengthMode();
                 ChokeOnset onsetMode = choke.getOnsetMode();
 
-                // Handle button press (ENABLE/TOGGLE)
+                // ========== BUTTON PRESS (ENGAGE) ==========
                 if (cmd.type == CommandType::EFFECT_ENABLE ||
                     cmd.type == CommandType::EFFECT_TOGGLE) {
 
-                    if (onsetMode == ChokeOnset::QUANTIZED) {
-                        // QUANTIZED ONSET: Schedule choke for next beat boundary
-                        // Calculate samples until next quantized boundary
-                        uint32_t samplesToNext = samplesToNextQuantizedBoundary(globalQuantization);
-                        scheduledOnsetSample = TimeKeeper::getSamplePosition() + samplesToNext;
-
-                        // Debug output
-                        Serial.print("Choke ONSET scheduled (");
-                        Serial.print(quantizationName(globalQuantization));
-                        Serial.print(" boundary, ");
-                        Serial.print(samplesToNext);
-                        Serial.println(" samples)");
-
-                        // Skip normal command processing (choke will engage later)
-                        continue;
-                    } else {
+                    if (onsetMode == ChokeOnset::FREE) {
                         // FREE ONSET: Engage immediately
                         choke.enable();
 
                         if (lengthMode == ChokeLength::QUANTIZED) {
-                            // QUANTIZED LENGTH: Schedule auto-release
+                            // FREE ONSET + QUANTIZED LENGTH
                             uint32_t durationSamples = calculateQuantizedDuration(globalQuantization);
                             uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
                             choke.scheduleRelease(releaseSample);
@@ -358,7 +311,7 @@ void AppLogic::threadLoop() {
                             Serial.print(quantizationName(globalQuantization));
                             Serial.println(")");
                         } else {
-                            // FREE LENGTH: Manual release
+                            // FREE ONSET + FREE LENGTH
                             Serial.println("Choke ENGAGED (Free onset, Free length)");
                         }
 
@@ -366,28 +319,40 @@ void AppLogic::threadLoop() {
                         InputIO::setLED(cmd.targetEffect, true);
                         lastActivatedEffect = cmd.targetEffect;
                         DisplayIO::showChoke();
+                        continue;
+                    } else {
+                        // QUANTIZED ONSET: Schedule for next beat boundary
+                        uint32_t samplesToNext = samplesToNextQuantizedBoundary(globalQuantization);
+                        scheduledOnsetSample = TimeKeeper::getSamplePosition() + samplesToNext;
 
-                        // Skip normal command processing
+                        Serial.print("Choke ONSET scheduled (");
+                        Serial.print(quantizationName(globalQuantization));
+                        Serial.print(" boundary, ");
+                        Serial.print(samplesToNext);
+                        Serial.println(" samples)");
+
+                        // No visual feedback yet - wait for beat
                         continue;
                     }
                 }
 
-                // Handle button release (DISABLE)
+                // ========== BUTTON RELEASE (DISENGAGE) ==========
                 if (cmd.type == CommandType::EFFECT_DISABLE) {
                     if (lengthMode == ChokeLength::QUANTIZED) {
-                        // QUANTIZED LENGTH: Ignore button release (auto-releases)
-                        Serial.println("Choke button released (ignored in Quantized length mode)");
+                        // QUANTIZED LENGTH: Ignore release (auto-releases)
+                        Serial.println("Choke button released (ignored - quantized length)");
                         continue;
                     }
 
+                    // FREE LENGTH: Check if we have scheduled onset
                     if (scheduledOnsetSample > 0) {
-                        // Cancel scheduled onset if button released before onset fires
+                        // QUANTIZED ONSET + FREE LENGTH: Cancel scheduled onset
                         scheduledOnsetSample = 0;
-                        Serial.println("Choke scheduled onset CANCELLED");
+                        Serial.println("Choke scheduled onset CANCELLED (button released before beat)");
                         continue;
                     }
 
-                    // FREE LENGTH: Fall through to normal command processing (immediate release)
+                    // FREE ONSET + FREE LENGTH: Fall through to immediate disable
                 }
             }
 
@@ -400,12 +365,35 @@ void AppLogic::threadLoop() {
                 FreezeLength lengthMode = freeze.getLengthMode();
                 FreezeOnset onsetMode = freeze.getOnsetMode();
 
-                // Handle button press (ENABLE/TOGGLE)
+                // ========== BUTTON PRESS (ENGAGE) ==========
                 if (cmd.type == CommandType::EFFECT_ENABLE ||
                     cmd.type == CommandType::EFFECT_TOGGLE) {
 
-                    if (onsetMode == FreezeOnset::QUANTIZED) {
-                        // QUANTIZED ONSET: Schedule freeze for next beat boundary
+                    if (onsetMode == FreezeOnset::FREE) {
+                        // FREE ONSET: Engage immediately
+                        freeze.enable();
+
+                        if (lengthMode == FreezeLength::QUANTIZED) {
+                            // FREE ONSET + QUANTIZED LENGTH
+                            uint32_t durationSamples = calculateQuantizedDuration(globalQuantization);
+                            uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
+                            freeze.scheduleRelease(releaseSample);
+
+                            Serial.print("Freeze ENGAGED (Free onset, Quantized length=");
+                            Serial.print(quantizationName(globalQuantization));
+                            Serial.println(")");
+                        } else {
+                            // FREE ONSET + FREE LENGTH
+                            Serial.println("Freeze ENGAGED (Free onset, Free length)");
+                        }
+
+                        // Update visual feedback
+                        InputIO::setLED(cmd.targetEffect, true);
+                        lastActivatedEffect = cmd.targetEffect;
+                        DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+                        continue;
+                    } else {
+                        // QUANTIZED ONSET: Schedule for next beat boundary
                         uint32_t samplesToNext = samplesToNextQuantizedBoundary(globalQuantization);
                         scheduledFreezeOnsetSample = TimeKeeper::getSamplePosition() + samplesToNext;
 
@@ -415,52 +403,28 @@ void AppLogic::threadLoop() {
                         Serial.print(samplesToNext);
                         Serial.println(" samples)");
 
-                        // Skip normal command processing
-                        continue;
-                    } else {
-                        // FREE ONSET: Engage immediately
-                        freeze.enable();
-
-                        if (lengthMode == FreezeLength::QUANTIZED) {
-                            // QUANTIZED LENGTH: Schedule auto-release
-                            uint32_t durationSamples = calculateQuantizedDuration(globalQuantization);
-                            uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
-                            freeze.scheduleRelease(releaseSample);
-
-                            Serial.print("Freeze ENGAGED (Free onset, Quantized length=");
-                            Serial.print(quantizationName(globalQuantization));
-                            Serial.println(")");
-                        } else {
-                            // FREE LENGTH: Manual release
-                            Serial.println("Freeze ENGAGED (Free onset, Free length)");
-                        }
-
-                        // Update visual feedback
-                        InputIO::setLED(cmd.targetEffect, true);
-                        lastActivatedEffect = cmd.targetEffect;
-                        DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
-
-                        // Skip normal command processing
+                        // No visual feedback yet - wait for beat
                         continue;
                     }
                 }
 
-                // Handle button release (DISABLE)
+                // ========== BUTTON RELEASE (DISENGAGE) ==========
                 if (cmd.type == CommandType::EFFECT_DISABLE) {
                     if (lengthMode == FreezeLength::QUANTIZED) {
-                        // QUANTIZED LENGTH: Ignore button release (auto-releases)
-                        Serial.println("Freeze button released (ignored in Quantized length mode)");
+                        // QUANTIZED LENGTH: Ignore release (auto-releases)
+                        Serial.println("Freeze button released (ignored - quantized length)");
                         continue;
                     }
 
+                    // FREE LENGTH: Check if we have scheduled onset
                     if (scheduledFreezeOnsetSample > 0) {
-                        // Cancel scheduled onset if button released before onset fires
+                        // QUANTIZED ONSET + FREE LENGTH: Cancel scheduled onset
                         scheduledFreezeOnsetSample = 0;
-                        Serial.println("Freeze scheduled onset CANCELLED");
+                        Serial.println("Freeze scheduled onset CANCELLED (button released before beat)");
                         continue;
                     }
 
-                    // FREE LENGTH: Fall through to normal command processing (immediate release)
+                    // FREE ONSET + FREE LENGTH: Fall through to immediate disable
                 }
             }
 

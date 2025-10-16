@@ -210,29 +210,36 @@ uint32_t TimeKeeper::samplesToNextBeat() {
     /**
      * Calculate samples until next beat boundary
      *
-     * ALGORITHM:
-     *   1. Get current sample position
-     *   2. Calculate sample position of next beat
-     *   3. Return delta
+     * NEW ALGORITHM (RELATIVE, NOT ABSOLUTE):
+     *   Uses position within current beat to calculate relative offset to next beat.
+     *   This avoids timing drift issues between MIDI beat tracking and audio samples.
      *
-     * EDGE CASE: If we're exactly on a beat boundary, return full beat
-     * (don't return 0, that would cause immediate trigger)
+     * EXAMPLE (120 BPM, spb = 22050):
+     *   - If we're at sample 5000 within beat, next beat is in 17050 samples
+     *   - If we're at sample 21000 within beat, next beat is in 1050 samples
+     *   - If we're at sample 0 (exact beat boundary), next beat is in 22050 samples
+     *
+     * WHY RELATIVE?
+     *   - MIDI beat number can lag behind audio sample position
+     *   - Using beat number causes quantization to fire late (5+ seconds)
+     *   - Relative calculation works even with MIDI/audio drift
      */
     uint64_t currentSample = getSamplePosition();
-    uint32_t currentBeat = getBeatNumber();
     uint32_t spb = getSamplesPerBeat();
 
-    // Sample position of next beat
-    uint64_t nextBeatSample = (uint64_t)(currentBeat + 1) * spb;
+    // Calculate position within current beat (0 to spb-1)
+    uint32_t sampleWithinBeat = (uint32_t)(currentSample % spb);
 
-    // If we're past the next beat sample (can happen due to timing drift),
-    // return samples to the beat after that
-    if (currentSample >= nextBeatSample) {
-        nextBeatSample = (uint64_t)(currentBeat + 2) * spb;
+    // Samples remaining until next beat boundary
+    uint32_t samplesToNext = spb - sampleWithinBeat;
+
+    // If we're exactly on a beat boundary (sampleWithinBeat == 0),
+    // return full beat duration (don't return 0)
+    if (samplesToNext == 0 || samplesToNext == spb) {
+        samplesToNext = spb;
     }
 
-    // Return delta (safe to cast to uint32_t since delta < samplesPerBeat < 100000)
-    return (uint32_t)(nextBeatSample - currentSample);
+    return samplesToNext;
 }
 
 uint32_t TimeKeeper::samplesToNextBar() {
