@@ -76,6 +76,10 @@ static const BitmapData bitmapRegistry[] = {
     { bitmap_choke_length_quant, DISPLAY_WIDTH, DISPLAY_HEIGHT }, // BitmapID::CHOKE_LENGTH_QUANT
     { bitmap_choke_onset_free, DISPLAY_WIDTH, DISPLAY_HEIGHT },   // BitmapID::CHOKE_ONSET_FREE
     { bitmap_choke_onset_quant, DISPLAY_WIDTH, DISPLAY_HEIGHT },  // BitmapID::CHOKE_ONSET_QUANT
+    { bitmap_choke_length_free, DISPLAY_WIDTH, DISPLAY_HEIGHT },  // BitmapID::FREEZE_LENGTH_FREE (placeholder: reuse choke bitmap)
+    { bitmap_choke_length_quant, DISPLAY_WIDTH, DISPLAY_HEIGHT }, // BitmapID::FREEZE_LENGTH_QUANT (placeholder: reuse choke bitmap)
+    { bitmap_choke_onset_free, DISPLAY_WIDTH, DISPLAY_HEIGHT },   // BitmapID::FREEZE_ONSET_FREE (placeholder: reuse choke bitmap)
+    { bitmap_choke_onset_quant, DISPLAY_WIDTH, DISPLAY_HEIGHT },  // BitmapID::FREEZE_ONSET_QUANT (placeholder: reuse choke bitmap)
     // Add more bitmaps here as needed
 };
 

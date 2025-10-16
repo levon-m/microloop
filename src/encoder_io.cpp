@@ -166,7 +166,9 @@ int32_t getPosition(uint8_t encoderNum) {
 
 bool getButton(uint8_t encoderNum) {
     if (encoderNum < 4) {
-        return encoders[encoderNum].buttonPressed;
+        bool pressed = encoders[encoderNum].buttonPressed;
+        encoders[encoderNum].buttonPressed = false;  // Consume the button press
+        return pressed;
     }
     return false;
 }

@@ -67,8 +67,12 @@ enum class BitmapID : uint8_t {
     CHOKE_LENGTH_QUANT = 8,  // Choke length: Quantized mode
     CHOKE_ONSET_FREE = 9,    // Choke onset: Free mode
     CHOKE_ONSET_QUANT = 10,  // Choke onset: Quantized mode
+    FREEZE_LENGTH_FREE = 11,  // Freeze length: Free mode
+    FREEZE_LENGTH_QUANT = 12, // Freeze length: Quantized mode
+    FREEZE_ONSET_FREE = 13,   // Freeze onset: Free mode
+    FREEZE_ONSET_QUANT = 14,  // Freeze onset: Quantized mode
     // Future bitmaps:
-    // MENU_MAIN = 11,
+    // MENU_MAIN = 15,
     // MENU_LOOP = 12,
     // MENU_SAMPLE = 13,
     // BPM_DISPLAY = 14,

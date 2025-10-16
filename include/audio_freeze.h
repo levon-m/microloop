@@ -60,8 +60,27 @@
 #pragma once
 
 #include "audio_effect_base.h"
+#include "timekeeper.h"
 #include <atomic>
 #include <Arduino.h>
+
+/**
+ * Freeze length mode
+ * Controls how freeze release is handled
+ */
+enum class FreezeLength : uint8_t {
+    FREE = 0,       // Release immediately when button released (default)
+    QUANTIZED = 1   // Auto-release after global quantization duration
+};
+
+/**
+ * Freeze onset mode
+ * Controls how freeze onset (engage timing) is handled
+ */
+enum class FreezeOnset : uint8_t {
+    FREE = 0,       // Engage immediately when button pressed (default)
+    QUANTIZED = 1   // Quantize onset to next beat/subdivision
+};
 
 class AudioEffectFreeze : public AudioEffectBase {
 public:
@@ -73,6 +92,9 @@ public:
         m_writePos = 0;
         m_readPos = 0;
         m_isEnabled.store(false, std::memory_order_relaxed);  // Start disabled (passthrough)
+        m_lengthMode = FreezeLength::FREE;  // Default: free mode
+        m_onsetMode = FreezeOnset::FREE;    // Default: free mode
+        m_releaseAtSample = 0;  // No scheduled release
 
         // Initialize buffers to silence
         memset(m_freezeBufferL, 0, sizeof(m_freezeBufferL));
@@ -144,6 +166,70 @@ public:
         return "Freeze";
     }
 
+    // ========================================================================
+    // FREEZE LENGTH MODE API
+    // ========================================================================
+
+    /**
+     * Set freeze length mode
+     *
+     * Thread-safe: Can be called from any thread
+     *
+     * @param mode FREE (default) or QUANTIZED
+     */
+    void setLengthMode(FreezeLength mode) {
+        m_lengthMode = mode;
+    }
+
+    /**
+     * Get freeze length mode
+     *
+     * Thread-safe: Can be called from any thread
+     *
+     * @return Current length mode
+     */
+    FreezeLength getLengthMode() const {
+        return m_lengthMode;
+    }
+
+    /**
+     * Schedule quantized auto-release
+     *
+     * Thread-safe: Can be called from any thread
+     * Used internally when lengthMode is QUANTIZED
+     *
+     * @param releaseSample Sample position when freeze should auto-release
+     */
+    void scheduleRelease(uint64_t releaseSample) {
+        m_releaseAtSample = releaseSample;
+    }
+
+    // ========================================================================
+    // FREEZE ONSET MODE API
+    // ========================================================================
+
+    /**
+     * Set freeze onset mode
+     *
+     * Thread-safe: Can be called from any thread
+     *
+     * @param mode FREE (default) or QUANTIZED
+     */
+    void setOnsetMode(FreezeOnset mode) {
+        m_onsetMode = mode;
+    }
+
+    /**
+     * Get freeze onset mode
+     *
+     * Thread-safe: Can be called from any thread
+     *
+     * @return Current onset mode
+     */
+    FreezeOnset getOnsetMode() const {
+        return m_onsetMode;
+    }
+
     /**
      * Audio ISR callback (called every 128 samples)
      *
@@ -152,6 +238,16 @@ public:
      * - Keep processing minimal (<1ms budget)
      */
     virtual void update() override {
+        // Check for quantized auto-release
+        if (m_releaseAtSample > 0) {
+            uint64_t currentSample = TimeKeeper::getSamplePosition();
+            if (currentSample >= m_releaseAtSample) {
+                // Time to auto-release
+                m_isEnabled.store(false, std::memory_order_release);
+                m_releaseAtSample = 0;  // Clear scheduled release
+            }
+        }
+
         // Check freeze state
         bool frozen = m_isEnabled.load(std::memory_order_acquire);
 
@@ -285,4 +381,11 @@ private:
      * false = passthrough (recording to buffer)
      */
     std::atomic<bool> m_isEnabled;
+
+    // Freeze length mode state
+    FreezeLength m_lengthMode;        // FREE or QUANTIZED
+    uint64_t m_releaseAtSample;       // Sample position when freeze should auto-release (0 = no scheduled release)
+
+    // Freeze onset mode state
+    FreezeOnset m_onsetMode;          // FREE or QUANTIZED
 };

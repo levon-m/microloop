@@ -4,13 +4,15 @@
 #include "display_io.h"
 #include "encoder_io.h"
 #include "audio_choke.h"
+#include "audio_freeze.h"
 #include "effect_manager.h"
 #include "trace.h"
 #include "timekeeper.h"
 #include <TeensyThreads.h>
 
-// External reference to choke audio effect (defined in main.cpp)
+// External references to audio effects (defined in main.cpp)
 extern AudioEffectChoke choke;
+extern AudioEffectFreeze freeze;
 
 /**
  * Application Logic Implementation
@@ -43,7 +45,7 @@ extern AudioEffectChoke choke;
  */
 
 // LED configuration
-static constexpr uint8_t LED_PIN = 31;
+static constexpr uint8_t LED_PIN = 37;
 
 // Transport state
 static bool transportActive = false;  // Is sequencer running?
@@ -76,11 +78,23 @@ static uint32_t encoder4ReleaseTime = 0;      // Time when encoder was released
 static constexpr uint32_t ENCODER_DISPLAY_COOLDOWN_MS = 2000;  // 2 second cooldown before returning to default
 
 // ========== CHOKE MENU STATE ==========
-// Encoder 3 state tracking (for choke length menu)
+// Choke parameter selection (which parameter to control)
+enum class ChokeParameter : uint8_t {
+    LENGTH = 0,  // Choke length (Free, Quantized)
+    ONSET = 1    // Choke onset timing (Free, Quantized)
+};
+
+// Current choke parameter being edited
+static ChokeParameter currentChokeParameter = ChokeParameter::LENGTH;  // Default: LENGTH
+
+// Encoder 3 state tracking (for choke menu)
 static int32_t lastEncoder3Position = 0;      // Last raw position (for detecting movement)
 static int32_t encoder3Accumulator = 0;       // Accumulated steps since last turn
 static bool encoder3WasTouched = false;       // Tracks if encoder was recently touched
 static uint32_t encoder3ReleaseTime = 0;      // Time when encoder was released
+
+// Quantized onset state
+static uint64_t scheduledOnsetSample = 0;     // Sample position when choke should engage (0 = no scheduled onset)
 
 // Helper function to convert Quantization to BitmapID
 static BitmapID quantizationToBitmap(Quantization quant) {
@@ -122,6 +136,79 @@ static const char* chokeLengthName(ChokeLength length) {
     }
 }
 
+// Helper function to convert ChokeOnset to BitmapID
+static BitmapID chokeOnsetToBitmap(ChokeOnset onset) {
+    switch (onset) {
+        case ChokeOnset::FREE:      return BitmapID::CHOKE_ONSET_FREE;
+        case ChokeOnset::QUANTIZED: return BitmapID::CHOKE_ONSET_QUANT;
+        default: return BitmapID::CHOKE_ONSET_FREE;  // Default fallback
+    }
+}
+
+// Helper function to get choke onset name string
+static const char* chokeOnsetName(ChokeOnset onset) {
+    switch (onset) {
+        case ChokeOnset::FREE:      return "Free";
+        case ChokeOnset::QUANTIZED: return "Quantized";
+        default: return "Free";
+    }
+}
+
+// ========== FREEZE MENU STATE ==========
+// Freeze parameter selection (which parameter to control)
+enum class FreezeParameter : uint8_t {
+    LENGTH = 0,  // Freeze length (Free, Quantized)
+    ONSET = 1    // Freeze onset timing (Free, Quantized)
+};
+
+// Current freeze parameter being edited
+static FreezeParameter currentFreezeParameter = FreezeParameter::LENGTH;  // Default: LENGTH
+
+// Encoder 1 state tracking (for freeze menu)
+static int32_t lastEncoder1Position = 0;      // Last raw position (for detecting movement)
+static int32_t encoder1Accumulator = 0;       // Accumulated steps since last turn
+static bool encoder1WasTouched = false;       // Tracks if encoder was recently touched
+static uint32_t encoder1ReleaseTime = 0;      // Time when encoder was released
+
+// Quantized onset state for FREEZE
+static uint64_t scheduledFreezeOnsetSample = 0;  // Sample position when freeze should engage (0 = no scheduled onset)
+
+// Helper function to convert FreezeLength to BitmapID
+static BitmapID freezeLengthToBitmap(FreezeLength length) {
+    switch (length) {
+        case FreezeLength::FREE:      return BitmapID::FREEZE_LENGTH_FREE;
+        case FreezeLength::QUANTIZED: return BitmapID::FREEZE_LENGTH_QUANT;
+        default: return BitmapID::FREEZE_LENGTH_FREE;  // Default fallback
+    }
+}
+
+// Helper function to get freeze length name string
+static const char* freezeLengthName(FreezeLength length) {
+    switch (length) {
+        case FreezeLength::FREE:      return "Free";
+        case FreezeLength::QUANTIZED: return "Quantized";
+        default: return "Free";
+    }
+}
+
+// Helper function to convert FreezeOnset to BitmapID
+static BitmapID freezeOnsetToBitmap(FreezeOnset onset) {
+    switch (onset) {
+        case FreezeOnset::FREE:      return BitmapID::FREEZE_ONSET_FREE;
+        case FreezeOnset::QUANTIZED: return BitmapID::FREEZE_ONSET_QUANT;
+        default: return BitmapID::FREEZE_ONSET_FREE;  // Default fallback
+    }
+}
+
+// Helper function to get freeze onset name string
+static const char* freezeOnsetName(FreezeOnset onset) {
+    switch (onset) {
+        case FreezeOnset::FREE:      return "Free";
+        case FreezeOnset::QUANTIZED: return "Quantized";
+        default: return "Free";
+    }
+}
+
 // Helper function to calculate quantized duration in samples
 static uint32_t calculateQuantizedDuration(Quantization quant) {
     uint32_t samplesPerBeat = TimeKeeper::getSamplesPerBeat();
@@ -140,6 +227,29 @@ static uint32_t calculateQuantizedDuration(Quantization quant) {
     }
 }
 
+// Helper function to calculate samples to next quantized boundary
+static uint32_t samplesToNextQuantizedBoundary(Quantization quant) {
+    uint32_t samplesPerBeat = TimeKeeper::getSamplesPerBeat();
+    uint64_t currentSample = TimeKeeper::getSamplePosition();
+
+    // Get the current beat start sample
+    uint32_t beatNumber = TimeKeeper::getBeatNumber();
+    uint64_t currentBeatSample = beatNumber * samplesPerBeat;
+
+    // Calculate subdivision size
+    uint32_t subdivisionSamples = calculateQuantizedDuration(quant);
+
+    // Find which subdivision we're in within the current beat
+    uint32_t sampleWithinBeat = currentSample - currentBeatSample;
+    uint32_t currentSubdivision = sampleWithinBeat / subdivisionSamples;
+
+    // Calculate next subdivision boundary
+    uint64_t nextBoundarySample = currentBeatSample + ((currentSubdivision + 1) * subdivisionSamples);
+
+    // Return samples until next boundary
+    return nextBoundarySample - currentSample;
+}
+
 void AppLogic::begin() {
     // Configure LED pin
     pinMode(LED_PIN, OUTPUT);
@@ -149,6 +259,7 @@ void AppLogic::begin() {
     transportActive = false;
 
     // Initialize encoder positions
+    lastEncoder1Position = EncoderIO::getPosition(0);  // Encoder 1 is index 0
     lastEncoder3Position = EncoderIO::getPosition(2);  // Encoder 3 is index 2
     lastEncoder4Position = EncoderIO::getPosition(3);  // Encoder 4 is index 3
 }
@@ -175,59 +286,168 @@ void AppLogic::threadLoop() {
          */
         Command cmd;
         while (InputIO::popCommand(cmd)) {
-            // ========== CHOKE QUANTIZED MODE LOGIC ==========
+            // ========== CHOKE ONSET/LENGTH QUANTIZATION LOGIC ==========
             /**
-             * SPECIAL HANDLING FOR CHOKE EFFECT IN QUANTIZED MODE
+             * SPECIAL HANDLING FOR CHOKE EFFECT WITH ONSET/LENGTH QUANTIZATION
              *
-             * In QUANTIZED mode:
-             * - Button press: Engage choke AND schedule auto-release
-             * - Button release: Ignored (choke releases after quantized duration)
+             * ONSET modes:
+             * - FREE: Engage immediately when button pressed
+             * - QUANTIZED: Schedule onset for next beat boundary
              *
-             * In FREE mode:
-             * - Button press: Engage choke
-             * - Button release: Release choke immediately
+             * LENGTH modes:
+             * - FREE: Release immediately when button released
+             * - QUANTIZED: Auto-release after global quantization duration
+             *
+             * COMBINATIONS (4 total):
+             * 1. FREE onset + FREE length: Standard toggle behavior
+             * 2. FREE onset + QUANTIZED length: Immediate onset, auto-release
+             * 3. QUANTIZED onset + FREE length: Delayed onset, manual release
+             * 4. QUANTIZED onset + QUANTIZED length: Delayed onset, auto-release
+             *
+             * LAST PRESS WINS:
+             * - Multiple presses before quantized onset replaces scheduled sample
              */
             if (cmd.targetEffect == EffectID::CHOKE) {
                 ChokeLength lengthMode = choke.getLengthMode();
+                ChokeOnset onsetMode = choke.getOnsetMode();
 
-                if (lengthMode == ChokeLength::QUANTIZED) {
-                    // Quantized mode: Only handle button press, ignore release
-                    if (cmd.type == CommandType::EFFECT_ENABLE ||
-                        cmd.type == CommandType::EFFECT_TOGGLE) {
+                // Handle button press (ENABLE/TOGGLE)
+                if (cmd.type == CommandType::EFFECT_ENABLE ||
+                    cmd.type == CommandType::EFFECT_TOGGLE) {
 
-                        // Engage choke
-                        choke.enable();
-
-                        // Calculate quantized duration in samples
-                        uint32_t durationSamples = calculateQuantizedDuration(globalQuantization);
-
-                        // Schedule auto-release
-                        uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
-                        choke.scheduleRelease(releaseSample);
-
-                        // Update visual feedback
-                        bool enabled = choke.isEnabled();
-                        InputIO::setLED(cmd.targetEffect, enabled);
-
-                        if (enabled) {
-                            lastActivatedEffect = cmd.targetEffect;
-                            DisplayIO::showChoke();
-                        }
+                    if (onsetMode == ChokeOnset::QUANTIZED) {
+                        // QUANTIZED ONSET: Schedule choke for next beat boundary
+                        // Calculate samples until next quantized boundary
+                        uint32_t samplesToNext = samplesToNextQuantizedBoundary(globalQuantization);
+                        scheduledOnsetSample = TimeKeeper::getSamplePosition() + samplesToNext;
 
                         // Debug output
-                        Serial.print("Choke ENGAGED (Quantized, duration=");
+                        Serial.print("Choke ONSET scheduled (");
                         Serial.print(quantizationName(globalQuantization));
-                        Serial.println(")");
+                        Serial.print(" boundary, ");
+                        Serial.print(samplesToNext);
+                        Serial.println(" samples)");
+
+                        // Skip normal command processing (choke will engage later)
+                        continue;
+                    } else {
+                        // FREE ONSET: Engage immediately
+                        choke.enable();
+
+                        if (lengthMode == ChokeLength::QUANTIZED) {
+                            // QUANTIZED LENGTH: Schedule auto-release
+                            uint32_t durationSamples = calculateQuantizedDuration(globalQuantization);
+                            uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
+                            choke.scheduleRelease(releaseSample);
+
+                            Serial.print("Choke ENGAGED (Free onset, Quantized length=");
+                            Serial.print(quantizationName(globalQuantization));
+                            Serial.println(")");
+                        } else {
+                            // FREE LENGTH: Manual release
+                            Serial.println("Choke ENGAGED (Free onset, Free length)");
+                        }
+
+                        // Update visual feedback
+                        InputIO::setLED(cmd.targetEffect, true);
+                        lastActivatedEffect = cmd.targetEffect;
+                        DisplayIO::showChoke();
 
                         // Skip normal command processing
                         continue;
-                    } else if (cmd.type == CommandType::EFFECT_DISABLE) {
-                        // Button release in quantized mode: Ignore
-                        Serial.println("Choke button released (ignored in Quantized mode)");
+                    }
+                }
+
+                // Handle button release (DISABLE)
+                if (cmd.type == CommandType::EFFECT_DISABLE) {
+                    if (lengthMode == ChokeLength::QUANTIZED) {
+                        // QUANTIZED LENGTH: Ignore button release (auto-releases)
+                        Serial.println("Choke button released (ignored in Quantized length mode)");
+                        continue;
+                    }
+
+                    if (scheduledOnsetSample > 0) {
+                        // Cancel scheduled onset if button released before onset fires
+                        scheduledOnsetSample = 0;
+                        Serial.println("Choke scheduled onset CANCELLED");
+                        continue;
+                    }
+
+                    // FREE LENGTH: Fall through to normal command processing (immediate release)
+                }
+            }
+
+            // ========== FREEZE ONSET/LENGTH QUANTIZATION LOGIC ==========
+            /**
+             * SPECIAL HANDLING FOR FREEZE EFFECT WITH ONSET/LENGTH QUANTIZATION
+             * (Identical logic to CHOKE, but for FREEZE effect)
+             */
+            if (cmd.targetEffect == EffectID::FREEZE) {
+                FreezeLength lengthMode = freeze.getLengthMode();
+                FreezeOnset onsetMode = freeze.getOnsetMode();
+
+                // Handle button press (ENABLE/TOGGLE)
+                if (cmd.type == CommandType::EFFECT_ENABLE ||
+                    cmd.type == CommandType::EFFECT_TOGGLE) {
+
+                    if (onsetMode == FreezeOnset::QUANTIZED) {
+                        // QUANTIZED ONSET: Schedule freeze for next beat boundary
+                        uint32_t samplesToNext = samplesToNextQuantizedBoundary(globalQuantization);
+                        scheduledFreezeOnsetSample = TimeKeeper::getSamplePosition() + samplesToNext;
+
+                        Serial.print("Freeze ONSET scheduled (");
+                        Serial.print(quantizationName(globalQuantization));
+                        Serial.print(" boundary, ");
+                        Serial.print(samplesToNext);
+                        Serial.println(" samples)");
+
+                        // Skip normal command processing
+                        continue;
+                    } else {
+                        // FREE ONSET: Engage immediately
+                        freeze.enable();
+
+                        if (lengthMode == FreezeLength::QUANTIZED) {
+                            // QUANTIZED LENGTH: Schedule auto-release
+                            uint32_t durationSamples = calculateQuantizedDuration(globalQuantization);
+                            uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
+                            freeze.scheduleRelease(releaseSample);
+
+                            Serial.print("Freeze ENGAGED (Free onset, Quantized length=");
+                            Serial.print(quantizationName(globalQuantization));
+                            Serial.println(")");
+                        } else {
+                            // FREE LENGTH: Manual release
+                            Serial.println("Freeze ENGAGED (Free onset, Free length)");
+                        }
+
+                        // Update visual feedback
+                        InputIO::setLED(cmd.targetEffect, true);
+                        lastActivatedEffect = cmd.targetEffect;
+                        DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+
+                        // Skip normal command processing
                         continue;
                     }
                 }
-                // FREE mode: Fall through to normal command processing
+
+                // Handle button release (DISABLE)
+                if (cmd.type == CommandType::EFFECT_DISABLE) {
+                    if (lengthMode == FreezeLength::QUANTIZED) {
+                        // QUANTIZED LENGTH: Ignore button release (auto-releases)
+                        Serial.println("Freeze button released (ignored in Quantized length mode)");
+                        continue;
+                    }
+
+                    if (scheduledFreezeOnsetSample > 0) {
+                        // Cancel scheduled onset if button released before onset fires
+                        scheduledFreezeOnsetSample = 0;
+                        Serial.println("Freeze scheduled onset CANCELLED");
+                        continue;
+                    }
+
+                    // FREE LENGTH: Fall through to normal command processing (immediate release)
+                }
             }
 
             // Execute command via EffectManager
@@ -402,20 +622,29 @@ void AppLogic::threadLoop() {
             }
         }
 
-        // ========== 2A. HANDLE ENCODER 3 (CHOKE LENGTH MENU) ==========
+        // ========== 2A. HANDLE ENCODER 3 (CHOKE PARAMETER MENU) ==========
         /**
-         * ENCODER 3 CHOKE LENGTH MENU
+         * ENCODER 3 CHOKE PARAMETER MENU WITH CYCLING
          *
          * DESIGN:
-         * - Encoder 3 controls choke length parameter
-         * - Options: FREE (default), QUANTIZED
-         * - 2 detents = 1 "turn" (allows "peeking" without changing value)
-         * - Display shows choke length bitmap while encoder is touched
-         * - 2 second cooldown after release before returning to default display
+         * - Encoder 3 controls choke parameters (LENGTH and ONSET)
+         * - Press button to cycle between parameters
+         * - Rotation adjusts the currently selected parameter
+         * - State persistence: Each parameter remembers its value
          *
-         * CHOKE LENGTH:
-         * - FREE: Release immediately when button released
-         * - QUANTIZED: Auto-release after global quantization duration
+         * PARAMETERS:
+         * - LENGTH: FREE (default), QUANTIZED
+         *   - FREE: Release immediately when button released
+         *   - QUANTIZED: Auto-release after global quantization duration
+         * - ONSET: FREE (default), QUANTIZED
+         *   - FREE: Engage immediately when button pressed
+         *   - QUANTIZED: Quantize onset to next beat/subdivision
+         *
+         * NAVIGATION:
+         * - Button press: Cycle to next parameter (LENGTH → ONSET → LENGTH...)
+         * - Can press button without rotating first (shows current parameter)
+         * - Rotation shows current parameter menu immediately
+         * - Display shows bitmap for current parameter/value
          *
          * DETENT CALCULATION:
          * - Most encoders: 4 quadrature steps per physical detent
@@ -423,17 +652,45 @@ void AppLogic::threadLoop() {
          * - Direction: CW = QUANTIZED, CCW = FREE
          */
 
+        // Check for encoder 3 button press (parameter cycling)
+        // getButton() returns true once per press, then auto-clears
+        if (EncoderIO::getButton(2)) {  // Encoder 3 is index 2
+            // Cycle to next parameter on button press
+            if (currentChokeParameter == ChokeParameter::LENGTH) {
+                currentChokeParameter = ChokeParameter::ONSET;
+                Serial.println("Choke Parameter: ONSET");
+            } else {
+                currentChokeParameter = ChokeParameter::LENGTH;
+                Serial.println("Choke Parameter: LENGTH");
+            }
+
+            // Show bitmap for current parameter/value
+            if (currentChokeParameter == ChokeParameter::LENGTH) {
+                DisplayIO::showBitmap(chokeLengthToBitmap(choke.getLengthMode()));
+            } else {  // ONSET
+                DisplayIO::showBitmap(chokeOnsetToBitmap(choke.getOnsetMode()));
+            }
+
+            // Mark encoder as touched and reset timers
+            encoder3WasTouched = true;
+            encoder3ReleaseTime = 0;
+        }
+
         // Get current encoder 3 position (raw steps)
         int32_t currentEncoder3Position = EncoderIO::getPosition(2);  // Encoder 3 is index 2
         int32_t encoder3Delta = currentEncoder3Position - lastEncoder3Position;
 
         // Check if encoder was touched (position changed)
         if (encoder3Delta != 0) {
-            // Encoder is being touched - show choke length bitmap immediately
+            // Encoder is being touched - show current parameter bitmap immediately
             if (!encoder3WasTouched) {
                 encoder3WasTouched = true;
-                // Show current choke length bitmap
-                DisplayIO::showBitmap(chokeLengthToBitmap(choke.getLengthMode()));
+                // Show current parameter bitmap based on currentChokeParameter
+                if (currentChokeParameter == ChokeParameter::LENGTH) {
+                    DisplayIO::showBitmap(chokeLengthToBitmap(choke.getLengthMode()));
+                } else {  // ONSET
+                    DisplayIO::showBitmap(chokeOnsetToBitmap(choke.getOnsetMode()));
+                }
             }
 
             // Reset the release timer since encoder is still being touched
@@ -446,33 +703,62 @@ void AppLogic::threadLoop() {
             // Typical encoder: 4 steps per detent, so 8 steps = 2 detents = 1 turn
             int32_t turns = encoder3Accumulator / 8;  // 8 steps = 2 detents
 
-            // Update choke length if we've crossed a turn boundary
+            // Update parameter if we've crossed a turn boundary
             if (turns != 0) {
-                // Update LENGTH parameter
-                int8_t currentIndex = static_cast<int8_t>(choke.getLengthMode());
-                int8_t newIndex = currentIndex + turns;
+                if (currentChokeParameter == ChokeParameter::LENGTH) {
+                    // Update LENGTH parameter
+                    int8_t currentIndex = static_cast<int8_t>(choke.getLengthMode());
+                    int8_t newIndex = currentIndex + turns;
 
-                // Clamp to valid range (0-1)
-                if (newIndex < 0) newIndex = 0;
-                if (newIndex > 1) newIndex = 1;
+                    // Clamp to valid range (0-1)
+                    if (newIndex < 0) newIndex = 0;
+                    if (newIndex > 1) newIndex = 1;
 
-                // Update choke length if changed
-                if (newIndex != currentIndex) {
-                    ChokeLength newLength = static_cast<ChokeLength>(newIndex);
-                    choke.setLengthMode(newLength);
+                    // Update choke length if changed
+                    if (newIndex != currentIndex) {
+                        ChokeLength newLength = static_cast<ChokeLength>(newIndex);
+                        choke.setLengthMode(newLength);
 
-                    // Update display to show new value
-                    DisplayIO::showBitmap(chokeLengthToBitmap(newLength));
+                        // Update display to show new value
+                        DisplayIO::showBitmap(chokeLengthToBitmap(newLength));
 
-                    // Serial output for debugging
-                    Serial.print("Choke Length: ");
-                    Serial.println(chokeLengthName(newLength));
+                        // Serial output for debugging
+                        Serial.print("Choke Length: ");
+                        Serial.println(chokeLengthName(newLength));
 
-                    // Reset accumulator to prevent "unwinding" at boundaries
-                    encoder3Accumulator = 0;
-                } else {
-                    // Hit a boundary (clamped) - reset accumulator to prevent buildup
-                    encoder3Accumulator = 0;
+                        // Reset accumulator to prevent "unwinding" at boundaries
+                        encoder3Accumulator = 0;
+                    } else {
+                        // Hit a boundary (clamped) - reset accumulator to prevent buildup
+                        encoder3Accumulator = 0;
+                    }
+                } else {  // ONSET parameter
+                    // Update ONSET parameter
+                    int8_t currentIndex = static_cast<int8_t>(choke.getOnsetMode());
+                    int8_t newIndex = currentIndex + turns;
+
+                    // Clamp to valid range (0-1)
+                    if (newIndex < 0) newIndex = 0;
+                    if (newIndex > 1) newIndex = 1;
+
+                    // Update choke onset if changed
+                    if (newIndex != currentIndex) {
+                        ChokeOnset newOnset = static_cast<ChokeOnset>(newIndex);
+                        choke.setOnsetMode(newOnset);
+
+                        // Update display to show new value
+                        DisplayIO::showBitmap(chokeOnsetToBitmap(newOnset));
+
+                        // Serial output for debugging
+                        Serial.print("Choke Onset: ");
+                        Serial.println(chokeOnsetName(newOnset));
+
+                        // Reset accumulator to prevent "unwinding" at boundaries
+                        encoder3Accumulator = 0;
+                    } else {
+                        // Hit a boundary (clamped) - reset accumulator to prevent buildup
+                        encoder3Accumulator = 0;
+                    }
                 }
             }
 
@@ -515,7 +801,54 @@ void AppLogic::threadLoop() {
             }
         }
 
-        // ========== 2B. MONITOR CHOKE AUTO-RELEASE (QUANTIZED MODE) ==========
+        // ========== 2B. MONITOR CHOKE SCHEDULED ONSET (QUANTIZED ONSET MODE) ==========
+        /**
+         * QUANTIZED ONSET MONITORING
+         *
+         * PURPOSE:
+         * - Check if scheduled onset sample has been reached
+         * - Engage choke at exact quantized boundary
+         * - Handle both length modes after onset fires
+         *
+         * DESIGN:
+         * - Poll sample position every 2ms (app thread interval)
+         * - When scheduledOnsetSample is reached, engage choke
+         * - If length is QUANTIZED, also schedule auto-release
+         * - If length is FREE, choke stays engaged until button release
+         */
+        if (scheduledOnsetSample > 0) {
+            uint64_t currentSample = TimeKeeper::getSamplePosition();
+            if (currentSample >= scheduledOnsetSample) {
+                // Time to engage choke
+                choke.enable();
+
+                // Check length mode for auto-release scheduling
+                ChokeLength lengthMode = choke.getLengthMode();
+                if (lengthMode == ChokeLength::QUANTIZED) {
+                    // QUANTIZED LENGTH: Schedule auto-release
+                    uint32_t durationSamples = calculateQuantizedDuration(globalQuantization);
+                    uint64_t releaseSample = currentSample + durationSamples;
+                    choke.scheduleRelease(releaseSample);
+
+                    Serial.print("Choke ENGAGED at scheduled onset (Quantized length=");
+                    Serial.print(quantizationName(globalQuantization));
+                    Serial.println(")");
+                } else {
+                    // FREE LENGTH: Manual release
+                    Serial.println("Choke ENGAGED at scheduled onset (Free length)");
+                }
+
+                // Update visual feedback
+                InputIO::setLED(EffectID::CHOKE, true);
+                lastActivatedEffect = EffectID::CHOKE;
+                DisplayIO::showChoke();
+
+                // Clear scheduled onset
+                scheduledOnsetSample = 0;
+            }
+        }
+
+        // ========== 2C. MONITOR CHOKE AUTO-RELEASE (QUANTIZED MODE) ==========
         /**
          * QUANTIZED CHOKE AUTO-RELEASE DISPLAY UPDATE
          *
