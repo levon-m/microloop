@@ -210,19 +210,20 @@ uint32_t TimeKeeper::samplesToNextBeat() {
     /**
      * Calculate samples until next beat boundary
      *
-     * NEW ALGORITHM (RELATIVE, NOT ABSOLUTE):
+     * RELATIVE ALGORITHM (drift-proof):
      *   Uses position within current beat to calculate relative offset to next beat.
      *   This avoids timing drift issues between MIDI beat tracking and audio samples.
      *
-     * EXAMPLE (120 BPM, spb = 22050):
-     *   - If we're at sample 5000 within beat, next beat is in 17050 samples
-     *   - If we're at sample 21000 within beat, next beat is in 1050 samples
-     *   - If we're at sample 0 (exact beat boundary), next beat is in 22050 samples
+     * NEAR-BOUNDARY TOLERANCE (NEW):
+     *   If we're very close to a beat boundary (within 128 samples = 1 audio block),
+     *   return 0 to fire immediately. This prevents "just missed it" latency where
+     *   pressing exactly on the beat adds a full beat of delay.
      *
-     * WHY RELATIVE?
-     *   - MIDI beat number can lag behind audio sample position
-     *   - Using beat number causes quantization to fire late (5+ seconds)
-     *   - Relative calculation works even with MIDI/audio drift
+     * EXAMPLE (120 BPM, spb = 22050):
+     *   - At sample 100 within beat → 21950 samples until next beat
+     *   - At sample 22000 within beat (50 samples before boundary) → 50 samples
+     *   - At sample 22040 within beat (10 samples before boundary) → 0 (fire now!)
+     *   - At sample 0 (exact boundary) → 0 (fire now!)
      */
     uint64_t currentSample = getSamplePosition();
     uint32_t spb = getSamplesPerBeat();
@@ -233,29 +234,132 @@ uint32_t TimeKeeper::samplesToNextBeat() {
     // Samples remaining until next beat boundary
     uint32_t samplesToNext = spb - sampleWithinBeat;
 
-    // If we're exactly on a beat boundary (sampleWithinBeat == 0),
-    // return full beat duration (don't return 0)
-    if (samplesToNext == 0 || samplesToNext == spb) {
-        samplesToNext = spb;
+    // TOLERANCE: Only fire immediately if we're AT or slightly PAST the boundary
+    // Grace period: If we're within 16 samples (~0.36ms) PAST the boundary, treat as "on time"
+    // This handles "just missed it by a few samples" without firing early
+    if (sampleWithinBeat <= 16) {
+        return 0;  // We're at or just past the boundary - fire now!
+    }
+
+    return samplesToNext;
+}
+
+uint32_t TimeKeeper::samplesToNextSubdivision(uint32_t subdivision) {
+    /**
+     * Calculate samples until next subdivision boundary
+     *
+     * BEAT-ANCHORED ALGORITHM (FIXED):
+     *   Subdivisions are anchored to beat boundaries, not sample 0.
+     *   This prevents drift when samplesPerBeat isn't perfectly divisible.
+     *
+     * APPROACH:
+     *   1. Find position within current beat
+     *   2. Use 64-bit fractional math to find next subdivision boundary within beat
+     *   3. If we've passed all subdivisions in this beat, go to next beat
+     *
+     * TOLERANCE:
+     *   16-sample grace period PAST boundary (like samplesToNextBeat)
+     *
+     * BLOCK ROUNDING:
+     *   Round up to next AUDIO_BLOCK_SAMPLES boundary for ISR scheduling
+     *
+     * EXAMPLE (120 BPM, spb=22050, 1/8 note subdivision=11025):
+     *   Beat 0: subdivisions at sample 0, 11025
+     *   Beat 1: subdivisions at sample 22050, 33075
+     *   Beat 2: subdivisions at sample 44100, 55125
+     *   (Always anchored to beat boundaries, no drift!)
+     */
+    uint64_t currentSample = getSamplePosition();
+    uint32_t spb = getSamplesPerBeat();
+
+    // Find position within current beat
+    uint32_t sampleWithinBeat = (uint32_t)(currentSample % spb);
+
+    // How many subdivisions fit in one beat?
+    // Use 64-bit to avoid overflow: subdivisions_per_beat = spb / subdivision
+    // We need fractional precision to handle non-integer divisions
+    uint32_t subdivisionsPerBeat = spb / subdivision;
+    if (subdivisionsPerBeat == 0) subdivisionsPerBeat = 1;  // Safety: at least 1 per beat
+
+    // Find which subdivision we're currently in (0-indexed)
+    // currentSubdivision = floor(sampleWithinBeat / subdivision)
+    uint32_t currentSubdivisionIndex = sampleWithinBeat / subdivision;
+
+    // Find the sample position of the NEXT subdivision boundary within this beat
+    uint32_t nextSubdivisionIndex = currentSubdivisionIndex + 1;
+
+    // Check if we've passed all subdivisions in this beat
+    if (nextSubdivisionIndex >= subdivisionsPerBeat) {
+        // Go to first subdivision of next beat (which is the beat boundary itself)
+        uint32_t samplesToNext = spb - sampleWithinBeat;
+
+        // TOLERANCE: Grace period if just past beat boundary
+        if (sampleWithinBeat <= 16) {
+            return 0;  // At or just past boundary - fire now!
+        }
+
+        // BLOCK ROUNDING
+        uint32_t remainder = samplesToNext % AUDIO_BLOCK_SAMPLES;
+        if (remainder > 0) {
+            samplesToNext += (AUDIO_BLOCK_SAMPLES - remainder);
+        }
+
+        return samplesToNext;
+    }
+
+    // Calculate next subdivision boundary sample (within current beat)
+    uint32_t nextSubdivisionSample = nextSubdivisionIndex * subdivision;
+
+    // Samples until that boundary
+    uint32_t samplesToNext = nextSubdivisionSample - sampleWithinBeat;
+
+    // TOLERANCE: Grace period if just past subdivision boundary
+    uint32_t sampleWithinSubdivision = sampleWithinBeat % subdivision;
+    if (sampleWithinSubdivision <= 16) {
+        return 0;  // At or just past subdivision boundary - fire now!
+    }
+
+    // BLOCK ROUNDING
+    uint32_t remainder = samplesToNext % AUDIO_BLOCK_SAMPLES;
+    if (remainder > 0) {
+        samplesToNext += (AUDIO_BLOCK_SAMPLES - remainder);
     }
 
     return samplesToNext;
 }
 
 uint32_t TimeKeeper::samplesToNextBar() {
+    /**
+     * Calculate samples until next bar boundary
+     *
+     * RELATIVE ALGORITHM (NEW - drift-proof):
+     *   Uses position within current bar to calculate relative offset to next bar.
+     *   Avoids relying on getBarNumber() which can lag/jump due to MIDI timing.
+     *
+     * WHY RELATIVE?
+     *   - OLD: Used getBarNumber() (absolute) → can be stale if MIDI ticks lag
+     *   - NEW: Uses position % samplesPerBar (relative) → always accurate
+     *
+     * TOLERANCE:
+     *   Same as samplesToNextBeat() - fire immediately if within 128 samples
+     */
     uint64_t currentSample = getSamplePosition();
-    uint32_t currentBar = getBarNumber();
     uint32_t spb = getSamplesPerBeat();
+    uint32_t samplesPerBar = spb * BEATS_PER_BAR;
 
-    // Sample position of next bar (bars are 4 beats)
-    uint64_t nextBarSample = (uint64_t)(currentBar + 1) * BEATS_PER_BAR * spb;
+    // Calculate position within current bar (0 to samplesPerBar-1)
+    uint32_t sampleWithinBar = (uint32_t)(currentSample % samplesPerBar);
 
-    // Handle past-bar case
-    if (currentSample >= nextBarSample) {
-        nextBarSample = (uint64_t)(currentBar + 2) * BEATS_PER_BAR * spb;
+    // Samples remaining until next bar boundary
+    uint32_t samplesToNext = samplesPerBar - sampleWithinBar;
+
+    // TOLERANCE: Only fire immediately if AT or slightly PAST boundary
+    // Grace period: 16 samples (~0.36ms) past boundary
+    if (sampleWithinBar <= 16) {
+        return 0;  // At or just past boundary - fire now!
     }
 
-    return (uint32_t)(nextBarSample - currentSample);
+    return samplesToNext;
 }
 
 uint64_t TimeKeeper::beatToSample(uint32_t beatNumber) {

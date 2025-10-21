@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "effect_quantization.h"  // For Quantization enum
 
 /**
  * @file app_logic.h
@@ -10,7 +11,7 @@
  * - Drain MIDI queues (clocks, transport events)
  * - Track beat position (24 ticks = 1 beat)
  * - Drive LED beat indicator
- * - Global quantization settings
+ * - Global quantization settings (now delegated to EffectQuantization module)
  * - Future: BPM calculation, looper logic, UI
  *
  * THREAD CONTEXT:
@@ -18,17 +19,6 @@
  * - Can afford to be slower (not real-time critical)
  * - Safe to do Serial.print, UI updates, etc.
  */
-
-/**
- * Global quantization options
- * Order matches visual layout from left to right: 1/32, 1/16, 1/8, 1/4
- */
-enum class Quantization : uint8_t {
-    QUANT_32 = 0,  // 1/32 note
-    QUANT_16 = 1,  // 1/16 note (default)
-    QUANT_8 = 2,   // 1/8 note
-    QUANT_4 = 3    // 1/4 note
-};
 
 namespace AppLogic {
     /**

@@ -91,6 +91,7 @@ public:
         m_lengthMode = ChokeLength::FREE;  // Default: free mode
         m_onsetMode = ChokeOnset::FREE;    // Default: free mode
         m_releaseAtSample = 0;  // No scheduled release
+        m_onsetAtSample = 0;    // No scheduled onset
     }
 
     // ========================================================================
@@ -195,9 +196,47 @@ public:
         m_releaseAtSample = releaseSample;
     }
 
+    /**
+     * Cancel scheduled auto-release
+     *
+     * Thread-safe: Can be called from any thread
+     * Used when user releases button before scheduled release fires
+     */
+    void cancelScheduledRelease() {
+        m_releaseAtSample = 0;
+    }
+
     // ========================================================================
     // CHOKE ONSET MODE API
     // ========================================================================
+
+    /**
+     * Schedule quantized onset (ISR-accurate)
+     *
+     * Thread-safe: Can be called from any thread
+     * Used internally when onsetMode is QUANTIZED
+     *
+     * DESIGN:
+     *   - Mirrors scheduleRelease() for consistency
+     *   - ISR checks m_onsetAtSample every update() call
+     *   - When current sample >= onset sample, calls enable()
+     *   - Sample-accurate (no app-thread polling jitter)
+     *
+     * @param onsetSample Sample position when choke should engage
+     */
+    void scheduleOnset(uint64_t onsetSample) {
+        m_onsetAtSample = onsetSample;
+    }
+
+    /**
+     * Cancel scheduled onset
+     *
+     * Thread-safe: Can be called from any thread
+     * Used when user releases button before scheduled onset fires
+     */
+    void cancelScheduledOnset() {
+        m_onsetAtSample = 0;
+    }
 
     /**
      * Set choke onset mode
@@ -267,19 +306,27 @@ public:
      *
      * CRITICAL PATH:
      * - Process audio with gain ramping
-     * - Check for quantized auto-release
+     * - Check for scheduled onset (quantized onset mode)
+     * - Check for scheduled release (quantized length mode)
      * - Keep processing minimal (<1ms budget)
      */
     virtual void update() override {
-        // Check for quantized auto-release
-        if (m_releaseAtSample > 0) {
-            uint64_t currentSample = TimeKeeper::getSamplePosition();
-            if (currentSample >= m_releaseAtSample) {
-                // Time to auto-release
-                m_targetGain = 1.0f;  // Unmute
-                m_isEnabled.store(false, std::memory_order_release);
-                m_releaseAtSample = 0;  // Clear scheduled release
-            }
+        uint64_t currentSample = TimeKeeper::getSamplePosition();
+
+        // Check for scheduled onset (ISR-accurate quantized onset)
+        if (m_onsetAtSample > 0 && currentSample >= m_onsetAtSample) {
+            // Time to engage choke (sample-accurate!)
+            m_targetGain = 0.0f;  // Mute
+            m_isEnabled.store(true, std::memory_order_release);
+            m_onsetAtSample = 0;  // Clear scheduled onset
+        }
+
+        // Check for scheduled release (ISR-accurate quantized length)
+        if (m_releaseAtSample > 0 && currentSample >= m_releaseAtSample) {
+            // Time to auto-release
+            m_targetGain = 1.0f;  // Unmute
+            m_isEnabled.store(false, std::memory_order_release);
+            m_releaseAtSample = 0;  // Clear scheduled release
         }
 
         // Receive input blocks (left and right channels)
@@ -337,8 +384,8 @@ private:
     }
 
     // Fade parameters
-    static constexpr float FADE_TIME_MS = 10.0f;  // 10ms crossfade
-    static constexpr float FADE_SAMPLES = (FADE_TIME_MS / 1000.0f) * 44100.0f;  // 441 samples
+    static constexpr float FADE_TIME_MS = 3.0f;  // 3ms crossfade (tighter feel for quantization)
+    static constexpr float FADE_SAMPLES = (FADE_TIME_MS / 1000.0f) * 44100.0f;  // 132 samples
 
     // Gain state (modified in audio ISR)
     float m_currentGain;  // Current gain (ramped smoothly)
@@ -354,4 +401,5 @@ private:
 
     // Choke onset mode state
     ChokeOnset m_onsetMode;       // FREE or QUANTIZED
+    uint64_t m_onsetAtSample;     // Sample position when choke should engage (0 = no scheduled onset)
 };

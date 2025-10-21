@@ -250,9 +250,44 @@ add_library(effect_manager STATIC src/effect_manager.cpp)
 target_include_directories(effect_manager PUBLIC include)
 target_link_libraries(effect_manager teensy_core audio)
 
+# New modular subsystems
+add_library(effect_quantization STATIC src/effect_quantization.cpp)
+target_include_directories(effect_quantization PUBLIC include)
+target_link_libraries(effect_quantization teensy_core microloop_utils)
+
+add_library(encoder_menu STATIC src/encoder_menu.cpp)
+target_include_directories(encoder_menu PUBLIC include)
+target_link_libraries(encoder_menu teensy_core encoder_io)
+
+add_library(display_manager STATIC src/display_manager.cpp)
+target_include_directories(display_manager PUBLIC include)
+target_link_libraries(display_manager teensy_core display_io effect_manager)
+
+add_library(choke_handler STATIC src/choke_handler.cpp)
+target_include_directories(choke_handler PUBLIC include)
+target_link_libraries(choke_handler teensy_core audio effect_quantization display_manager input_io microloop_utils)
+
+add_library(freeze_handler STATIC src/freeze_handler.cpp)
+target_include_directories(freeze_handler PUBLIC include)
+target_link_libraries(freeze_handler teensy_core audio effect_quantization display_manager input_io microloop_utils)
+
+# App logic (now uses modular subsystems)
 add_library(app_logic STATIC src/app_logic.cpp)
 target_include_directories(app_logic PUBLIC include)
-target_link_libraries(app_logic teensy_core teensy_threads midi_io input_io display_io effect_manager microloop_utils)
+target_link_libraries(app_logic
+    teensy_core
+    teensy_threads
+    midi_io
+    input_io
+    display_io
+    effect_manager
+    microloop_utils
+    effect_quantization
+    encoder_menu
+    display_manager
+    choke_handler
+    freeze_handler
+)
 
 add_library(encoder_io STATIC src/encoder_io.cpp)
 target_include_directories(encoder_io PUBLIC include)
@@ -279,6 +314,11 @@ target_link_libraries(microloop.elf
     display_io
     app_logic
     effect_manager
+    effect_quantization
+    encoder_menu
+    display_manager
+    choke_handler
+    freeze_handler
     seesaw
     neopixel
     busio
