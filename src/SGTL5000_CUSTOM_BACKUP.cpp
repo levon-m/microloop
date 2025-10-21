@@ -38,9 +38,9 @@ bool SGTL5000::enable() {
   && write(CHIP_I2S_CTRL, 0x0030) //I2S Port Format: Codec as slave + set DLEN to 16 bits (codec default, but I think can be changed)
   && write(CHIP_SSS_CTRL, 0x0010) //Route signals: ADC -> I2S OUT/IN -> DAC. DAC_SELECT = I2S_IN, I2S_SELECT = ADC for simple loopback
 
-  //Analog reference & outputs power up, safety and to reduce pops, straight from NXP example
+  //Analog reference & outputs power up, safety and to reduce pops
   && write(CHIP_REF_CTRL, 0x004E) //Set ref ground (VAG) near VDDA/2, and modest bias current
-  && write(CHIP_LINE_OUT_CTRL, 0x0322) //Line out reference & bias current (for 3.3 V VDDIO, 10k load)
+  && write(CHIP_LINE_OUT_CTRL, 0x0F22) //Line out reference & bias current (Teensy Audio Library standard)
   && write(CHIP_REF_CTRL, 0x004F) //Slow ramp to reduce pops
   && write(CHIP_SHORT_CTRL, 0x1106) //Headphone/center short detect trip levels (optional safety)
 
@@ -49,10 +49,13 @@ bool SGTL5000::enable() {
 
   //Select inputs, unmute in pop-safe order
   && modify(CHIP_ANA_CTRL, 0x0004, 0x0004) //SELECT_ADC = LINEIN, keep HP/LO muted for now
+  && modify(CHIP_ANA_ADC_CTRL, 0x0000, 0x00FF) //ADC gain = 0 dB both channels
+  && modify(CHIP_ANA_ADC_CTRL, 0x0000, 0x0100) //Ensure ADC_VOL_M6DB bit is clear
+  && write(CHIP_LINE_OUT_VOL, 0x1D1D) //Line out volume ~1.3V p-p (Teensy Audio Library default)
   && write(CHIP_DAC_VOL, 0x3C3C) //DAC L/R = 0 dB
-  && write(CHIP_ANA_HP_CTRL, 0x1818) //Analog L/R = 0 dB
-  && modify(CHIP_ADCDAC_CTRL, 0x0000, 0x000C) //Unmute DAC_MUTE_LEFT and DAC_MUTE_RIGHT
-  && modify(CHIP_ANA_CTRL, 0x0000, 0x0110); //Unmute MUTE_HP and MUTE_LO
+  && write(CHIP_ANA_HP_CTRL, 0x1818) //Headphone L/R = 0 dB (ignored for line-out, but set anyway)
+  && modify(CHIP_ADCDAC_CTRL, 0x0000, 0x000C) //Unmute DAC left and right
+  && modify(CHIP_ANA_CTRL, 0x0000, 0x0110); //Unmute headphone and line-out
 
   return ok;
 }

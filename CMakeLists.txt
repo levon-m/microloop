@@ -67,6 +67,9 @@ set(THREADS_LIB "${TEENSY_LIBS}/TeensyThreads")
 set(SEESAW_LIB "${TEENSY_LIBS}/Adafruit_seesaw_Library")
 set(NEOPIXEL_LIB "${TEENSY_LIBS}/Adafruit_NeoPixel")
 set(BUSIO_LIB "${TEENSY_LIBS}/Adafruit_BusIO")
+set(SSD1306_LIB "${TEENSY_LIBS}/Adafruit_SSD1306-2.5.15")
+set(GFX_LIB "${TEENSY_LIBS}/Adafruit-GFX-Library-1.12.3")
+set(MCP23017_LIB "${TEENSY_LIBS}/Adafruit-MCP23017-Arduino-Library-2.3.2/src")
 
 # Include directories
 include_directories(
@@ -80,6 +83,9 @@ include_directories(
     ${SEESAW_LIB}
     ${NEOPIXEL_LIB}
     ${BUSIO_LIB}
+    ${SSD1306_LIB}
+    ${GFX_LIB}
+    ${MCP23017_LIB}
     ${TEENSY_LIBS}/SPI
     ${TEENSY_LIBS}/SD/src
     ${TEENSY_LIBS}/SdFat/src
@@ -108,6 +114,13 @@ add_library(wire STATIC
 target_include_directories(wire PUBLIC ${WIRE_LIB})
 target_link_libraries(wire teensy_core)
 
+# SPI library (required by SSD1306)
+add_library(spi STATIC
+    ${TEENSY_LIBS}/SPI/SPI.cpp
+)
+target_include_directories(spi PUBLIC ${TEENSY_LIBS}/SPI)
+target_link_libraries(spi teensy_core)
+
 # TeensyThreads library
 add_library(teensy_threads STATIC
     ${THREADS_LIB}/TeensyThreads.cpp
@@ -135,17 +148,19 @@ target_link_libraries(audio teensy_core)
 add_library(midi INTERFACE)
 target_include_directories(midi INTERFACE ${MIDI_LIB})
 
-# Adafruit BusIO library (for I2C/SPI abstraction, required by Seesaw)
-# REQUIRED: Dependency of Adafruit Seesaw Library
+# Adafruit BusIO library (for I2C/SPI abstraction, required by Seesaw and MCP23017)
+# REQUIRED: Dependency of Adafruit Seesaw Library and MCP23017 Library
 if(NOT EXISTS "${BUSIO_LIB}/Adafruit_I2CDevice.cpp")
     message(FATAL_ERROR "Adafruit BusIO Library NOT found. Download from https://github.com/adafruit/Adafruit_BusIO")
 endif()
 add_library(busio STATIC
     "${BUSIO_LIB}/Adafruit_I2CDevice.cpp"
     "${BUSIO_LIB}/Adafruit_SPIDevice.cpp"
+    "${BUSIO_LIB}/Adafruit_BusIO_Register.cpp"
+    "${BUSIO_LIB}/Adafruit_GenericDevice.cpp"
 )
 target_include_directories(busio PUBLIC ${BUSIO_LIB})
-target_link_libraries(busio teensy_core wire)
+target_link_libraries(busio teensy_core wire spi)
 message(STATUS "Adafruit BusIO Library found")
 
 # Adafruit Seesaw library (for Neokey choke button)
@@ -169,6 +184,42 @@ target_include_directories(neopixel PUBLIC ${NEOPIXEL_LIB})
 target_link_libraries(neopixel teensy_core)
 message(STATUS "Adafruit NeoPixel Library found")
 
+# Adafruit GFX library (for graphics primitives, required by SSD1306)
+# REQUIRED: Install via Arduino IDE Library Manager: "Adafruit GFX Library"
+if(NOT EXISTS "${GFX_LIB}/Adafruit_GFX.cpp")
+    message(FATAL_ERROR "Adafruit GFX Library NOT found. Install via Arduino IDE: Tools → Manage Libraries → Search 'Adafruit GFX'")
+endif()
+add_library(gfx STATIC
+    "${GFX_LIB}/Adafruit_GFX.cpp"
+    "${GFX_LIB}/glcdfont.c"
+)
+target_include_directories(gfx PUBLIC ${GFX_LIB})
+target_link_libraries(gfx teensy_core)
+message(STATUS "Adafruit GFX Library found")
+
+# Adafruit SSD1306 library (for OLED display)
+# REQUIRED: Install via Arduino IDE Library Manager: "Adafruit SSD1306"
+if(NOT EXISTS "${SSD1306_LIB}/Adafruit_SSD1306.cpp")
+    message(FATAL_ERROR "Adafruit SSD1306 Library NOT found. Install via Arduino IDE: Tools → Manage Libraries → Search 'Adafruit SSD1306'")
+endif()
+add_library(ssd1306 STATIC "${SSD1306_LIB}/Adafruit_SSD1306.cpp")
+target_include_directories(ssd1306 PUBLIC ${SSD1306_LIB})
+target_link_libraries(ssd1306 teensy_core wire spi gfx)
+message(STATUS "Adafruit SSD1306 Library found")
+
+# Adafruit MCP23017 library (for encoder I/O expander)
+# REQUIRED: Install via Arduino IDE Library Manager: "Adafruit MCP23017 Arduino Library"
+if(NOT EXISTS "${MCP23017_LIB}/Adafruit_MCP23X17.cpp")
+    message(FATAL_ERROR "Adafruit MCP23017 Library NOT found. Install via Arduino IDE: Tools → Manage Libraries → Search 'Adafruit MCP23017'")
+endif()
+add_library(mcp23017 STATIC
+    "${MCP23017_LIB}/Adafruit_MCP23X17.cpp"
+    "${MCP23017_LIB}/Adafruit_MCP23XXX.cpp"
+)
+target_include_directories(mcp23017 PUBLIC ${MCP23017_LIB})
+target_link_libraries(mcp23017 teensy_core wire busio)
+message(STATUS "Adafruit MCP23017 Library found")
+
 # Utils library (now has trace.cpp and timekeeper.cpp)
 add_library(microloop_utils STATIC
     utils/trace.cpp
@@ -180,41 +231,101 @@ target_include_directories(microloop_utils PUBLIC
 target_link_libraries(microloop_utils teensy_core)
 
 # Project libraries
-add_library(sgtl5000 STATIC src/SGTL5000.cpp)
-target_include_directories(sgtl5000 PUBLIC include)
-target_link_libraries(sgtl5000 teensy_core wire)
+# Note: Custom SGTL5000 driver backed up as SGTL5000_CUSTOM_BACKUP.cpp/.h
+# Using Teensy Audio Library's AudioControlSGTL5000 instead
 
 add_library(midi_io STATIC src/midi_io.cpp)
 target_include_directories(midi_io PUBLIC include)
 target_link_libraries(midi_io teensy_core midi teensy_threads microloop_utils)
 
-add_library(choke_io STATIC src/choke_io.cpp)
-target_include_directories(choke_io PUBLIC include)
-target_link_libraries(choke_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
+add_library(input_io STATIC src/input_io.cpp)
+target_include_directories(input_io PUBLIC include)
+target_link_libraries(input_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
 
+add_library(display_io STATIC src/display_io.cpp)
+target_include_directories(display_io PUBLIC include)
+target_link_libraries(display_io teensy_core teensy_threads ssd1306 gfx wire microloop_utils)
+
+add_library(effect_manager STATIC src/effect_manager.cpp)
+target_include_directories(effect_manager PUBLIC include)
+target_link_libraries(effect_manager teensy_core audio)
+
+# New modular subsystems
+add_library(effect_quantization STATIC src/effect_quantization.cpp)
+target_include_directories(effect_quantization PUBLIC include)
+target_link_libraries(effect_quantization teensy_core microloop_utils)
+
+add_library(encoder_menu STATIC src/encoder_menu.cpp)
+target_include_directories(encoder_menu PUBLIC include)
+target_link_libraries(encoder_menu teensy_core encoder_io)
+
+add_library(display_manager STATIC src/display_manager.cpp)
+target_include_directories(display_manager PUBLIC include)
+target_link_libraries(display_manager teensy_core display_io effect_manager)
+
+add_library(choke_handler STATIC src/choke_handler.cpp)
+target_include_directories(choke_handler PUBLIC include)
+target_link_libraries(choke_handler teensy_core audio effect_quantization display_manager input_io microloop_utils)
+
+add_library(freeze_handler STATIC src/freeze_handler.cpp)
+target_include_directories(freeze_handler PUBLIC include)
+target_link_libraries(freeze_handler teensy_core audio effect_quantization display_manager input_io microloop_utils)
+
+# App logic (now uses modular subsystems)
 add_library(app_logic STATIC src/app_logic.cpp)
 target_include_directories(app_logic PUBLIC include)
-target_link_libraries(app_logic teensy_core teensy_threads midi_io choke_io microloop_utils)
+target_link_libraries(app_logic
+    teensy_core
+    teensy_threads
+    midi_io
+    input_io
+    display_io
+    effect_manager
+    microloop_utils
+    effect_quantization
+    encoder_menu
+    display_manager
+    choke_handler
+    freeze_handler
+)
+
+add_library(encoder_io STATIC src/encoder_io.cpp)
+target_include_directories(encoder_io PUBLIC include)
+target_link_libraries(encoder_io teensy_core wire mcp23017 busio)
 
 # MAIN
 add_executable(microloop.elf src/main.cpp)
 
-# TESTING
+# ENCODER TEST
+#add_executable(microloop.elf tests/test_encoders_main.cpp)
+
+# UNIT TESTING
 #add_executable(microloop.elf tests/run_tests.cpp)
 
 target_link_libraries(microloop.elf
     teensy_core
     audio
     wire
+    spi
     midi
     teensy_threads
-    sgtl5000
     midi_io
-    choke_io
+    input_io
+    display_io
     app_logic
+    effect_manager
+    effect_quantization
+    encoder_menu
+    display_manager
+    choke_handler
+    freeze_handler
     seesaw
     neopixel
     busio
+    ssd1306
+    gfx
+    mcp23017
+    encoder_io
     microloop_utils
     m  # Math library
 )

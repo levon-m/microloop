@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "effect_quantization.h"  // For Quantization enum
 
 /**
  * @file app_logic.h
@@ -10,6 +11,7 @@
  * - Drain MIDI queues (clocks, transport events)
  * - Track beat position (24 ticks = 1 beat)
  * - Drive LED beat indicator
+ * - Global quantization settings (now delegated to EffectQuantization module)
  * - Future: BPM calculation, looper logic, UI
  *
  * THREAD CONTEXT:
@@ -38,6 +40,7 @@ namespace AppLogic {
      * - Drain transport event queue
      * - Drain clock queue and track beats
      * - Update LED beat indicator
+     * - Handle encoder input for quantization menu
      * - Periodic status printing (debug)
      *
      * PERFORMANCE:
@@ -45,4 +48,16 @@ namespace AppLogic {
      * - At 120 BPM, clocks arrive every ~20ms (plenty of headroom)
      */
     void threadLoop();
+
+    /**
+     * @brief Get current global quantization setting
+     * @return Current quantization value
+     */
+    Quantization getGlobalQuantization();
+
+    /**
+     * @brief Set global quantization setting
+     * @param quant New quantization value
+     */
+    void setGlobalQuantization(Quantization quant);
 }

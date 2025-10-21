@@ -218,19 +218,37 @@ public:
      * CRITICAL for quantization: "How long should I wait before starting
      * recording to align with the next beat?"
      *
-     * CALCULATION:
-     *   nextBeatSample = (currentBeat + 1) * samplesPerBeat
-     *   samplesToNextBeat = nextBeatSample - currentSamplePosition
+     * TOLERANCE (NEW):
+     *   If within AUDIO_BLOCK_SAMPLES (128) of boundary, returns 0 to fire immediately.
+     *   This prevents "just missed it" latency where pressing exactly on beat adds
+     *   a full beat of delay.
      *
-     * EXAMPLE:
-     *   Current beat: 2 (samples 0-22049)
-     *   Current sample: 15000
-     *   Next beat sample: 22050 (start of beat 3)
-     *   Return: 22050 - 15000 = 7050 samples (~160ms @ 44.1kHz)
-     *
-     * @return Samples remaining until next beat boundary
+     * @return Samples remaining until next beat boundary (or 0 if very close)
      */
     static uint32_t samplesToNextBeat();
+
+    /**
+     * Get number of samples until next subdivision boundary
+     *
+     * Supports fine-grained quantization: 1/32, 1/16, 1/8, 1/4 note grids
+     *
+     * SUBDIVISION MATH:
+     *   - 1/32 note = samplesPerBeat / 8  (8 thirty-second notes per beat)
+     *   - 1/16 note = samplesPerBeat / 4  (4 sixteenth notes per beat)
+     *   - 1/8 note  = samplesPerBeat / 2  (2 eighth notes per beat)
+     *   - 1/4 note  = samplesPerBeat      (1 quarter note per beat)
+     *
+     * TOLERANCE:
+     *   Same as samplesToNextBeat() - returns 0 if within 128 samples of boundary
+     *
+     * BLOCK ROUNDING (NEW):
+     *   Result is rounded up to next AUDIO_BLOCK_SAMPLES (128) boundary.
+     *   This prevents "just missed it by 50 samples" jitter from app thread polling.
+     *
+     * @param subdivision Subdivision size in samples (from calculateQuantizedDuration)
+     * @return Samples remaining until next subdivision boundary (block-rounded)
+     */
+    static uint32_t samplesToNextSubdivision(uint32_t subdivision);
 
     /**
      * Get number of samples until next bar boundary
@@ -285,6 +303,32 @@ public:
      */
     static bool isOnBarBoundary();
 
+    // ========== BEAT NOTIFICATION API ==========
+
+    /**
+     * Check and clear beat boundary flag (for external beat indicators)
+     *
+     * Thread-safe: Can be called from any thread
+     * Real-time safe: Wait-free (atomic exchange)
+     *
+     * @return true if beat boundary crossed since last check
+     *
+     * USAGE:
+     * This flag is set by TimeKeeper::incrementTick() when beat advances,
+     * and cleared by consumer (e.g., App thread for LED control).
+     *
+     * Example:
+     *   if (TimeKeeper::pollBeatFlag()) {
+     *       digitalWrite(LED_PIN, HIGH);  // Turn on LED at beat
+     *   }
+     *
+     * BENEFITS:
+     * - Never misses a beat (flag stays set until consumed)
+     * - Zero-latency notification from incrementTick()
+     * - Perfect accuracy (same beat grid as quantization)
+     */
+    static bool pollBeatFlag();
+
 private:
     // ========== STATE (all volatile for cross-thread visibility) ==========
 
@@ -298,6 +342,9 @@ private:
 
     // Transport state
     static volatile TransportState s_transportState;
+
+    // Beat notification (for external beat indicators like LED)
+    static volatile bool s_beatFlag;  // Set by incrementTick(), cleared by pollBeatFlag()
 
     //avoid division by 0, set sensible defaults
     static constexpr uint32_t DEFAULT_BPM = 120;

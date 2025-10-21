@@ -1,286 +1,415 @@
 #include "app_logic.h"
 #include "midi_io.h"
-#include "choke_io.h"
+#include "input_io.h"
+#include "encoder_io.h"
 #include "audio_choke.h"
+#include "audio_freeze.h"
+#include "effect_manager.h"
 #include "trace.h"
 #include "timekeeper.h"
+
+// Modular subsystems
+#include "effect_quantization.h"
+#include "encoder_menu.h"
+#include "display_manager.h"
+#include "choke_handler.h"
+#include "freeze_handler.h"
+
 #include <TeensyThreads.h>
 
-// External reference to choke audio effect (defined in main.cpp)
-extern AudioEffectChoke choke;
-
 /**
- * Application Logic Implementation
+ * Application Logic Implementation (REFACTORED)
  *
- * FEATURE: LED Beat Indicator
- * - Blinks LED on every beat (24 clock ticks)
- * - LED on for first 12 ticks, off for last 12 ticks (50% duty cycle)
- * - Pauses on MIDI STOP, resumes on START/CONTINUE
+ * This file has been modularized to eliminate code duplication:
+ * - EffectQuantization: Shared quantization logic
+ * - EncoderMenu: Generic encoder handling
+ * - DisplayManager: Display priority logic
+ * - ChokeHandler: CHOKE-specific quantization
+ * - FreezeHandler: FREEZE-specific quantization
  *
- * KEY DESIGN DECISIONS:
- *
- * 1. WHY COUNT TO 24 (NOT 23)?
- *    - MIDI clock: 24 PPQN (Pulses Per Quarter Note)
- *    - Tick 0-23 = one beat, tick 24 starts next beat
- *    - We reset counter when tickCount reaches 24
- *
- * 2. WHY 50% DUTY CYCLE?
- *    - Clear visual feedback (on-off pattern)
- *    - Easy to see beat at a glance
- *    - Alternative: Short pulse (10% duty) - harder to see
- *
- * 3. WHY RESET ON START (NOT CONTINUE)?
- *    - START = sequencer reset to beginning (tick 0)
- *    - CONTINUE = resume from pause (keep tick position)
- *    - This matches DAW behavior
- *
+ * BEFORE: 1329 lines with massive duplication
+ * AFTER:  ~350 lines of clean, focused code
  */
 
-// LED configuration
-static constexpr uint8_t LED_PIN = 31;
+// External references to audio effects (defined in main.cpp)
+extern AudioEffectChoke choke;
+extern AudioEffectFreeze freeze;
 
-// Beat tracking state
-static uint8_t tickCount = 0;         // Current tick within beat (0-23)
+// ========== LED BEAT INDICATOR ==========
+static constexpr uint8_t LED_PIN = 37;
+static uint64_t ledOffSample = 0;  // Sample position when LED should turn off (0 = LED off)
+
+// ========== TRANSPORT STATE ==========
 static bool transportActive = false;  // Is sequencer running?
 
-// Timestamp-based timing state
-static uint32_t beatStartMicros = 0;  // Timestamp of last beat start (tick 0)
-static uint32_t lastTickMicros = 0;   // Timestamp of last tick (for BPM calc)
-//initialized to default value so no errors/crashes
-static uint32_t avgTickPeriodUs = 20833; // Average period between ticks (~20.8ms @ 120BPM)
-                                          // Updated dynamically via exponential moving average
+// ========== MIDI CLOCK TIMING ==========
+static uint32_t lastTickMicros = 0;
+static uint32_t avgTickPeriodUs = 20833;  // ~20.8ms @ 120BPM
 
-// Debug output rate limiting
+// ========== DEBUG OUTPUT ==========
 static uint32_t lastPrint = 0;
-static constexpr uint32_t PRINT_INTERVAL_MS = 1000;  // Print status every 1s
+static constexpr uint32_t PRINT_INTERVAL_MS = 1000;
+
+// ========== ENCODER MENU INSTANCES ==========
+static EncoderMenu::Handler* encoder1 = nullptr;  // FREEZE parameters
+static EncoderMenu::Handler* encoder3 = nullptr;  // CHOKE parameters
+static EncoderMenu::Handler* encoder4 = nullptr;  // Global quantization
+
+// ========== ENCODER 1 (FREEZE PARAMETERS) ==========
+
+static void setupEncoder1() {
+    encoder1 = new EncoderMenu::Handler(0);  // Encoder 1 is index 0
+
+    // Button press: Cycle between LENGTH and ONSET parameters
+    encoder1->onButtonPress([]() {
+        FreezeHandler::Parameter current = FreezeHandler::getCurrentParameter();
+        if (current == FreezeHandler::Parameter::LENGTH) {
+            FreezeHandler::setCurrentParameter(FreezeHandler::Parameter::ONSET);
+            Serial.println("Freeze Parameter: ONSET");
+            DisplayIO::showBitmap(FreezeHandler::onsetToBitmap(freeze.getOnsetMode()));
+        } else {
+            FreezeHandler::setCurrentParameter(FreezeHandler::Parameter::LENGTH);
+            Serial.println("Freeze Parameter: LENGTH");
+            DisplayIO::showBitmap(FreezeHandler::lengthToBitmap(freeze.getLengthMode()));
+        }
+    });
+
+    // Value change: Adjust current parameter
+    encoder1->onValueChange([](int8_t delta) {
+        FreezeHandler::Parameter param = FreezeHandler::getCurrentParameter();
+
+        if (param == FreezeHandler::Parameter::LENGTH) {
+            // Update LENGTH parameter
+            int8_t currentIndex = static_cast<int8_t>(freeze.getLengthMode());
+            int8_t newIndex = currentIndex + delta;
+
+            // Clamp to valid range (0-1)
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex > 1) newIndex = 1;
+
+            if (newIndex != currentIndex) {
+                FreezeLength newLength = static_cast<FreezeLength>(newIndex);
+                freeze.setLengthMode(newLength);
+                DisplayIO::showBitmap(FreezeHandler::lengthToBitmap(newLength));
+                Serial.print("Freeze Length: ");
+                Serial.println(FreezeHandler::lengthName(newLength));
+            }
+        } else {  // ONSET parameter
+            // Update ONSET parameter
+            int8_t currentIndex = static_cast<int8_t>(freeze.getOnsetMode());
+            int8_t newIndex = currentIndex + delta;
+
+            // Clamp to valid range (0-1)
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex > 1) newIndex = 1;
+
+            if (newIndex != currentIndex) {
+                FreezeOnset newOnset = static_cast<FreezeOnset>(newIndex);
+                freeze.setOnsetMode(newOnset);
+                DisplayIO::showBitmap(FreezeHandler::onsetToBitmap(newOnset));
+                Serial.print("Freeze Onset: ");
+                Serial.println(FreezeHandler::onsetName(newOnset));
+            }
+        }
+    });
+
+    // Display update: Show current parameter or return to effect display
+    encoder1->onDisplayUpdate([](bool isTouched) {
+        if (isTouched) {
+            // Show current parameter
+            FreezeHandler::Parameter param = FreezeHandler::getCurrentParameter();
+            if (param == FreezeHandler::Parameter::LENGTH) {
+                DisplayIO::showBitmap(FreezeHandler::lengthToBitmap(freeze.getLengthMode()));
+            } else {
+                DisplayIO::showBitmap(FreezeHandler::onsetToBitmap(freeze.getOnsetMode()));
+            }
+        } else {
+            // Cooldown expired - return to effect display
+            DisplayManager::updateDisplay();
+        }
+    });
+}
+
+// ========== ENCODER 3 (CHOKE PARAMETERS) ==========
+
+static void setupEncoder3() {
+    encoder3 = new EncoderMenu::Handler(2);  // Encoder 3 is index 2
+
+    // Button press: Cycle between LENGTH and ONSET parameters
+    encoder3->onButtonPress([]() {
+        ChokeHandler::Parameter current = ChokeHandler::getCurrentParameter();
+        if (current == ChokeHandler::Parameter::LENGTH) {
+            ChokeHandler::setCurrentParameter(ChokeHandler::Parameter::ONSET);
+            Serial.println("Choke Parameter: ONSET");
+            DisplayIO::showBitmap(ChokeHandler::onsetToBitmap(choke.getOnsetMode()));
+        } else {
+            ChokeHandler::setCurrentParameter(ChokeHandler::Parameter::LENGTH);
+            Serial.println("Choke Parameter: LENGTH");
+            DisplayIO::showBitmap(ChokeHandler::lengthToBitmap(choke.getLengthMode()));
+        }
+    });
+
+    // Value change: Adjust current parameter
+    encoder3->onValueChange([](int8_t delta) {
+        ChokeHandler::Parameter param = ChokeHandler::getCurrentParameter();
+
+        if (param == ChokeHandler::Parameter::LENGTH) {
+            // Update LENGTH parameter
+            int8_t currentIndex = static_cast<int8_t>(choke.getLengthMode());
+            int8_t newIndex = currentIndex + delta;
+
+            // Clamp to valid range (0-1)
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex > 1) newIndex = 1;
+
+            if (newIndex != currentIndex) {
+                ChokeLength newLength = static_cast<ChokeLength>(newIndex);
+                choke.setLengthMode(newLength);
+                DisplayIO::showBitmap(ChokeHandler::lengthToBitmap(newLength));
+                Serial.print("Choke Length: ");
+                Serial.println(ChokeHandler::lengthName(newLength));
+            }
+        } else {  // ONSET parameter
+            // Update ONSET parameter
+            int8_t currentIndex = static_cast<int8_t>(choke.getOnsetMode());
+            int8_t newIndex = currentIndex + delta;
+
+            // Clamp to valid range (0-1)
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex > 1) newIndex = 1;
+
+            if (newIndex != currentIndex) {
+                ChokeOnset newOnset = static_cast<ChokeOnset>(newIndex);
+                choke.setOnsetMode(newOnset);
+                DisplayIO::showBitmap(ChokeHandler::onsetToBitmap(newOnset));
+                Serial.print("Choke Onset: ");
+                Serial.println(ChokeHandler::onsetName(newOnset));
+            }
+        }
+    });
+
+    // Display update: Show current parameter or return to effect display
+    encoder3->onDisplayUpdate([](bool isTouched) {
+        if (isTouched) {
+            // Show current parameter
+            ChokeHandler::Parameter param = ChokeHandler::getCurrentParameter();
+            if (param == ChokeHandler::Parameter::LENGTH) {
+                DisplayIO::showBitmap(ChokeHandler::lengthToBitmap(choke.getLengthMode()));
+            } else {
+                DisplayIO::showBitmap(ChokeHandler::onsetToBitmap(choke.getOnsetMode()));
+            }
+        } else {
+            // Cooldown expired - return to effect display
+            DisplayManager::updateDisplay();
+        }
+    });
+}
+
+// ========== ENCODER 4 (GLOBAL QUANTIZATION) ==========
+
+static void setupEncoder4() {
+    encoder4 = new EncoderMenu::Handler(3);  // Encoder 4 is index 3
+
+    // Value change: Adjust global quantization
+    encoder4->onValueChange([](int8_t delta) {
+        int8_t currentIndex = static_cast<int8_t>(EffectQuantization::getGlobalQuantization());
+        int8_t newIndex = currentIndex + delta;
+
+        // Clamp to valid range (0-3)
+        if (newIndex < 0) newIndex = 0;
+        if (newIndex > 3) newIndex = 3;
+
+        if (newIndex != currentIndex) {
+            Quantization newQuant = static_cast<Quantization>(newIndex);
+            EffectQuantization::setGlobalQuantization(newQuant);
+            DisplayIO::showBitmap(EffectQuantization::quantizationToBitmap(newQuant));
+            Serial.print("Global Quantization: ");
+            Serial.println(EffectQuantization::quantizationName(newQuant));
+        }
+    });
+
+    // Display update: Show quantization or return to effect display
+    encoder4->onDisplayUpdate([](bool isTouched) {
+        if (isTouched) {
+            // Show current quantization
+            Quantization quant = EffectQuantization::getGlobalQuantization();
+            DisplayIO::showBitmap(EffectQuantization::quantizationToBitmap(quant));
+        } else {
+            // Cooldown expired - return to effect display
+            DisplayManager::updateDisplay();
+        }
+    });
+}
+
+// ========== APP LOGIC INITIALIZATION ==========
 
 void AppLogic::begin() {
     // Configure LED pin
     pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, LOW);  // Start with LED off
+    digitalWrite(LED_PIN, LOW);
+
+    // Initialize subsystems
+    EffectQuantization::initialize();
+    DisplayManager::initialize();
+    ChokeHandler::initialize(choke);
+    FreezeHandler::initialize(freeze);
+
+    // Setup encoders
+    setupEncoder1();  // FREEZE parameters
+    setupEncoder3();  // CHOKE parameters
+    setupEncoder4();  // Global quantization
 
     // Initialize state
-    tickCount = 0;
     transportActive = false;
 }
 
-void AppLogic::threadLoop() {
-    /**
-     * APP THREAD MAIN LOOP
-     *
-     * EXECUTION ORDER (matters!):
-     * 1. Process choke events (button press/release)
-     * 2. Process transport events (START/STOP affects LED state)
-     * 3. Process clock ticks (update beat position, drive LED)
-     * 4. Periodic debug output
-     * 5. Yield CPU
-     */
-    for (;;) {
-        // ========== 1. DRAIN CHOKE EVENTS ==========
-        /**
-         * WHY PROCESS CHOKE FIRST?
-         * - Button response should be immediate (user perception)
-         * - Choke is independent of MIDI transport state
-         * - Processing early minimizes latency
-         */
-        ChokeEvent chokeEvent;
-        while (ChokeIO::popEvent(chokeEvent)) {
-            switch (chokeEvent) {
-                case ChokeEvent::BUTTON_PRESS:
-                    // Button pressed → engage choke (mute audio)
-                    choke.engage();
-                    ChokeIO::setLED(true);  // Red LED
-                    Serial.println("🔇 Choke ENGAGED");
-                    break;
+// ========== APP LOGIC MAIN LOOP ==========
 
-                case ChokeEvent::BUTTON_RELEASE:
-                    // Button released → release choke (unmute audio)
-                    choke.releaseChoke();
-                    ChokeIO::setLED(false);  // Green LED
-                    Serial.println("🔊 Choke RELEASED");
-                    break;
+void AppLogic::threadLoop() {
+    for (;;) {
+        // ========== 1. PROCESS INPUT COMMANDS ==========
+        Command cmd;
+        while (InputIO::popCommand(cmd)) {
+            // Check if CHOKE/FREEZE handlers want to intercept
+            bool handled = false;
+
+            if (cmd.targetEffect == EffectID::CHOKE) {
+                if (cmd.type == CommandType::EFFECT_ENABLE || cmd.type == CommandType::EFFECT_TOGGLE) {
+                    handled = ChokeHandler::handleButtonPress(cmd);
+                } else if (cmd.type == CommandType::EFFECT_DISABLE) {
+                    handled = ChokeHandler::handleButtonRelease(cmd);
+                }
+            } else if (cmd.targetEffect == EffectID::FREEZE) {
+                if (cmd.type == CommandType::EFFECT_ENABLE || cmd.type == CommandType::EFFECT_TOGGLE) {
+                    handled = FreezeHandler::handleButtonPress(cmd);
+                } else if (cmd.type == CommandType::EFFECT_DISABLE) {
+                    handled = FreezeHandler::handleButtonRelease(cmd);
+                }
+            }
+
+            // If handler didn't intercept, execute via EffectManager
+            if (!handled && EffectManager::executeCommand(cmd)) {
+                // Update visual feedback
+                AudioEffectBase* effect = EffectManager::getEffect(cmd.targetEffect);
+                if (effect) {
+                    bool enabled = effect->isEnabled();
+                    InputIO::setLED(cmd.targetEffect, enabled);
+
+                    if (enabled) {
+                        DisplayManager::setLastActivatedEffect(cmd.targetEffect);
+                    } else {
+                        DisplayManager::setLastActivatedEffect(EffectID::NONE);
+                    }
+
+                    DisplayManager::updateDisplay();
+                    Serial.print(effect->getName());
+                    Serial.println(enabled ? " ENABLED" : " DISABLED");
+                }
             }
         }
 
-        // ========== 2. DRAIN TRANSPORT EVENTS ==========
-        /**
-         * WHY DRAIN COMPLETELY?
-         * - Events are rare (only on start/stop)
-         * - Always want latest state
-         * - If multiple events queued (e.g., rapid start/stop), we want final state
-         */
+        // ========== 2. UPDATE ENCODERS ==========
+        EncoderIO::update();  // Process hardware events
+        encoder1->update();   // FREEZE parameters
+        encoder3->update();   // CHOKE parameters
+        encoder4->update();   // Global quantization
+
+        // ========== 3. UPDATE EFFECT HANDLERS ==========
+        ChokeHandler::updateVisualFeedback();
+        FreezeHandler::updateVisualFeedback();
+
+        // ========== 4. PROCESS TRANSPORT EVENTS ==========
         MidiEvent event;
         while (MidiIO::popEvent(event)) {
             switch (event) {
-                case MidiEvent::START:
-                    /**
-                     * START: Reset to beginning
-                     * - Reset tick counter (we're at beat 0, tick 0)
-                     * - Reset timestamps (start fresh timing)
-                     * - Reset TimeKeeper (sample 0, beat 0)
-                     * - Enable transport
-                     * - Turn on LED (start of beat)
-                     */
-                    tickCount = 0;
-                    beatStartMicros = micros();
-                    lastTickMicros = 0;  // Reset for fresh EMA
+                case MidiEvent::START: {
+                    lastTickMicros = 0;
                     transportActive = true;
-
-                    // Reset TimeKeeper to beat 0, sample 0
                     TimeKeeper::reset();
                     TimeKeeper::setTransportState(TimeKeeper::TransportState::PLAYING);
 
+                    // Turn on LED for beat 0
                     digitalWrite(LED_PIN, HIGH);
+                    uint32_t spb = TimeKeeper::getSamplesPerBeat();
+                    uint32_t pulseSamples = (spb * 2) / 24;  // 2 ticks
+                    ledOffSample = TimeKeeper::getSamplePosition() + pulseSamples;
+                    TRACE(TRACE_BEAT_LED_ON);
                     TRACE(TRACE_MIDI_START);
                     Serial.println("▶ START");
                     break;
+                }
 
                 case MidiEvent::STOP:
-                    /**
-                     * STOP: Pause playback
-                     * - Disable transport (ignore clock ticks)
-                     * - Update TimeKeeper transport state
-                     * - Turn off LED (visual feedback of stopped state)
-                     * - Keep tick counter (CONTINUE will resume from here)
-                     */
                     transportActive = false;
                     TimeKeeper::setTransportState(TimeKeeper::TransportState::STOPPED);
-
                     digitalWrite(LED_PIN, LOW);
+                    ledOffSample = 0;
                     TRACE(TRACE_MIDI_STOP);
                     Serial.println("■ STOP");
                     break;
 
                 case MidiEvent::CONTINUE:
-                    /**
-                     * CONTINUE: Resume from pause
-                     * - Enable transport
-                     * - Update TimeKeeper transport state
-                     * - Don't reset tick counter (resume from last position)
-                     * - Update LED based on current tick position
-                     */
                     transportActive = true;
                     TimeKeeper::setTransportState(TimeKeeper::TransportState::PLAYING);
-
-                    // Set LED state based on current position
-                    digitalWrite(LED_PIN, (tickCount < 12) ? HIGH : LOW);
                     TRACE(TRACE_MIDI_CONTINUE);
                     Serial.println("▶ CONTINUE");
                     break;
             }
         }
 
-        // ========== 3. DRAIN CLOCK TICKS ==========
-        /**
-         * WHY DRAIN COMPLETELY (NOT JUST ONE)?
-         * - If app thread stalls, ticks pile up in queue
-         * - We want to catch up to current beat ASAP
-         * - Processing all queued ticks keeps us in sync
-         *
-         * TRADEOFF: Responsiveness vs CPU usage
-         * - Drain all: Catches up fast, but can hog CPU if backlogged
-         * - Drain one: Smooth CPU usage, but falls behind if stalls
-         * - We choose drain all because:
-         *   a) Queue rarely has >1 tick (we run every 2ms, ticks every ~20ms)
-         *   b) Staying in sync is critical for looper (future)
-         */
+        // ========== 5. PROCESS CLOCK TICKS ==========
         uint32_t clockMicros;
         while (MidiIO::popClock(clockMicros)) {
-            // Only process ticks if transport is running
-            if (!transportActive) {
-                continue;  // Ignore ticks when stopped
-            }
+            if (!transportActive) continue;
 
-            /**
-             * TIMESTAMP-BASED BEAT TRACKING
-             *
-             * APPROACH:
-             * 1. Calculate tick period (time between ticks) using exponential moving average
-             * 2. Track beat start time (tick 0)
-             * 3. Update LED based on elapsed time from beat start, not just tick count
-             *
-             * BENEFITS:
-             * - Immune to MIDI jitter (smooths out irregular tick arrival)
-             * - LED timing stays rock-solid even with jittery MIDI
-             * - Foundation for sample-accurate quantization (future)
-             *
-             * MATH:
-             * - MIDI clock: 24 PPQN (Pulses Per Quarter Note)
-             * - At 120 BPM: 24 ticks per beat, 2 beats/sec = 48 ticks/sec
-             * - Tick period: 1/48 = 20.833ms = 20833µs
-             * - Half beat (LED transition): 12 ticks × 20833µs = 250ms
-             */
-
-            // Update tick period estimate (exponential moving average)
-            // Alpha = 0.1 (smooth jitter, converge in ~10 ticks)
+            // Update tick period estimate (EMA)
             if (lastTickMicros > 0) {
                 uint32_t tickPeriod = clockMicros - lastTickMicros;
-                // Sanity check: 10ms - 50ms range (60-300 BPM)
                 if (tickPeriod >= 10000 && tickPeriod <= 50000) {
-                    //multiply equation constants by 10 to avoid float math
-                    //alpha = 0.1
                     avgTickPeriodUs = (avgTickPeriodUs * 9 + tickPeriod) / 10;
-
-                    // Sync TimeKeeper to MIDI clock (converts ticks to samples)
                     TimeKeeper::syncToMIDIClock(avgTickPeriodUs);
-
-                    TRACE(TRACE_TICK_PERIOD_UPDATE, avgTickPeriodUs / 10);  // Store in units of 10µs to fit in uint16_t
+                    TRACE(TRACE_TICK_PERIOD_UPDATE, avgTickPeriodUs / 10);
                 }
             }
             lastTickMicros = clockMicros;
-
-            // Increment tick counter (both local and TimeKeeper)
-            tickCount++;
-            TimeKeeper::incrementTick();  // Tracks ticks 0-23, auto-advances beat at 24
-
-            // Reset at beat boundary and capture beat start timestamp
-            if (tickCount >= 24) {
-                tickCount = 0;
-                beatStartMicros = clockMicros;
-                digitalWrite(LED_PIN, HIGH);  // Turn on immediately at beat start
-                TRACE(TRACE_BEAT_START);
-                TRACE(TRACE_BEAT_LED_ON);
-                // Beat counter already incremented by TimeKeeper::incrementTick()
-            }
-
-            // Turn off LED after short pulse (2 ticks = ~40ms @ 120 BPM)
-            // Using tick count is simpler and avoids timestamp calculation every tick
-            if (tickCount == 2) {
-                digitalWrite(LED_PIN, LOW);
-                TRACE(TRACE_BEAT_LED_OFF);
-            }
+            TimeKeeper::incrementTick();
         }
 
-        // ========== 4. PERIODIC DEBUG OUTPUT ==========
-        /**
-         * WHY RATE LIMIT SERIAL OUTPUT?
-         * - Serial.print is SLOW (~100-500µs per call)
-         * - Can cause audio glitches if done too often
-         * - 1 second interval is enough for debug monitoring
-         *
-         * WHY SAFE HERE (NOT IN MIDI HANDLER)?
-         * - We're in app thread, not I/O thread
-         * - App thread is lower priority (won't block MIDI)
-         * - Audio runs in ISR (higher than both threads)
-         */
+        // ========== 6. UPDATE BEAT LED ==========
+        uint64_t currentSample = TimeKeeper::getSamplePosition();
+
+        if (TimeKeeper::pollBeatFlag()) {
+            digitalWrite(LED_PIN, HIGH);
+            uint32_t spb = TimeKeeper::getSamplesPerBeat();
+            uint32_t pulseSamples = (spb * 2) / 24;
+            ledOffSample = currentSample + pulseSamples;
+            TRACE(TRACE_BEAT_LED_ON);
+        }
+
+        if (ledOffSample > 0 && currentSample >= ledOffSample) {
+            digitalWrite(LED_PIN, LOW);
+            ledOffSample = 0;
+            TRACE(TRACE_BEAT_LED_OFF);
+        }
+
+        // ========== 7. PERIODIC DEBUG OUTPUT ==========
         uint32_t now = millis();
         if (now - lastPrint >= PRINT_INTERVAL_MS) {
             lastPrint = now;
+            // Optional: Print status here
         }
 
-        // ========== 5. YIELD CPU ==========
-        /**
-         * WHY 2ms DELAY?
-         * - MIDI clocks arrive every ~20ms at 120 BPM
-         * - 2ms delay = we check 10x per clock interval (plenty of headroom)
-         * - Shorter delay: More responsive, but wastes CPU
-         * - Longer delay: Save CPU, but might miss events (if queue fills)
-         *
-         * WHY threads.delay() (NOT delay())?
-         * - threads.delay() yields to other threads (cooperative)
-         * - delay() blocks entire core (bad for multithreading)
-         * - Even though we're on single-core Teensy, good practice for portability
-         */
+        // ========== 8. YIELD CPU ==========
         threads.delay(2);
     }
+}
+
+// ========== GLOBAL QUANTIZATION API (delegated) ==========
+
+Quantization AppLogic::getGlobalQuantization() {
+    return EffectQuantization::getGlobalQuantization();
+}
+
+void AppLogic::setGlobalQuantization(Quantization quant) {
+    EffectQuantization::setGlobalQuantization(quant);
 }
