@@ -10,16 +10,23 @@ static Quantization globalQuantization = Quantization::QUANT_16;
 
 uint32_t calculateQuantizedDuration(Quantization quant) {
     /**
-     * Calculate quantized duration in samples (BLOCK-ROUNDED)
+     * Calculate quantized duration in samples (EXACT)
      *
-     * BLOCK ROUNDING (NEW):
-     *   Result is rounded to nearest AUDIO_BLOCK_SAMPLES (128) boundary.
-     *   WHY? Audio ISR can only toggle effects at block boundaries anyway.
-     *   Rounding makes durations consistent and prevents partial-block artifacts.
+     * NO BLOCK ROUNDING:
+     *   Returns exact subdivision duration calculated from samplesPerBeat.
+     *   ISR will handle block-level scheduling automatically.
+     *   This prevents cumulative drift when subdivisions are chained.
      *
      * EXAMPLE (120 BPM, samplesPerBeat = 22050):
-     *   - 1/16 note: 22050 / 4 = 5512 samples → rounded to 5504 (43 blocks)
-     *   - 1/8 note:  22050 / 2 = 11025 samples → rounded to 11008 (86 blocks)
+     *   - 1/32 note: 22050 / 8 = 2756 samples (exact)
+     *   - 1/16 note: 22050 / 4 = 5512 samples (exact)
+     *   - 1/8 note:  22050 / 2 = 11025 samples (exact)
+     *   - 1/4 note:  22050 / 1 = 22050 samples (exact)
+     *
+     * WHY NO ROUNDING?
+     *   Block rounding causes cumulative drift. After 4 sixteenth notes,
+     *   you'd be 34 samples off from the beat boundary. By using exact
+     *   values, subdivisions stay anchored to the musical grid.
      */
     uint32_t samplesPerBeat = TimeKeeper::getSamplesPerBeat();
     uint32_t duration;
@@ -42,16 +49,7 @@ uint32_t calculateQuantizedDuration(Quantization quant) {
             break;
     }
 
-    // BLOCK ROUNDING: Round to nearest AUDIO_BLOCK_SAMPLES boundary
-    uint32_t remainder = duration % AUDIO_BLOCK_SAMPLES;
-    if (remainder >= (AUDIO_BLOCK_SAMPLES / 2)) {
-        // Round up
-        duration += (AUDIO_BLOCK_SAMPLES - remainder);
-    } else {
-        // Round down
-        duration -= remainder;
-    }
-
+    // NO BLOCK ROUNDING - ISR will handle block-level granularity
     return duration;
 }
 

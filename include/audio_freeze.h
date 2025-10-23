@@ -280,18 +280,21 @@ public:
      */
     virtual void update() override {
         uint64_t currentSample = TimeKeeper::getSamplePosition();
+        uint64_t blockEndSample = currentSample + AUDIO_BLOCK_SAMPLES;
 
         // Check for scheduled onset (ISR-accurate quantized onset)
-        if (m_onsetAtSample > 0 && currentSample >= m_onsetAtSample) {
-            // Time to engage freeze (sample-accurate!)
+        // Fire if the scheduled sample falls within this audio block [currentSample, blockEndSample)
+        if (m_onsetAtSample > 0 && m_onsetAtSample >= currentSample && m_onsetAtSample < blockEndSample) {
+            // Time to engage freeze (block-accurate - best we can do in ISR)
             m_readPos = m_writePos;  // Capture current buffer position
             m_isEnabled.store(true, std::memory_order_release);
             m_onsetAtSample = 0;  // Clear scheduled onset
         }
 
         // Check for scheduled release (ISR-accurate quantized length)
-        if (m_releaseAtSample > 0 && currentSample >= m_releaseAtSample) {
-            // Time to auto-release
+        // Fire if the scheduled sample falls within this audio block [currentSample, blockEndSample)
+        if (m_releaseAtSample > 0 && m_releaseAtSample >= currentSample && m_releaseAtSample < blockEndSample) {
+            // Time to auto-release (block-accurate)
             m_isEnabled.store(false, std::memory_order_release);
             m_releaseAtSample = 0;  // Clear scheduled release
         }

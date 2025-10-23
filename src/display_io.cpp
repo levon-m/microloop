@@ -47,11 +47,10 @@ static volatile BitmapID currentBitmap = BitmapID::DEFAULT;
 /**
  * Bitmap structure for registry
  * Maps BitmapID enum to actual PROGMEM bitmap data
+ * Note: All bitmaps are 128x64 (DISPLAY_WIDTH x DISPLAY_HEIGHT)
  */
 struct BitmapData {
     const uint8_t* data;  // Pointer to PROGMEM bitmap array
-    uint16_t width;
-    uint16_t height;
 };
 
 /**
@@ -65,21 +64,21 @@ struct BitmapData {
  * 3. Add registry entry here (order matters!)
  */
 static const BitmapData bitmapRegistry[] = {
-    { bitmap_default, DISPLAY_WIDTH, DISPLAY_HEIGHT },            // BitmapID::DEFAULT
-    { bitmap_freeze_active, DISPLAY_WIDTH, DISPLAY_HEIGHT },      // BitmapID::FREEZE_ACTIVE
-    { bitmap_choke_active, DISPLAY_WIDTH, DISPLAY_HEIGHT },       // BitmapID::CHOKE_ACTIVE
-    { bitmap_quant_32, DISPLAY_WIDTH, DISPLAY_HEIGHT },           // BitmapID::QUANT_32
-    { bitmap_quant_16, DISPLAY_WIDTH, DISPLAY_HEIGHT },           // BitmapID::QUANT_16
-    { bitmap_quant_8, DISPLAY_WIDTH, DISPLAY_HEIGHT },            // BitmapID::QUANT_8
-    { bitmap_quant_4, DISPLAY_WIDTH, DISPLAY_HEIGHT },            // BitmapID::QUANT_4
-    { bitmap_choke_length_free, DISPLAY_WIDTH, DISPLAY_HEIGHT },  // BitmapID::CHOKE_LENGTH_FREE
-    { bitmap_choke_length_quant, DISPLAY_WIDTH, DISPLAY_HEIGHT }, // BitmapID::CHOKE_LENGTH_QUANT
-    { bitmap_choke_onset_free, DISPLAY_WIDTH, DISPLAY_HEIGHT },   // BitmapID::CHOKE_ONSET_FREE
-    { bitmap_choke_onset_quant, DISPLAY_WIDTH, DISPLAY_HEIGHT },  // BitmapID::CHOKE_ONSET_QUANT
-    { bitmap_choke_length_free, DISPLAY_WIDTH, DISPLAY_HEIGHT },  // BitmapID::FREEZE_LENGTH_FREE (placeholder: reuse choke bitmap)
-    { bitmap_choke_length_quant, DISPLAY_WIDTH, DISPLAY_HEIGHT }, // BitmapID::FREEZE_LENGTH_QUANT (placeholder: reuse choke bitmap)
-    { bitmap_choke_onset_free, DISPLAY_WIDTH, DISPLAY_HEIGHT },   // BitmapID::FREEZE_ONSET_FREE (placeholder: reuse choke bitmap)
-    { bitmap_choke_onset_quant, DISPLAY_WIDTH, DISPLAY_HEIGHT },  // BitmapID::FREEZE_ONSET_QUANT (placeholder: reuse choke bitmap)
+    { bitmap_default },            // BitmapID::DEFAULT
+    { bitmap_freeze_active },      // BitmapID::FREEZE_ACTIVE
+    { bitmap_choke_active },       // BitmapID::CHOKE_ACTIVE
+    { bitmap_quant_32 },           // BitmapID::QUANT_32
+    { bitmap_quant_16 },           // BitmapID::QUANT_16
+    { bitmap_quant_8 },            // BitmapID::QUANT_8
+    { bitmap_quant_4 },            // BitmapID::QUANT_4
+    { bitmap_choke_length_free },  // BitmapID::CHOKE_LENGTH_FREE
+    { bitmap_choke_length_quant }, // BitmapID::CHOKE_LENGTH_QUANT
+    { bitmap_choke_onset_free },   // BitmapID::CHOKE_ONSET_FREE
+    { bitmap_choke_onset_quant },  // BitmapID::CHOKE_ONSET_QUANT
+    { bitmap_choke_length_free },  // BitmapID::FREEZE_LENGTH_FREE (placeholder: reuse choke bitmap)
+    { bitmap_choke_length_quant }, // BitmapID::FREEZE_LENGTH_QUANT (placeholder: reuse choke bitmap)
+    { bitmap_choke_onset_free },   // BitmapID::FREEZE_ONSET_FREE (placeholder: reuse choke bitmap)
+    { bitmap_choke_onset_quant },  // BitmapID::FREEZE_ONSET_QUANT (placeholder: reuse choke bitmap)
     // Add more bitmaps here as needed
 };
 
@@ -110,7 +109,7 @@ static void drawBitmap(BitmapID id) {
     display.clearDisplay();
 
     // Draw bitmap (full screen, top-left origin)
-    display.drawBitmap(0, 0, bitmap.data, bitmap.width, bitmap.height, WHITE);
+    display.drawBitmap(0, 0, bitmap.data, DISPLAY_WIDTH, DISPLAY_HEIGHT, WHITE);
 
     // Push to display
     display.display();
