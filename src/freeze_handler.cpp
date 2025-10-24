@@ -6,12 +6,8 @@
 
 namespace FreezeHandler {
 
-// ========== STATE ==========
-
 static AudioEffectFreeze* freeze = nullptr;
 static Parameter currentParameter = Parameter::LENGTH;
-
-// ========== HELPER FUNCTIONS ==========
 
 BitmapID lengthToBitmap(FreezeLength length) {
     switch (length) {
@@ -44,8 +40,6 @@ const char* onsetName(FreezeOnset onset) {
         default: return "Free";
     }
 }
-
-// ========== PUBLIC API ==========
 
 void initialize(AudioEffectFreeze& freezeEffect) {
     freeze = &freezeEffect;
@@ -215,4 +209,4 @@ void setCurrentParameter(Parameter param) {
     currentParameter = param;
 }
 
-}  // namespace FreezeHandler
+}

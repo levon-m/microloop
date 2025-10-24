@@ -4,8 +4,6 @@
 
 namespace EncoderMenu {
 
-// ========== ENCODER MENU HANDLER ==========
-
 Handler::Handler(uint8_t encoderIndex)
     : encoderIndex(encoderIndex)
     , lastPosition(0)
@@ -106,4 +104,4 @@ void Handler::resetPosition() {
     accumulator = 0;
 }
 
-}  // namespace EncoderMenu
+}

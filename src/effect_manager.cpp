@@ -1,32 +1,9 @@
-/**
- * effect_manager.cpp - Implementation of effect registry and command dispatcher
- */
-
 #include "effect_manager.h"
 #include <Arduino.h>  // For Serial debug output
 
-// ============================================================================
-// STATIC STORAGE
-// ============================================================================
-
-/**
- * Effect registry storage
- *
- * Static array, initialized to NONE/nullptr
- * Memory: 8 entries × 8 bytes = 64 bytes RAM
- */
 EffectManager::EffectEntry EffectManager::s_effects[MAX_EFFECTS] = {};
 
-/**
- * Number of registered effects
- *
- * Initialized to 0 (no effects registered yet)
- */
 uint8_t EffectManager::s_numEffects = 0;
-
-// ============================================================================
-// REGISTRATION
-// ============================================================================
 
 bool EffectManager::registerEffect(EffectID id, AudioEffectBase* effect) {
     // Validate inputs
@@ -75,10 +52,6 @@ bool EffectManager::registerEffect(EffectID id, AudioEffectBase* effect) {
     return true;
 }
 
-// ============================================================================
-// COMMAND DISPATCH
-// ============================================================================
-
 bool EffectManager::executeCommand(const Command& cmd) {
     // Special case: NONE command is a no-op (used for disabled buttons)
     if (cmd.type == CommandType::NONE) {
@@ -121,10 +94,6 @@ bool EffectManager::executeCommand(const Command& cmd) {
             return false;
     }
 }
-
-// ============================================================================
-// QUERY INTERFACE
-// ============================================================================
 
 AudioEffectBase* EffectManager::getEffect(EffectID id) {
     // Linear search (fast for small N, cache-friendly)

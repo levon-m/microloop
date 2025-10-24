@@ -1,80 +1,54 @@
 # μLoop: Minimal Live Looper & Sampler
 
-Real-time MIDI-synchronized looper for Teensy 4.1 with professional-grade timing.
+![MicroLoop Hardware](images/microloop.jpg)
 
-**Current Status:** v0.1.0 - MIDI clock tracking, beat indicator, audio passthrough
-
-## Hardware
-
-- Teensy 4.1
-- Audio Shield Rev D (SGTL5000)
-- MIDI DIN input on Serial8 (RX=pin 34)
-- External LED on pin 31 (beat indicator)
-
-## Quick Start
-
-### Build
-
-Requires CMake 3.16+ and arm-none-eabi-gcc (from Arduino IDE 2.x Teensyduino).
-
-```bash
-# Configure toolchain path first
-# Edit cmake/teensy41.cmake, set COMPILER_PATH to your Arduino15 location
-
-mkdir build && cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/teensy41.cmake ..
-ninja
-```
-
-### Upload
-
-Drag `build/microloop.hex` into Teensy Loader GUI, press button on Teensy.
-
-### Monitor
-
-Open serial monitor in VS Code or Arduino IDE (115200 baud).
+MIDI-synced micro-looper for live performance, inspired by French house greats like Justice, Mr. Oizo, and SebastiAn.
 
 ## Features
 
-**Implemented:**
-- MIDI clock input (24 PPQN)
-- Transport control (START/STOP/CONTINUE)
-- Timestamp-based beat tracking with EMA jitter smoothing
-- LED beat indicator (short pulse on downbeat)
-- Stereo audio passthrough
-- Lock-free multi-threaded architecture
-- **Comprehensive on-device test suite (47+ tests)**
+**Three core effects:**
 
-**Planned:**
-- Loop recording/playback
-- Sample triggering
-- BPM display
-- Quantized operations
+- **CHOKE**: Instant audio mute with click-free crossfades—hold for silence, release for passthrough
+- **STUTTER**: Rhythmic buffer looping that captures and repeats a slice of incoming audio for glitchy, chopped textures
+- **FREEZE**: Granular hold effect that captures and sustains a moment of audio
 
-## Testing
+**Triggering modes & parameters:**
 
-The project includes a comprehensive on-device test suite that runs directly on Teensy hardware.
+- **Free/Quantized**:Trigger effects immediately or snap onset/release to the set beat grid
+- **Global Quantization**: Sets beat grid (1/4, 1/8, 1/16, 1/32 note divisions) for all quantized effect parameters
+- **Onset**: Delay effect start by a set number of beats after button press
+- **Length**: Automatically release effect after set beat grid length
+- **Capture Start/End**: Define loop boundaries for STUTTER repetition
 
-**Quick test:**
-1. Edit `CMakeLists.txt`: Comment out `src/main.cpp`, use `tests/run_tests.cpp`
-2. Build: `cd build && ninja`
-3. Upload `microloop.hex` to Teensy
-4. Open serial monitor (115200 baud) - you'll see test results
+**System features:**
 
-**Test coverage:**
-- ✅ TimeKeeper (30+ tests) - Beat tracking, MIDI sync, quantization
-- ✅ Trace utility (7 tests) - Event logging, overflow handling
-- ✅ SPSC queue (10 tests) - Push/pop, wraparound, performance
+- **MIDI-synchronized timing**: Locks to external MIDI clock (24 PPQN) with jitter-smoothed beat tracking
+- **Parameter/menu control**: 4× rotary encoders for real-time parameter adjustment and menu navigation
+- **Visual feedback**: 128×64 OLED display shows current effect state, parameters, and menu options
+- **Effect presets**: Save and recall complete parameter configurations for different performance contexts
 
-See [tests/TESTING.md](tests/TESTING.md) for detailed testing guide including manual integration tests.
+## Architecture
 
-## Documentation
+**Hardware**: ARM Cortex-M7 (Teensy 4.1) + SGTL5000 audio codec, Adafruit MIDI FeatherWing, Adafruit 1x4 NeokKey, 128×64 OLED display, MCP23017 GPIO expander, 4 encoders, 4 push buttons, and some status LEDs
 
-- [CLAUDE.md](CLAUDE.md) - Architecture details, development workflow, real-time safety guidelines
-- [tests/TESTING.md](tests/TESTING.md) - Comprehensive testing guide
-- [utils/TIMEKEEPER_USAGE.md](utils/TIMEKEEPER_USAGE.md) - TimeKeeper API documentation
-- [utils/TRACE_USAGE.md](utils/TRACE_USAGE.md) - Trace utility usage guide
+**Software**: Custom CMake build system, C++17, zero-allocation DSP engine
 
-## License
+**Threading model**: Deterministic multithreaded architecture with:
+- High-priority audio ISR (44.1kHz, 128-sample blocks)
+- 5 control threads (MIDI I/O, input polling, display updates, encoder handling, app logic)
+- Lock-free SPSC queues for non-blocking inter-thread communication
 
-[Specify your license]
+**Key components**:
+- Custom SGTL5000 register-layer driver (I²C codec configuration)
+- TimeKeeper: Centralized timing authority bridging MIDI clock and audio samples
+- Sample-accurate quantization API for beat/bar-aligned recording and playback
+- Effect system with polymorphic command dispatch
+
+**Real-time safety**: No dynamic allocation in audio path, wait-free data structures
+
+## Technical Highlights
+
+- **Sub-millisecond effect latency**: ISR state capture with 64-event ring buffer (~26µs response time)
+- **Professional timing**: EMA-smoothed MIDI clock with atomic beat boundary detection
+- **Click-free audio**: 3ms linear crossfades on all effect transitions
+- **Zero missed steps**: Hardware-frozen encoder state via MCP23017 INTCAP registers

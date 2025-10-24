@@ -298,10 +298,9 @@ uint32_t TimeKeeper::samplesToNextSubdivision(uint32_t subdivision) {
             return 0;  // At or just past boundary - fire now!
         }
 
-        // BLOCK ROUNDING
-        uint32_t remainder = samplesToNext % AUDIO_BLOCK_SAMPLES;
-        if (remainder > 0) {
-            samplesToNext += (AUDIO_BLOCK_SAMPLES - remainder);
+        // NO BLOCK ROUNDING: Let ISR handle block-level granularity
+        if (samplesToNext < AUDIO_BLOCK_SAMPLES) {
+            return 0;  // Fire in next audio callback
         }
 
         return samplesToNext;
@@ -319,10 +318,10 @@ uint32_t TimeKeeper::samplesToNextSubdivision(uint32_t subdivision) {
         return 0;  // At or just past subdivision boundary - fire now!
     }
 
-    // BLOCK ROUNDING
-    uint32_t remainder = samplesToNext % AUDIO_BLOCK_SAMPLES;
-    if (remainder > 0) {
-        samplesToNext += (AUDIO_BLOCK_SAMPLES - remainder);
+    // NO BLOCK ROUNDING: Let ISR handle block-level granularity
+    // If very close to boundary (< 1 block), fire immediately to avoid rounding errors
+    if (samplesToNext < AUDIO_BLOCK_SAMPLES) {
+        return 0;  // Fire in next audio callback
     }
 
     return samplesToNext;

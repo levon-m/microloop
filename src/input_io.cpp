@@ -1,7 +1,3 @@
-/**
- * input_io.cpp - Generic input handler implementation
- */
-
 #include "input_io.h"
 #include "spsc_queue.h"
 #include "trace.h"
@@ -10,16 +6,10 @@
 #include <TeensyThreads.h>
 #include <Wire.h>
 
-/**
- * HARDWARE CONFIGURATION
- */
 static constexpr uint8_t NEOKEY_I2C_ADDR = 0x30;  // Default Neokey address
 static constexpr uint8_t INT_PIN = 33;             // Teensy pin for Neokey INT
 static constexpr uint8_t NUM_KEYS = 4;             // Neokey has 4 keys
 
-/**
- * LED COLORS (RGB values, full brightness)
- */
 static constexpr uint32_t LED_COLOR_RED = 0xFF0000;       // Choke engaged
 static constexpr uint32_t LED_COLOR_GREEN = 0x00FF00;     // Effect disabled (default)
 static constexpr uint32_t LED_COLOR_CYAN = 0x00FFFF;      // Freeze engaged
@@ -28,46 +18,15 @@ static constexpr uint32_t LED_COLOR_PURPLE = 0xFF00FF;    // Reverb enabled (fut
 static constexpr uint32_t LED_COLOR_YELLOW = 0xFFFF00;    // Gain enabled (future)
 static constexpr uint8_t LED_BRIGHTNESS = 255;            // Full brightness
 
-/**
- * DEBOUNCE CONFIGURATION
- */
 static constexpr uint32_t DEBOUNCE_MS = 20;  // Minimum time between events
 
-/**
- * Neokey object (Seesaw-based I2C device)
- * Initialize with Wire2 bus (SDA2=pin 25, SCL2=pin 24)
- */
 static Adafruit_NeoKey_1x4 neokey(NEOKEY_I2C_ADDR, &Wire2);
 
-/**
- * Lock-free command queue (I/O thread → App thread)
- */
 static SPSCQueue<Command, 32> commandQueue;
 
-/**
- * Button state tracking (for edge detection)
- */
 static bool lastKeyState[NUM_KEYS] = {false, false, false, false};
 static uint32_t lastEventTime[NUM_KEYS] = {0, 0, 0, 0};
 
-// =============================================================================
-// BUTTON MAPPING TABLE
-// =============================================================================
-
-/**
- * Button Mapping - Maps physical keys to Commands
- *
- * DESIGN:
- * - Table-driven configuration (easy to modify)
- * - Each key has separate press and release commands
- * - NONE command = no-op (for disabled keys or ignored releases)
- *
- * CURRENT MAPPING:
- * - Key 0: Freeze (momentary - ENABLE on press, DISABLE on release)
- * - Key 1: Reserved (NONE commands, ready for future effect)
- * - Key 2: Choke (momentary - ENABLE on press, DISABLE on release)
- * - Key 3: Reserved (NONE commands, ready for future effect)
- */
 struct ButtonMapping {
     uint8_t keyIndex;           // Which physical key (0-3)
     Command pressCommand;       // Command to emit on press
@@ -106,10 +65,6 @@ static const ButtonMapping buttonMappings[] = {
 
 static constexpr size_t NUM_MAPPINGS = sizeof(buttonMappings) / sizeof(buttonMappings[0]);
 
-// =============================================================================
-// PUBLIC API
-// =============================================================================
-
 bool InputIO::begin() {
     // Configure INT pin (input with pull-up, active LOW)
     pinMode(INT_PIN, INPUT_PULLUP);
@@ -147,20 +102,6 @@ bool InputIO::begin() {
 }
 
 void InputIO::threadLoop() {
-    /**
-     * CONTINUOUS POLLING STRATEGY:
-     *
-     * - Read I2C every 5ms (synchronizes with hardware state)
-     * - Track state per-key for edge detection
-     * - Rate-limit events per-key (20ms debounce)
-     * - Emit commands based on button mapping table
-     *
-     * BENEFITS:
-     * - Low latency: ~5-10ms from button press to command queued
-     * - State synchronization: Always in sync with hardware
-     * - Simple: No ISR complexity, just thread with polling
-     */
-
     for (;;) {
         // Read all button states in one I2C transaction
         uint32_t buttons = neokey.read();
@@ -208,15 +149,6 @@ bool InputIO::popCommand(Command& outCmd) {
 }
 
 void InputIO::setLED(EffectID effectID, bool enabled) {
-    /**
-     * Map EffectID to key index
-     *
-     * CURRENT MAPPING:
-     * - FREEZE → Key 0 (cyan when frozen, green when inactive)
-     * - Key 1 → Reserved (future)
-     * - CHOKE → Key 2 (red when choked, green when inactive)
-     * - Key 3 → Reserved (future)
-     */
     uint8_t keyIndex = 0;
     uint32_t enabledColor = LED_COLOR_RED;
     uint32_t disabledColor = LED_COLOR_GREEN;

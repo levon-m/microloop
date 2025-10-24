@@ -1,78 +1,14 @@
-/**
- * audio_choke.h - Real-time audio mute effect with smooth crossfade
- *
- * PURPOSE:
- * Provides click-free audio muting for live performance "choke" functionality.
- * Inserts between TimeKeeper and output in audio graph, applies smooth gain
- * ramping to prevent audible artifacts.
- *
- * DESIGN:
- * - Stereo processor (2 inputs, 2 outputs)
- * - 10ms linear crossfade (441 samples @ 44.1kHz)
- * - Lock-free control (atomic bool for thread safety)
- * - Zero-copy passthrough when not fading
- * - Inherits from AudioEffectBase (multi-effect architecture)
- * - Quantized length mode: Auto-releases after global quantization duration
- *
- * USAGE IN AUDIO GRAPH:
- *   AudioInputI2S i2s_in;
- *   AudioTimeKeeper timekeeper;
- *   AudioEffectChoke choke;        // Insert here
- *   AudioOutputI2S i2s_out;
- *
- *   AudioConnection c1(i2s_in, 0, timekeeper, 0);
- *   AudioConnection c2(i2s_in, 1, timekeeper, 1);
- *   AudioConnection c3(timekeeper, 0, choke, 0);      // Through choke
- *   AudioConnection c4(timekeeper, 1, choke, 1);
- *   AudioConnection c5(choke, 0, i2s_out, 0);
- *   AudioConnection c6(choke, 1, i2s_out, 1);
- *
- * CONTROL API (NEW - AudioEffectBase interface):
- *   choke.enable();     // Start fade to silence (mute)
- *   choke.disable();    // Start fade to full volume (unmute)
- *   choke.toggle();     // Toggle choke on/off
- *   choke.isEnabled();  // Query current state
- *
- * CHOKE LENGTH MODES:
- *   choke.setLengthMode(ChokeLength::FREE);       // Hold to choke, release immediately
- *   choke.setLengthMode(ChokeLength::QUANTIZED);  // Auto-release after global quant duration
- *   choke.getLengthMode();                         // Query current mode
- *
- * LEGACY API (Backward compatible, will be removed in Phase 5):
- *   choke.engage();      // Same as enable()
- *   choke.releaseChoke(); // Same as disable()
- *   choke.isChoked();    // Same as isEnabled()
- *
- * PERFORMANCE:
- * - Passthrough: ~50 CPU cycles (memcpy + atomic read)
- * - Fading: ~2000 cycles per block (128 samples × gain multiply)
- * - Total: <1% of 600MHz CPU
- *
- * THREAD SAFETY:
- * - enable()/disable()/toggle() can be called from any thread
- * - Uses atomic operations for lock-free state updates
- * - Audio ISR reads state atomically, applies gain
- */
-
 #pragma once
 
 #include "audio_effect_base.h"
 #include "timekeeper.h"
 #include <atomic>
 
-/**
- * Choke length mode
- * Controls how choke release is handled
- */
 enum class ChokeLength : uint8_t {
     FREE = 0,       // Release immediately when button released (default)
     QUANTIZED = 1   // Auto-release after global quantization duration
 };
 
-/**
- * Choke onset mode
- * Controls how choke onset (engage timing) is handled
- */
 enum class ChokeOnset : uint8_t {
     FREE = 0,       // Engage immediately when button pressed (default)
     QUANTIZED = 1   // Quantize onset to next beat/subdivision
@@ -80,10 +16,6 @@ enum class ChokeOnset : uint8_t {
 
 class AudioEffectChoke : public AudioEffectBase {
 public:
-    /**
-     * Constructor
-     * Creates stereo choke effect (2 inputs, 2 outputs)
-     */
     AudioEffectChoke() : AudioEffectBase(2) {  // Call base with 2 inputs (stereo)
         m_targetGain = 1.0f;      // Start unmuted
         m_currentGain = 1.0f;
@@ -94,42 +26,16 @@ public:
         m_onsetAtSample = 0;    // No scheduled onset
     }
 
-    // ========================================================================
-    // AUDIOEFFECTBASE INTERFACE (NEW)
-    // ========================================================================
-
-    /**
-     * Enable effect (start fade to silence / mute)
-     *
-     * Thread-safe: Can be called from any thread
-     * Effect: Audio fades to silence over 10ms
-     *
-     * Note: For choke, "enabled" means "muted" (choke is engaged)
-     */
     void enable() override {
         m_targetGain = 0.0f;  // Mute
         m_isEnabled.store(true, std::memory_order_release);
     }
 
-    /**
-     * Disable effect (start fade to full volume / unmute)
-     *
-     * Thread-safe: Can be called from any thread
-     * Effect: Audio fades to full volume over 10ms
-     *
-     * Note: For choke, "disabled" means "unmuted" (choke is released)
-     */
     void disable() override {
         m_targetGain = 1.0f;  // Unmute
         m_isEnabled.store(false, std::memory_order_release);
     }
 
-    /**
-     * Toggle effect on/off
-     *
-     * Thread-safe: Can be called from any thread
-     * Effect: If muted, unmute; if unmuted, mute
-     */
     void toggle() override {
         if (isEnabled()) {
             disable();
@@ -138,192 +44,75 @@ public:
         }
     }
 
-    /**
-     * Check if effect is enabled
-     *
-     * Thread-safe: Can be called from any thread
-     *
-     * @return true if choked (muted), false if unmuted
-     */
     bool isEnabled() const override {
         return m_isEnabled.load(std::memory_order_acquire);
     }
 
-    /**
-     * Get effect name
-     *
-     * @return "Choke"
-     */
     const char* getName() const override {
         return "Choke";
     }
 
-    // ========================================================================
-    // CHOKE LENGTH MODE API
-    // ========================================================================
-
-    /**
-     * Set choke length mode
-     *
-     * Thread-safe: Can be called from any thread
-     *
-     * @param mode FREE (default) or QUANTIZED
-     */
     void setLengthMode(ChokeLength mode) {
         m_lengthMode = mode;
     }
 
-    /**
-     * Get choke length mode
-     *
-     * Thread-safe: Can be called from any thread
-     *
-     * @return Current length mode
-     */
     ChokeLength getLengthMode() const {
         return m_lengthMode;
     }
 
-    /**
-     * Schedule quantized auto-release
-     *
-     * Thread-safe: Can be called from any thread
-     * Used internally when lengthMode is QUANTIZED
-     *
-     * @param releaseSample Sample position when choke should auto-release
-     */
     void scheduleRelease(uint64_t releaseSample) {
         m_releaseAtSample = releaseSample;
     }
 
-    /**
-     * Cancel scheduled auto-release
-     *
-     * Thread-safe: Can be called from any thread
-     * Used when user releases button before scheduled release fires
-     */
     void cancelScheduledRelease() {
         m_releaseAtSample = 0;
     }
 
-    // ========================================================================
-    // CHOKE ONSET MODE API
-    // ========================================================================
-
-    /**
-     * Schedule quantized onset (ISR-accurate)
-     *
-     * Thread-safe: Can be called from any thread
-     * Used internally when onsetMode is QUANTIZED
-     *
-     * DESIGN:
-     *   - Mirrors scheduleRelease() for consistency
-     *   - ISR checks m_onsetAtSample every update() call
-     *   - When current sample >= onset sample, calls enable()
-     *   - Sample-accurate (no app-thread polling jitter)
-     *
-     * @param onsetSample Sample position when choke should engage
-     */
     void scheduleOnset(uint64_t onsetSample) {
         m_onsetAtSample = onsetSample;
     }
 
-    /**
-     * Cancel scheduled onset
-     *
-     * Thread-safe: Can be called from any thread
-     * Used when user releases button before scheduled onset fires
-     */
     void cancelScheduledOnset() {
         m_onsetAtSample = 0;
     }
 
-    /**
-     * Set choke onset mode
-     *
-     * Thread-safe: Can be called from any thread
-     *
-     * @param mode FREE (default) or QUANTIZED
-     */
     void setOnsetMode(ChokeOnset mode) {
         m_onsetMode = mode;
     }
 
-    /**
-     * Get choke onset mode
-     *
-     * Thread-safe: Can be called from any thread
-     *
-     * @return Current onset mode
-     */
     ChokeOnset getOnsetMode() const {
         return m_onsetMode;
     }
 
-    // ========================================================================
-    // LEGACY API (BACKWARD COMPATIBLE - will be removed in Phase 5)
-    // ========================================================================
-
-    /**
-     * LEGACY: Engage choke (start fade to silence)
-     *
-     * @deprecated Use enable() instead
-     *
-     * Thread-safe: Can be called from any thread
-     * Effect: Audio fades to silence over 10ms
-     */
     void engage() {
         enable();  // Forward to new interface
     }
 
-    /**
-     * LEGACY: Release choke (start fade to full volume)
-     *
-     * @deprecated Use disable() instead
-     *
-     * Thread-safe: Can be called from any thread
-     * Effect: Audio fades to full volume over 10ms
-     *
-     * Note: Named releaseChoke() to avoid conflict with AudioStream::release()
-     */
     void releaseChoke() {
         disable();  // Forward to new interface
     }
 
-    /**
-     * LEGACY: Query choke state
-     *
-     * @deprecated Use isEnabled() instead
-     *
-     * @return true if choked (muted or fading to mute)
-     */
     bool isChoked() const {
         return isEnabled();  // Forward to new interface
     }
 
-    /**
-     * Audio ISR callback (called every 128 samples)
-     *
-     * CRITICAL PATH:
-     * - Process audio with gain ramping
-     * - Check for scheduled onset (quantized onset mode)
-     * - Check for scheduled release (quantized length mode)
-     * - Keep processing minimal (<1ms budget)
-     */
     virtual void update() override {
         uint64_t currentSample = TimeKeeper::getSamplePosition();
+        uint64_t blockEndSample = currentSample + AUDIO_BLOCK_SAMPLES;
 
         // Check for scheduled onset (ISR-accurate quantized onset)
-        if (m_onsetAtSample > 0 && currentSample >= m_onsetAtSample) {
-            // Time to engage choke (sample-accurate!)
+        // Fire if the scheduled sample falls within this audio block [currentSample, blockEndSample)
+        if (m_onsetAtSample > 0 && m_onsetAtSample >= currentSample && m_onsetAtSample < blockEndSample) {
+            // Time to engage choke (block-accurate - best we can do in ISR)
             m_targetGain = 0.0f;  // Mute
             m_isEnabled.store(true, std::memory_order_release);
             m_onsetAtSample = 0;  // Clear scheduled onset
         }
 
         // Check for scheduled release (ISR-accurate quantized length)
-        if (m_releaseAtSample > 0 && currentSample >= m_releaseAtSample) {
-            // Time to auto-release
+        // Fire if the scheduled sample falls within this audio block [currentSample, blockEndSample)
+        if (m_releaseAtSample > 0 && m_releaseAtSample >= currentSample && m_releaseAtSample < blockEndSample) {
+            // Time to auto-release (block-accurate)
             m_targetGain = 1.0f;  // Unmute
             m_isEnabled.store(false, std::memory_order_release);
             m_releaseAtSample = 0;  // Clear scheduled release
@@ -354,13 +143,6 @@ public:
     }
 
 private:
-    /**
-     * Apply gain ramp to audio block
-     *
-     * @param data Audio samples (16-bit signed)
-     * @param numSamples Number of samples to process
-     * @param gainIncrement Gain change per sample
-     */
     inline void applyGainRamp(int16_t* data, size_t numSamples, float gainIncrement) {
         for (size_t i = 0; i < numSamples; i++) {
             // Update current gain (linear interpolation)

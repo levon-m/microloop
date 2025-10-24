@@ -7,8 +7,6 @@
 #include "effect_manager.h"
 #include "trace.h"
 #include "timekeeper.h"
-
-// Modular subsystems
 #include "effect_quantization.h"
 #include "encoder_menu.h"
 #include "display_manager.h"
@@ -16,20 +14,6 @@
 #include "freeze_handler.h"
 
 #include <TeensyThreads.h>
-
-/**
- * Application Logic Implementation (REFACTORED)
- *
- * This file has been modularized to eliminate code duplication:
- * - EffectQuantization: Shared quantization logic
- * - EncoderMenu: Generic encoder handling
- * - DisplayManager: Display priority logic
- * - ChokeHandler: CHOKE-specific quantization
- * - FreezeHandler: FREEZE-specific quantization
- *
- * BEFORE: 1329 lines with massive duplication
- * AFTER:  ~350 lines of clean, focused code
- */
 
 // External references to audio effects (defined in main.cpp)
 extern AudioEffectChoke choke;
@@ -56,7 +40,6 @@ static EncoderMenu::Handler* encoder3 = nullptr;  // CHOKE parameters
 static EncoderMenu::Handler* encoder4 = nullptr;  // Global quantization
 
 // ========== ENCODER 1 (FREEZE PARAMETERS) ==========
-
 static void setupEncoder1() {
     encoder1 = new EncoderMenu::Handler(0);  // Encoder 1 is index 0
 
@@ -131,7 +114,6 @@ static void setupEncoder1() {
 }
 
 // ========== ENCODER 3 (CHOKE PARAMETERS) ==========
-
 static void setupEncoder3() {
     encoder3 = new EncoderMenu::Handler(2);  // Encoder 3 is index 2
 
@@ -206,7 +188,6 @@ static void setupEncoder3() {
 }
 
 // ========== ENCODER 4 (GLOBAL QUANTIZATION) ==========
-
 static void setupEncoder4() {
     encoder4 = new EncoderMenu::Handler(3);  // Encoder 4 is index 3
 
@@ -242,7 +223,6 @@ static void setupEncoder4() {
 }
 
 // ========== APP LOGIC INITIALIZATION ==========
-
 void AppLogic::begin() {
     // Configure LED pin
     pinMode(LED_PIN, OUTPUT);
@@ -264,7 +244,6 @@ void AppLogic::begin() {
 }
 
 // ========== APP LOGIC MAIN LOOP ==========
-
 void AppLogic::threadLoop() {
     for (;;) {
         // ========== 1. PROCESS INPUT COMMANDS ==========
@@ -405,7 +384,6 @@ void AppLogic::threadLoop() {
 }
 
 // ========== GLOBAL QUANTIZATION API (delegated) ==========
-
 Quantization AppLogic::getGlobalQuantization() {
     return EffectQuantization::getGlobalQuantization();
 }
