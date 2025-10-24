@@ -1,33 +1,12 @@
 #include "effect_quantization.h"
-#include <AudioStream.h>  // For AUDIO_BLOCK_SAMPLES
+#include <AudioStream.h> 
 
 namespace EffectQuantization {
 
 // Global quantization state (default: 1/16 note)
 static Quantization globalQuantization = Quantization::QUANT_16;
 
-// ========== QUANTIZATION CALCULATIONS ==========
-
 uint32_t calculateQuantizedDuration(Quantization quant) {
-    /**
-     * Calculate quantized duration in samples (EXACT)
-     *
-     * NO BLOCK ROUNDING:
-     *   Returns exact subdivision duration calculated from samplesPerBeat.
-     *   ISR will handle block-level scheduling automatically.
-     *   This prevents cumulative drift when subdivisions are chained.
-     *
-     * EXAMPLE (120 BPM, samplesPerBeat = 22050):
-     *   - 1/32 note: 22050 / 8 = 2756 samples (exact)
-     *   - 1/16 note: 22050 / 4 = 5512 samples (exact)
-     *   - 1/8 note:  22050 / 2 = 11025 samples (exact)
-     *   - 1/4 note:  22050 / 1 = 22050 samples (exact)
-     *
-     * WHY NO ROUNDING?
-     *   Block rounding causes cumulative drift. After 4 sixteenth notes,
-     *   you'd be 34 samples off from the beat boundary. By using exact
-     *   values, subdivisions stay anchored to the musical grid.
-     */
     uint32_t samplesPerBeat = TimeKeeper::getSamplesPerBeat();
     uint32_t duration;
 
@@ -54,19 +33,6 @@ uint32_t calculateQuantizedDuration(Quantization quant) {
 }
 
 uint32_t samplesToNextQuantizedBoundary(Quantization quant) {
-    /**
-     * Calculate samples to next quantized boundary (FIXED)
-     *
-     * OLD BEHAVIOR:
-     *   - Ignored quant parameter, always used beat boundaries
-     *   - No subdivision support (1/32, 1/16, 1/8 all went to beat)
-     *
-     * NEW BEHAVIOR:
-     *   - Uses TimeKeeper::samplesToNextSubdivision() with actual grid
-     *   - Supports all subdivisions (1/32, 1/16, 1/8, 1/4)
-     *   - Block-rounded to prevent app-thread jitter
-     *   - Tolerance: fires immediately if within 128 samples of boundary
-     */
     uint32_t subdivision = calculateQuantizedDuration(quant);
     return TimeKeeper::samplesToNextSubdivision(subdivision);
 }
@@ -91,8 +57,6 @@ const char* quantizationName(Quantization quant) {
     }
 }
 
-// ========== GLOBAL QUANTIZATION API ==========
-
 Quantization getGlobalQuantization() {
     return globalQuantization;
 }
@@ -105,4 +69,4 @@ void initialize() {
     globalQuantization = Quantization::QUANT_16;
 }
 
-}  // namespace EffectQuantization
+}

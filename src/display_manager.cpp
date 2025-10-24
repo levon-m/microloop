@@ -5,8 +5,6 @@ namespace DisplayManager {
 // Last activated effect (for priority tracking)
 static EffectID lastActivatedEffect = EffectID::NONE;
 
-// ========== DISPLAY PRIORITY LOGIC ==========
-
 void updateDisplay() {
     // Check if any effects are active (use priority logic)
     AudioEffectBase* freezeEffect = EffectManager::getEffect(EffectID::FREEZE);
@@ -44,4 +42,4 @@ void initialize() {
     lastActivatedEffect = EffectID::NONE;
 }
 
-}  // namespace DisplayManager
+}

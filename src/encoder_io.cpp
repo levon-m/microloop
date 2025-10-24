@@ -179,4 +179,4 @@ void resetPosition(uint8_t encoderNum) {
     }
 }
 
-} // namespace EncoderIO
+}

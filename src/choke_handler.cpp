@@ -6,12 +6,8 @@
 
 namespace ChokeHandler {
 
-// ========== STATE ==========
-
 static AudioEffectChoke* choke = nullptr;
 static Parameter currentParameter = Parameter::LENGTH;
-
-// ========== HELPER FUNCTIONS ==========
 
 BitmapID lengthToBitmap(ChokeLength length) {
     switch (length) {
@@ -44,8 +40,6 @@ const char* onsetName(ChokeOnset onset) {
         default: return "Free";
     }
 }
-
-// ========== PUBLIC API ==========
 
 void initialize(AudioEffectChoke& chokeEffect) {
     choke = &chokeEffect;
@@ -215,4 +209,4 @@ void setCurrentParameter(Parameter param) {
     currentParameter = param;
 }
 
-}  // namespace ChokeHandler
+}

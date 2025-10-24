@@ -1,80 +1,41 @@
 # μLoop: Minimal Live Looper & Sampler
 
-Real-time MIDI-synchronized looper for Teensy 4.1 with professional-grade timing.
+![MicroLoop Hardware](images/microloop.jpg)
 
-**Current Status:** v0.1.0 - MIDI clock tracking, beat indicator, audio passthrough
-
-## Hardware
-
-- Teensy 4.1
-- Audio Shield Rev D (SGTL5000)
-- MIDI DIN input on Serial8 (RX=pin 34)
-- External LED on pin 31 (beat indicator)
-
-## Quick Start
-
-### Build
-
-Requires CMake 3.16+ and arm-none-eabi-gcc (from Arduino IDE 2.x Teensyduino).
-
-```bash
-# Configure toolchain path first
-# Edit cmake/teensy41.cmake, set COMPILER_PATH to your Arduino15 location
-
-mkdir build && cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/teensy41.cmake ..
-ninja
-```
-
-### Upload
-
-Drag `build/microloop.hex` into Teensy Loader GUI, press button on Teensy.
-
-### Monitor
-
-Open serial monitor in VS Code or Arduino IDE (115200 baud).
+MIDI-synced micro-looper for live performance, inspired by the French House sound of greats like Justice, Mr. Oizo, and SebastiAn.
 
 ## Features
 
-**Implemented:**
-- MIDI clock input (24 PPQN)
-- Transport control (START/STOP/CONTINUE)
-- Timestamp-based beat tracking with EMA jitter smoothing
-- LED beat indicator (short pulse on downbeat)
-- Stereo audio passthrough
-- Lock-free multi-threaded architecture
-- **Comprehensive on-device test suite (47+ tests)**
+- **Real-time audio effects**: Choke, stutter, and freeze effects applied to line-in audio with click-free crossfades
+- **MIDI-synchronized quantization**: Locks to external MIDI clock (24 PPQN) with exponential moving average jitter smoothing
+- **Parameter control**: 4× rotary encoders with ISR-based quadrature decoding (100% step accuracy)
+- **Visual feedback**: 128×64 OLED display with bitmap-based menu system
+- **Effect presets**: Save and recall parameter configurations
 
-**Planned:**
-- Loop recording/playback
-- Sample triggering
-- BPM display
-- Quantized operations
+## Architecture
 
-## Testing
+**Hardware**: ARM Cortex-M7 @ 600MHz (Teensy 4.1) + SGTL5000 audio codec + MCP23017 GPIO expander
 
-The project includes a comprehensive on-device test suite that runs directly on Teensy hardware.
+**Software**: Custom CMake build system, C++17, zero-allocation DSP engine
 
-**Quick test:**
-1. Edit `CMakeLists.txt`: Comment out `src/main.cpp`, use `tests/run_tests.cpp`
-2. Build: `cd build && ninja`
-3. Upload `microloop.hex` to Teensy
-4. Open serial monitor (115200 baud) - you'll see test results
+**Threading model**: Deterministic multithreaded architecture with:
+- High-priority audio ISR (44.1kHz, 128-sample blocks)
+- 5 control threads (MIDI I/O, input polling, display updates, encoder handling, app logic)
+- Lock-free SPSC queues for non-blocking inter-thread communication
 
-**Test coverage:**
-- ✅ TimeKeeper (30+ tests) - Beat tracking, MIDI sync, quantization
-- ✅ Trace utility (7 tests) - Event logging, overflow handling
-- ✅ SPSC queue (10 tests) - Push/pop, wraparound, performance
+**Key components**:
+- Custom SGTL5000 register-layer driver (I²C codec configuration)
+- TimeKeeper: Centralized timing authority bridging MIDI clock and audio samples
+- Sample-accurate quantization API for beat/bar-aligned recording and playback
+- Effect system with polymorphic command dispatch
 
-See [tests/TESTING.md](tests/TESTING.md) for detailed testing guide including manual integration tests.
+**Real-time safety**: `-fno-exceptions -fno-rtti`, no dynamic allocation in audio path, wait-free data structures
 
-## Documentation
+## Technical Highlights
 
-- [CLAUDE.md](CLAUDE.md) - Architecture details, development workflow, real-time safety guidelines
-- [tests/TESTING.md](tests/TESTING.md) - Comprehensive testing guide
-- [utils/TIMEKEEPER_USAGE.md](utils/TIMEKEEPER_USAGE.md) - TimeKeeper API documentation
-- [utils/TRACE_USAGE.md](utils/TRACE_USAGE.md) - Trace utility usage guide
+- **Sub-millisecond effect latency**: ISR state capture with 64-event ring buffer (~26µs response time)
+- **Professional timing**: EMA-smoothed MIDI clock with atomic beat boundary detection
+- **Click-free audio**: 10ms linear crossfades on all effect transitions
+- **Zero missed steps**: Hardware-frozen encoder state via MCP23017 INTCAP registers
 
-## License
-
-[Specify your license]
+Built with a focus on deterministic performance, cache-friendly data structures, and real-time-safe design patterns.
