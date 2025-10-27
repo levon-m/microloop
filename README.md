@@ -1,6 +1,6 @@
 # μLoop: Minimal Live Looper & Sampler
 
-MIDI-synced micro-looper for live performance, inspired by French house greats like Justice, Mr. Oizo, and SebastiAn.
+MIDI-synced micro-looper for live performance, inspired by French House greats like *Justice*, *Mr. Oizo*, and *SebastiAn*.
 
 ![MicroLoop Hardware](images/microloop.jpg)
 
