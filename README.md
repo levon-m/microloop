@@ -1,8 +1,8 @@
 # μLoop: Minimal Live Looper & Sampler
 
-![MicroLoop Hardware](images/microloop.jpg)
-
 MIDI-synced micro-looper for live performance, inspired by French house greats like Justice, Mr. Oizo, and SebastiAn.
+
+![MicroLoop Hardware](images/microloop.jpg)
 
 ## Features
 
@@ -29,7 +29,7 @@ MIDI-synced micro-looper for live performance, inspired by French house greats l
 
 ## Architecture
 
-**Hardware**: ARM Cortex-M7 (Teensy 4.1) + SGTL5000 audio codec, Adafruit MIDI FeatherWing, Adafruit 1x4 NeokKey, 128×64 OLED display, MCP23017 GPIO expander, 4 encoders, 4 push buttons, and some status LEDs
+**Hardware**: ARM Cortex-M7 (Teensy 4.1) + SGTL5000 audio codec, Adafruit MIDI FeatherWing, Adafruit 1x4 NeoKey, 128×64 OLED display, MCP23017 GPIO expander, 4 encoders, 4 push buttons, and some status LEDs
 
 **Software**: Custom CMake build system, C++17, zero-allocation DSP engine
 
