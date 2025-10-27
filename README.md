@@ -23,7 +23,7 @@ MIDI-synced micro-looper for live performance, inspired by French House greats l
 **System features:**
 
 - **MIDI-synchronized timing**: Locks to external MIDI clock (24 PPQN) with jitter-smoothed beat tracking
-- **Parameter/menu control**: 4× rotary encoders for real-time parameter adjustment and menu navigation
+- **Parameter/menu control**: x4 rotary encoders for real-time parameter adjustment and menu navigation
 - **Visual feedback**: 128×64 OLED display shows current effect state, parameters, and menu options
 - **Effect presets**: Save and recall complete parameter configurations for different performance contexts
 
