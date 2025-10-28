@@ -8,7 +8,7 @@ MIDI-synced micro-looper with effects, inspired by the French House and Electro 
 
 **Three core effects:**
 
-- **CHOKE**: Instant audio mute with click-free crossfades—hold for silence, release for passthrough
+- **CHOKE**: Instant audio mute with short crossfades for click-free audio
 - **STUTTER**: Rhythmic buffer looping that captures and repeats a slice of incoming audio for glitchy, chopped textures
 - **FREEZE**: Granular hold effect that captures and sustains a moment of audio
 
@@ -48,7 +48,7 @@ MIDI-synced micro-looper with effects, inspired by the French House and Electro 
 
 ## Technical Highlights
 
-- **Sub-millisecond effect latency**: ISR state capture with 64-event ring buffer (~26µs response time)
+- **Sub-millisecond effect latency**: ISR state capture with 64-event ring buffer (~26us response time)
 - **Professional timing**: EMA-smoothed MIDI clock with atomic beat boundary detection
 - **Click-free audio**: 3ms linear crossfades on all effect transitions
 - **Zero missed steps**: Hardware-frozen encoder state via MCP23017 INTCAP registers
