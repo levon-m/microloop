@@ -1,6 +1,6 @@
-# μLoop: Minimal Live Looper & Sampler
+# μLoop: Live Performance Looper/Sampler
 
-MIDI-synced micro-looper for live performance, inspired by the French House and Electro sounds of Ed Banger Records.
+MIDI-synced micro-looper with effects, inspired by the French House and Electro sounds of *Ed Banger Records*
 
 ![MicroLoop Hardware](images/microloop.jpg)
 
