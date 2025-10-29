@@ -83,50 +83,42 @@ bool handleButtonPress(const Command& cmd) {
         DisplayIO::showChoke();
         return true;  // Command handled
     } else {
-        // QUANTIZED ONSET: Schedule for ISR-accurate timing
+        // QUANTIZED ONSET: Schedule for next boundary (SIMPLE - like length!)
         Quantization quant = EffectQuantization::getGlobalQuantization();
+
+        // DEBUG: Get all timing info
+        uint64_t currentSample = TimeKeeper::getSamplePosition();
+        uint32_t samplesPerBeat = TimeKeeper::getSamplesPerBeat();
+        uint32_t beatNumber = TimeKeeper::getBeatNumber();
+        uint32_t tickInBeat = TimeKeeper::getTickInBeat();
+
         uint32_t samplesToNext = EffectQuantization::samplesToNextQuantizedBoundary(quant);
 
-        // Check if we're at/past boundary (grace period)
-        if (samplesToNext == 0) {
-            // We're at or just past boundary - fire immediately!
-            choke->enable();
+        // Calculate absolute sample position for onset
+        uint64_t onsetSample = currentSample + samplesToNext;
 
-            if (lengthMode == ChokeLength::QUANTIZED) {
-                // Schedule auto-release
-                uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
-                uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
-                choke->scheduleRelease(releaseSample);
-            }
+        // Schedule onset in ISR (same as how length scheduling works)
+        choke->scheduleOnset(onsetSample);
 
-            // Update visual feedback
-            InputIO::setLED(EffectID::CHOKE, true);
-            DisplayManager::setLastActivatedEffect(EffectID::CHOKE);
-            DisplayIO::showChoke();
-
-            Serial.print("Choke ENGAGED immediately (on boundary, ");
-            Serial.print(EffectQuantization::quantizationName(quant));
-            Serial.println(")");
-        } else {
-            // Schedule for next boundary
-            uint64_t onsetSample = TimeKeeper::getSamplePosition() + samplesToNext;
-
-            // Use ISR scheduling (sample-accurate!)
-            choke->scheduleOnset(onsetSample);
-
-            // Also schedule length if QUANTIZED
-            if (lengthMode == ChokeLength::QUANTIZED) {
-                uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
-                uint64_t releaseSample = onsetSample + durationSamples;
-                choke->scheduleRelease(releaseSample);
-            }
-
-            Serial.print("Choke ONSET scheduled (ISR, ");
-            Serial.print(EffectQuantization::quantizationName(quant));
-            Serial.print(" boundary, ");
-            Serial.print(samplesToNext);
-            Serial.println(" samples)");
+        // If length is also quantized, schedule release from onset position
+        if (lengthMode == ChokeLength::QUANTIZED) {
+            uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
+            uint64_t releaseSample = onsetSample + durationSamples;
+            choke->scheduleRelease(releaseSample);
         }
+
+        Serial.print("ONSET DEBUG: currentSample=");
+        Serial.print((uint32_t)currentSample);
+        Serial.print(" beat=");
+        Serial.print(beatNumber);
+        Serial.print(" tick=");
+        Serial.print(tickInBeat);
+        Serial.print(" spb=");
+        Serial.print(samplesPerBeat);
+        Serial.print(" samplesToNext=");
+        Serial.print(samplesToNext);
+        Serial.print(" onsetSample=");
+        Serial.println((uint32_t)onsetSample);
 
         return true;  // Command handled
     }

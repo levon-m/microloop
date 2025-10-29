@@ -83,50 +83,28 @@ bool handleButtonPress(const Command& cmd) {
         DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
         return true;  // Command handled
     } else {
-        // QUANTIZED ONSET: Schedule for ISR-accurate timing
+        // QUANTIZED ONSET: Schedule for next boundary (SIMPLE - like length!)
         Quantization quant = EffectQuantization::getGlobalQuantization();
         uint32_t samplesToNext = EffectQuantization::samplesToNextQuantizedBoundary(quant);
 
-        // Check if we're at/past boundary (grace period)
-        if (samplesToNext == 0) {
-            // We're at or just past boundary - fire immediately!
-            freeze->enable();
+        // Calculate absolute sample position for onset
+        uint64_t onsetSample = TimeKeeper::getSamplePosition() + samplesToNext;
 
-            if (lengthMode == FreezeLength::QUANTIZED) {
-                // Schedule auto-release
-                uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
-                uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
-                freeze->scheduleRelease(releaseSample);
-            }
+        // Schedule onset in ISR (same as how length scheduling works)
+        freeze->scheduleOnset(onsetSample);
 
-            // Update visual feedback
-            InputIO::setLED(EffectID::FREEZE, true);
-            DisplayManager::setLastActivatedEffect(EffectID::FREEZE);
-            DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
-
-            Serial.print("Freeze ENGAGED immediately (on boundary, ");
-            Serial.print(EffectQuantization::quantizationName(quant));
-            Serial.println(")");
-        } else {
-            // Schedule for next boundary
-            uint64_t onsetSample = TimeKeeper::getSamplePosition() + samplesToNext;
-
-            // Use ISR scheduling (sample-accurate!)
-            freeze->scheduleOnset(onsetSample);
-
-            // Also schedule length if QUANTIZED
-            if (lengthMode == FreezeLength::QUANTIZED) {
-                uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
-                uint64_t releaseSample = onsetSample + durationSamples;
-                freeze->scheduleRelease(releaseSample);
-            }
-
-            Serial.print("Freeze ONSET scheduled (ISR, ");
-            Serial.print(EffectQuantization::quantizationName(quant));
-            Serial.print(" boundary, ");
-            Serial.print(samplesToNext);
-            Serial.println(" samples)");
+        // If length is also quantized, schedule release from onset position
+        if (lengthMode == FreezeLength::QUANTIZED) {
+            uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
+            uint64_t releaseSample = onsetSample + durationSamples;
+            freeze->scheduleRelease(releaseSample);
         }
+
+        Serial.print("Freeze ONSET scheduled (");
+        Serial.print(EffectQuantization::quantizationName(quant));
+        Serial.print(" grid, ");
+        Serial.print(samplesToNext);
+        Serial.println(" samples)");
 
         return true;  // Command handled
     }

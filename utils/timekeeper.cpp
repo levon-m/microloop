@@ -246,85 +246,46 @@ uint32_t TimeKeeper::samplesToNextBeat() {
 
 uint32_t TimeKeeper::samplesToNextSubdivision(uint32_t subdivision) {
     /**
-     * Calculate samples until next subdivision boundary
+     * Calculate samples until next subdivision boundary (TICK-BASED)
      *
-     * BEAT-ANCHORED ALGORITHM (FIXED):
-     *   Subdivisions are anchored to beat boundaries, not sample 0.
-     *   This prevents drift when samplesPerBeat isn't perfectly divisible.
+     * KEY INSIGHT: We can't use (currentSample % spb) because beats don't
+     * align with sample 0. Instead, use MIDI tick position which tracks
+     * the actual beat grid.
      *
-     * APPROACH:
-     *   1. Find position within current beat
-     *   2. Use 64-bit fractional math to find next subdivision boundary within beat
-     *   3. If we've passed all subdivisions in this beat, go to next beat
+     * ALGORITHM:
+     *   1. Get current tick within beat (0-23)
+     *   2. Calculate samples elapsed in current beat based on ticks
+     *   3. Find subdivision boundary and calculate samples to it
      *
-     * TOLERANCE:
-     *   16-sample grace period PAST boundary (like samplesToNextBeat)
-     *
-     * BLOCK ROUNDING:
-     *   Round up to next AUDIO_BLOCK_SAMPLES boundary for ISR scheduling
-     *
-     * EXAMPLE (120 BPM, spb=22050, 1/8 note subdivision=11025):
-     *   Beat 0: subdivisions at sample 0, 11025
-     *   Beat 1: subdivisions at sample 22050, 33075
-     *   Beat 2: subdivisions at sample 44100, 55125
-     *   (Always anchored to beat boundaries, no drift!)
+     * EXAMPLE (120 BPM, spb=22050, 1/4 note subdivision=22050):
+     *   - At tick 12 (halfway) → 11025 samples to next beat
+     *   - At tick 0 (on beat) → 22050 samples to next beat
+     *   - At tick 23 (just before beat) → ~920 samples to next beat
      */
-    uint64_t currentSample = getSamplePosition();
     uint32_t spb = getSamplesPerBeat();
+    uint32_t tickInBeat = getTickInBeat();
 
-    // Find position within current beat
-    uint32_t sampleWithinBeat = (uint32_t)(currentSample % spb);
+    // Calculate how many samples we've progressed into current beat
+    // based on MIDI tick position (not absolute sample position)
+    uint32_t samplesPerTick = spb / MIDI_PPQN;  // MIDI_PPQN = 24
+    uint32_t samplesElapsedInBeat = tickInBeat * samplesPerTick;
 
-    // How many subdivisions fit in one beat?
-    // Use 64-bit to avoid overflow: subdivisions_per_beat = spb / subdivision
-    // We need fractional precision to handle non-integer divisions
-    uint32_t subdivisionsPerBeat = spb / subdivision;
-    if (subdivisionsPerBeat == 0) subdivisionsPerBeat = 1;  // Safety: at least 1 per beat
-
-    // Find which subdivision we're currently in (0-indexed)
-    // currentSubdivision = floor(sampleWithinBeat / subdivision)
-    uint32_t currentSubdivisionIndex = sampleWithinBeat / subdivision;
-
-    // Find the sample position of the NEXT subdivision boundary within this beat
-    uint32_t nextSubdivisionIndex = currentSubdivisionIndex + 1;
-
-    // Check if we've passed all subdivisions in this beat
-    if (nextSubdivisionIndex >= subdivisionsPerBeat) {
-        // Go to first subdivision of next beat (which is the beat boundary itself)
-        uint32_t samplesToNext = spb - sampleWithinBeat;
-
-        // TOLERANCE: Grace period if just past beat boundary
-        if (sampleWithinBeat <= 16) {
-            return 0;  // At or just past boundary - fire now!
-        }
-
-        // NO BLOCK ROUNDING: Let ISR handle block-level granularity
-        if (samplesToNext < AUDIO_BLOCK_SAMPLES) {
-            return 0;  // Fire in next audio callback
-        }
-
-        return samplesToNext;
+    // For 1/4 note (full beat), just return samples remaining in beat
+    if (subdivision >= spb) {
+        return spb - samplesElapsedInBeat;
     }
 
-    // Calculate next subdivision boundary sample (within current beat)
-    uint32_t nextSubdivisionSample = nextSubdivisionIndex * subdivision;
+    // For subdivisions smaller than a beat (1/8, 1/16, 1/32)
+    // Find which subdivision we're in and samples to its end
+    uint32_t subdivisionIndex = samplesElapsedInBeat / subdivision;
+    uint32_t nextSubdivisionStart = (subdivisionIndex + 1) * subdivision;
 
-    // Samples until that boundary
-    uint32_t samplesToNext = nextSubdivisionSample - sampleWithinBeat;
-
-    // TOLERANCE: Grace period if just past subdivision boundary
-    uint32_t sampleWithinSubdivision = sampleWithinBeat % subdivision;
-    if (sampleWithinSubdivision <= 16) {
-        return 0;  // At or just past subdivision boundary - fire now!
+    // If next subdivision would exceed beat boundary, wrap to next beat
+    if (nextSubdivisionStart > spb) {
+        nextSubdivisionStart = spb;
     }
 
-    // NO BLOCK ROUNDING: Let ISR handle block-level granularity
-    // If very close to boundary (< 1 block), fire immediately to avoid rounding errors
-    if (samplesToNext < AUDIO_BLOCK_SAMPLES) {
-        return 0;  // Fire in next audio callback
-    }
-
-    return samplesToNext;
+    return nextSubdivisionStart - samplesElapsedInBeat;
 }
 
 uint32_t TimeKeeper::samplesToNextBar() {
