@@ -8,6 +8,7 @@ namespace FreezeHandler {
 
 static AudioEffectFreeze* freeze = nullptr;
 static Parameter currentParameter = Parameter::LENGTH;
+static bool wasEnabled = false;  // Track previous enabled state for rising edge detection
 
 BitmapID lengthToBitmap(FreezeLength length) {
     switch (length) {
@@ -83,12 +84,16 @@ bool handleButtonPress(const Command& cmd) {
         DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
         return true;  // Command handled
     } else {
-        // QUANTIZED ONSET: Schedule for next boundary (SIMPLE - like length!)
+        // QUANTIZED ONSET: Schedule for next boundary with lookahead offset
         Quantization quant = EffectQuantization::getGlobalQuantization();
         uint32_t samplesToNext = EffectQuantization::samplesToNextQuantizedBoundary(quant);
 
+        // Apply lookahead offset (fire early to catch external audio transients)
+        uint32_t lookahead = EffectQuantization::getLookaheadOffset();
+        uint32_t adjustedSamples = (samplesToNext > lookahead) ? (samplesToNext - lookahead) : 0;
+
         // Calculate absolute sample position for onset
-        uint64_t onsetSample = TimeKeeper::getSamplePosition() + samplesToNext;
+        uint64_t onsetSample = TimeKeeper::getSamplePosition() + adjustedSamples;
 
         // Schedule onset in ISR (same as how length scheduling works)
         freeze->scheduleOnset(onsetSample);
@@ -103,8 +108,10 @@ bool handleButtonPress(const Command& cmd) {
         Serial.print("Freeze ONSET scheduled (");
         Serial.print(EffectQuantization::quantizationName(quant));
         Serial.print(" grid, ");
-        Serial.print(samplesToNext);
-        Serial.println(" samples)");
+        Serial.print(adjustedSamples);
+        Serial.print(" samples, lookahead=");
+        Serial.print(lookahead);
+        Serial.println(")");
 
         return true;  // Command handled
     }
@@ -139,13 +146,15 @@ bool handleButtonRelease(const Command& cmd) {
 void updateVisualFeedback() {
     if (!freeze) return;
 
+    bool isEnabled = freeze->isEnabled();
+
     // Check for ISR-fired onset (QUANTIZED ONSET mode)
-    // Detect rising edge: freeze enabled but display not showing it yet
-    if (freeze->isEnabled() && DisplayManager::getLastActivatedEffect() != EffectID::FREEZE) {
+    // Detect TRUE rising edge: transition from disabled to enabled
+    if (isEnabled && !wasEnabled) {
         // ISR fired onset - update visual feedback
         InputIO::setLED(EffectID::FREEZE, true);
         DisplayManager::setLastActivatedEffect(EffectID::FREEZE);
-        DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+        DisplayManager::updateDisplay();
 
         // Determine what happened based on onset/length modes
         FreezeOnset onsetMode = freeze->getOnsetMode();
@@ -162,8 +171,8 @@ void updateVisualFeedback() {
     }
 
     // Check for auto-release (QUANTIZED LENGTH mode)
-    // Detect falling edge: freeze disabled but display still showing it
-    if (!freeze->isEnabled() && DisplayManager::getLastActivatedEffect() == EffectID::FREEZE) {
+    // Detect TRUE falling edge: transition from enabled to disabled
+    if (!isEnabled && wasEnabled) {
         // Only auto-release if in QUANTIZED length mode
         if (freeze->getLengthMode() == FreezeLength::QUANTIZED) {
             // Freeze auto-released - update display
@@ -177,6 +186,9 @@ void updateVisualFeedback() {
             Serial.println("Freeze auto-released (Quantized mode)");
         }
     }
+
+    // Update previous state for next iteration
+    wasEnabled = isEnabled;
 }
 
 Parameter getCurrentParameter() {

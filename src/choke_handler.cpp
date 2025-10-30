@@ -8,6 +8,7 @@ namespace ChokeHandler {
 
 static AudioEffectChoke* choke = nullptr;
 static Parameter currentParameter = Parameter::LENGTH;
+static bool wasEnabled = false;  // Track previous enabled state for rising edge detection
 
 BitmapID lengthToBitmap(ChokeLength length) {
     switch (length) {
@@ -83,7 +84,7 @@ bool handleButtonPress(const Command& cmd) {
         DisplayIO::showChoke();
         return true;  // Command handled
     } else {
-        // QUANTIZED ONSET: Schedule for next boundary (SIMPLE - like length!)
+        // QUANTIZED ONSET: Schedule for next boundary with lookahead offset
         Quantization quant = EffectQuantization::getGlobalQuantization();
 
         // DEBUG: Get all timing info
@@ -94,8 +95,12 @@ bool handleButtonPress(const Command& cmd) {
 
         uint32_t samplesToNext = EffectQuantization::samplesToNextQuantizedBoundary(quant);
 
+        // Apply lookahead offset (fire early to catch external audio transients)
+        uint32_t lookahead = EffectQuantization::getLookaheadOffset();
+        uint32_t adjustedSamples = (samplesToNext > lookahead) ? (samplesToNext - lookahead) : 0;
+
         // Calculate absolute sample position for onset
-        uint64_t onsetSample = currentSample + samplesToNext;
+        uint64_t onsetSample = currentSample + adjustedSamples;
 
         // Schedule onset in ISR (same as how length scheduling works)
         choke->scheduleOnset(onsetSample);
@@ -117,6 +122,10 @@ bool handleButtonPress(const Command& cmd) {
         Serial.print(samplesPerBeat);
         Serial.print(" samplesToNext=");
         Serial.print(samplesToNext);
+        Serial.print(" lookahead=");
+        Serial.print(lookahead);
+        Serial.print(" adjusted=");
+        Serial.print(adjustedSamples);
         Serial.print(" onsetSample=");
         Serial.println((uint32_t)onsetSample);
 
@@ -153,13 +162,15 @@ bool handleButtonRelease(const Command& cmd) {
 void updateVisualFeedback() {
     if (!choke) return;
 
+    bool isEnabled = choke->isEnabled();
+
     // Check for ISR-fired onset (QUANTIZED ONSET mode)
-    // Detect rising edge: choke enabled but display not showing it yet
-    if (choke->isEnabled() && DisplayManager::getLastActivatedEffect() != EffectID::CHOKE) {
+    // Detect TRUE rising edge: transition from disabled to enabled
+    if (isEnabled && !wasEnabled) {
         // ISR fired onset - update visual feedback
         InputIO::setLED(EffectID::CHOKE, true);
         DisplayManager::setLastActivatedEffect(EffectID::CHOKE);
-        DisplayIO::showChoke();
+        DisplayManager::updateDisplay();
 
         // Determine what happened based on onset/length modes
         ChokeOnset onsetMode = choke->getOnsetMode();
@@ -176,8 +187,8 @@ void updateVisualFeedback() {
     }
 
     // Check for auto-release (QUANTIZED LENGTH mode)
-    // Detect falling edge: choke disabled but display still showing it
-    if (!choke->isEnabled() && DisplayManager::getLastActivatedEffect() == EffectID::CHOKE) {
+    // Detect TRUE falling edge: transition from enabled to disabled
+    if (!isEnabled && wasEnabled) {
         // Only auto-release if in QUANTIZED length mode
         if (choke->getLengthMode() == ChokeLength::QUANTIZED) {
             // Choke auto-released - update display
@@ -191,6 +202,9 @@ void updateVisualFeedback() {
             Serial.println("Choke auto-released (Quantized mode)");
         }
     }
+
+    // Update previous state for next iteration
+    wasEnabled = isEnabled;
 }
 
 Parameter getCurrentParameter() {
