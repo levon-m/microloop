@@ -6,6 +6,10 @@ namespace EffectQuantization {
 // Global quantization state (default: 1/16 note)
 static Quantization globalQuantization = Quantization::QUANT_16;
 
+// Lookahead offset for quantized onset (default: 128 samples = ~3ms @ 44.1kHz)
+// Fires onset slightly early to catch external audio transients (e.g., kick from Digitakt)
+static uint32_t lookaheadOffset = 128;
+
 uint32_t calculateQuantizedDuration(Quantization quant) {
     uint32_t samplesPerBeat = TimeKeeper::getSamplesPerBeat();
     uint32_t duration;
@@ -65,8 +69,17 @@ void setGlobalQuantization(Quantization quant) {
     globalQuantization = quant;
 }
 
+uint32_t getLookaheadOffset() {
+    return lookaheadOffset;
+}
+
+void setLookaheadOffset(uint32_t samples) {
+    lookaheadOffset = samples;
+}
+
 void initialize() {
     globalQuantization = Quantization::QUANT_16;
+    lookaheadOffset = 128;  // Default: 128 samples (~3ms)
 }
 
 }
