@@ -263,15 +263,15 @@ add_library(display_manager STATIC src/display_manager.cpp)
 target_include_directories(display_manager PUBLIC include)
 target_link_libraries(display_manager teensy_core display_io effect_manager)
 
-add_library(choke_handler STATIC src/choke_handler.cpp)
-target_include_directories(choke_handler PUBLIC include)
-target_link_libraries(choke_handler teensy_core audio effect_quantization display_manager input_io microloop_utils)
+add_library(choke_controller STATIC src/choke_controller.cpp)
+target_include_directories(choke_controller PUBLIC include)
+target_link_libraries(choke_controller teensy_core audio effect_quantization display_manager input_io microloop_utils)
 
-add_library(freeze_handler STATIC src/freeze_handler.cpp)
-target_include_directories(freeze_handler PUBLIC include)
-target_link_libraries(freeze_handler teensy_core audio effect_quantization display_manager input_io microloop_utils)
+add_library(freeze_controller STATIC src/freeze_controller.cpp)
+target_include_directories(freeze_controller PUBLIC include)
+target_link_libraries(freeze_controller teensy_core audio effect_quantization display_manager input_io microloop_utils)
 
-# App logic (now uses modular subsystems)
+# App logic (now uses modular subsystems and effect controllers)
 add_library(app_logic STATIC src/app_logic.cpp)
 target_include_directories(app_logic PUBLIC include)
 target_link_libraries(app_logic
@@ -285,8 +285,8 @@ target_link_libraries(app_logic
     effect_quantization
     encoder_menu
     display_manager
-    choke_handler
-    freeze_handler
+    choke_controller
+    freeze_controller
 )
 
 add_library(encoder_io STATIC src/encoder_io.cpp)
@@ -317,8 +317,8 @@ target_link_libraries(microloop.elf
     effect_quantization
     encoder_menu
     display_manager
-    choke_handler
-    freeze_handler
+    choke_controller
+    freeze_controller
     seesaw
     neopixel
     busio
