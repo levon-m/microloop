@@ -451,12 +451,6 @@ static void processInputCommands() {
                 bool enabled = effect->isEnabled();
                 InputIO::setLED(cmd.targetEffect, enabled);
 
-                if (enabled) {
-                    DisplayManager::instance().setLastActivatedEffect(cmd.targetEffect);
-                } else {
-                    DisplayManager::instance().setLastActivatedEffect(EffectID::NONE);
-                }
-
                 DisplayManager::instance().updateDisplay();
                 Serial.print(effect->getName());
                 Serial.println(enabled ? " ENABLED" : " DISABLED");

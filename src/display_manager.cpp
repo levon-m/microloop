@@ -12,29 +12,32 @@ void DisplayManager::updateDisplay() {
         return;
     }
 
-    // Priority 2+: Effects or default
-    // Check if any effects are active (use priority logic)
-    AudioEffectBase* freezeEffect = EffectManager::getEffect(EffectID::FREEZE);
+    // Priority 2+: Effects (based on audio chain order: CHOKE > FREEZE > STUTTER)
+    // Check effects in reverse audio chain order (highest priority first)
+
+    // Priority 2: CHOKE (highest effect priority - last in audio chain)
     AudioEffectBase* chokeEffect = EffectManager::getEffect(EffectID::CHOKE);
-
-    bool freezeActive = freezeEffect && freezeEffect->isEnabled();
-    bool chokeActive = chokeEffect && chokeEffect->isEnabled();
-
-    // Priority 2: Last activated effect wins
-    if (m_lastActivatedEffect == EffectID::FREEZE && freezeActive) {
-        DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
-    } else if (m_lastActivatedEffect == EffectID::CHOKE && chokeActive) {
+    if (chokeEffect && chokeEffect->isEnabled()) {
         DisplayIO::showChoke();
-    } else if (freezeActive) {
-        // Freeze is active but not last activated (show it anyway)
-        DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
-    } else if (chokeActive) {
-        // Choke is active but not last activated (show it anyway)
-        DisplayIO::showChoke();
-    } else {
-        // No effects active - show default
-        DisplayIO::showDefault();
+        return;
     }
+
+    // Priority 3: FREEZE (middle priority)
+    AudioEffectBase* freezeEffect = EffectManager::getEffect(EffectID::FREEZE);
+    if (freezeEffect && freezeEffect->isEnabled()) {
+        DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+        return;
+    }
+
+    // Priority 4: STUTTER (lowest effect priority - first in audio chain)
+    AudioEffectBase* stutterEffect = EffectManager::getEffect(EffectID::STUTTER);
+    if (stutterEffect && stutterEffect->isEnabled()) {
+        DisplayIO::showBitmap(BitmapID::STUTTER_ACTIVE);
+        return;
+    }
+
+    // Priority 5: Default/idle (no effects active)
+    DisplayIO::showDefault();
 }
 
 void DisplayManager::setLastActivatedEffect(EffectID effectID) {

@@ -6,7 +6,8 @@
 
 ChokeController::ChokeController(AudioEffectChoke& effect)
     : m_effect(effect),
-      m_currentParameter(Parameter::LENGTH) {
+      m_currentParameter(Parameter::LENGTH),
+      m_wasEnabled(false) {
 }
 
 const char* ChokeController::lengthName(ChokeLength length) {
@@ -58,8 +59,7 @@ bool ChokeController::handleButtonPress(const Command& cmd) {
 
         // Update visual feedback
         InputIO::setLED(EffectID::CHOKE, true);
-        DisplayManager::instance().setLastActivatedEffect(EffectID::CHOKE);
-        DisplayIO::showChoke();
+        DisplayManager::instance().updateDisplay();
         return true;  // Command handled
     } else {
         // QUANTIZED ONSET: Schedule for next boundary with lookahead offset
@@ -138,13 +138,13 @@ bool ChokeController::handleButtonRelease(const Command& cmd) {
 }
 
 void ChokeController::updateVisualFeedback() {
-    // Check for ISR-fired onset (QUANTIZED ONSET mode)
-    // Detect rising edge: choke enabled but display not showing it yet
-    if (m_effect.isEnabled() && DisplayManager::instance().getLastActivatedEffect() != EffectID::CHOKE) {
-        // ISR fired onset - update visual feedback
+    bool isEnabled = m_effect.isEnabled();
+
+    // Detect rising edge: effect just became enabled
+    if (isEnabled && !m_wasEnabled) {
+        // ISR fired onset or immediate enable - update visual feedback
         InputIO::setLED(EffectID::CHOKE, true);
-        DisplayManager::instance().setLastActivatedEffect(EffectID::CHOKE);
-        DisplayIO::showChoke();
+        DisplayManager::instance().updateDisplay();
 
         // Determine what happened based on onset/length modes
         ChokeOnset onsetMode = m_effect.getOnsetMode();
@@ -160,20 +160,18 @@ void ChokeController::updateVisualFeedback() {
         }
     }
 
-    // Check for auto-release (QUANTIZED LENGTH mode)
-    // Detect falling edge: choke disabled but display still showing it
-    if (!m_effect.isEnabled() && DisplayManager::instance().getLastActivatedEffect() == EffectID::CHOKE) {
-        // Only auto-release if in QUANTIZED length mode
+    // Detect falling edge: effect just became disabled
+    if (!isEnabled && m_wasEnabled) {
+        // Update LED to reflect disabled state
+        InputIO::setLED(EffectID::CHOKE, false);
+        DisplayManager::instance().updateDisplay();
+
+        // Check if this was auto-release (quantized length mode)
         if (m_effect.getLengthMode() == ChokeLength::QUANTIZED) {
-            // Choke auto-released - update display
-            DisplayManager::instance().setLastActivatedEffect(EffectID::NONE);
-            DisplayManager::instance().updateDisplay();
-
-            // Update LED to reflect disabled state
-            InputIO::setLED(EffectID::CHOKE, false);
-
-            // Debug output
             Serial.println("Choke auto-released (Quantized mode)");
         }
     }
+
+    // Update state for next call
+    m_wasEnabled = isEnabled;
 }

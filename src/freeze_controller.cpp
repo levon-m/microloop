@@ -6,7 +6,8 @@
 
 FreezeController::FreezeController(AudioEffectFreeze& effect)
     : m_effect(effect),
-      m_currentParameter(Parameter::LENGTH) {
+      m_currentParameter(Parameter::LENGTH),
+      m_wasEnabled(false) {
 }
 
 const char* FreezeController::lengthName(FreezeLength length) {
@@ -58,8 +59,7 @@ bool FreezeController::handleButtonPress(const Command& cmd) {
 
         // Update visual feedback
         InputIO::setLED(EffectID::FREEZE, true);
-        DisplayManager::instance().setLastActivatedEffect(EffectID::FREEZE);
-        DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+        DisplayManager::instance().updateDisplay();
         return true;  // Command handled
     } else {
         // QUANTIZED ONSET: Schedule for next boundary with lookahead offset
@@ -122,13 +122,13 @@ bool FreezeController::handleButtonRelease(const Command& cmd) {
 }
 
 void FreezeController::updateVisualFeedback() {
-    // Check for ISR-fired onset (QUANTIZED ONSET mode)
-    // Detect rising edge: freeze enabled but display not showing it yet
-    if (m_effect.isEnabled() && DisplayManager::instance().getLastActivatedEffect() != EffectID::FREEZE) {
-        // ISR fired onset - update visual feedback
+    bool isEnabled = m_effect.isEnabled();
+
+    // Detect rising edge: effect just became enabled
+    if (isEnabled && !m_wasEnabled) {
+        // ISR fired onset or immediate enable - update visual feedback
         InputIO::setLED(EffectID::FREEZE, true);
-        DisplayManager::instance().setLastActivatedEffect(EffectID::FREEZE);
-        DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+        DisplayManager::instance().updateDisplay();
 
         // Determine what happened based on onset/length modes
         FreezeOnset onsetMode = m_effect.getOnsetMode();
@@ -144,20 +144,18 @@ void FreezeController::updateVisualFeedback() {
         }
     }
 
-    // Check for auto-release (QUANTIZED LENGTH mode)
-    // Detect falling edge: freeze disabled but display still showing it
-    if (!m_effect.isEnabled() && DisplayManager::instance().getLastActivatedEffect() == EffectID::FREEZE) {
-        // Only auto-release if in QUANTIZED length mode
+    // Detect falling edge: effect just became disabled
+    if (!isEnabled && m_wasEnabled) {
+        // Update LED to reflect disabled state
+        InputIO::setLED(EffectID::FREEZE, false);
+        DisplayManager::instance().updateDisplay();
+
+        // Check if this was auto-release (quantized length mode)
         if (m_effect.getLengthMode() == FreezeLength::QUANTIZED) {
-            // Freeze auto-released - update display
-            DisplayManager::instance().setLastActivatedEffect(EffectID::NONE);
-            DisplayManager::instance().updateDisplay();
-
-            // Update LED to reflect disabled state
-            InputIO::setLED(EffectID::FREEZE, false);
-
-            // Debug output
             Serial.println("Freeze auto-released (Quantized mode)");
         }
     }
+
+    // Update state for next call
+    m_wasEnabled = isEnabled;
 }

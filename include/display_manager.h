@@ -8,12 +8,11 @@
  *
  * DESIGN:
  * - Singleton pattern (single global instance)
- * - Priority-based display: Last activated effect takes precedence
- * - Stateful: Remembers which effect was last activated
+ * - Priority-based display: Audio chain order determines priority (CHOKE > FREEZE > STUTTER)
+ * - Stateful: Tracks menu state and manages display transitions
  *
  * USAGE:
  *   DisplayManager::instance().updateDisplay();
- *   DisplayManager::instance().setLastActivatedEffect(EffectID::CHOKE);
  */
 
 #pragma once
@@ -46,16 +45,21 @@ public:
     /**
      * Update display based on current effect states
      *
-     * Priority logic:
+     * Priority logic (based on audio chain order):
      * 1. Menu screen (if menu is active)
-     * 2. Last activated effect (if still active)
-     * 3. Any active effect
-     * 4. Default/idle screen
+     * 2. CHOKE effect (if active) - highest effect priority
+     * 3. FREEZE effect (if active) - middle priority
+     * 4. STUTTER effect (if active) - lowest effect priority
+     * 5. Default/idle screen
      */
     void updateDisplay();
 
     /**
-     * Set which effect was last activated (for display priority)
+     * Set which effect was last activated
+     *
+     * NOTE: This method is deprecated and no longer used for display priority.
+     * Display priority is now based on fixed audio chain order.
+     * Kept for backward compatibility.
      *
      * @param effectID Effect to mark as last activated
      */
@@ -63,6 +67,9 @@ public:
 
     /**
      * Get which effect was last activated
+     *
+     * NOTE: This method is deprecated and no longer used for display priority.
+     * Kept for backward compatibility.
      *
      * @return EffectID of last activated effect, or NONE
      */

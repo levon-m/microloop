@@ -74,4 +74,5 @@ public:
 private:
     AudioEffectFreeze& m_effect;    // Reference to audio effect (DSP)
     Parameter m_currentParameter;   // Currently selected parameter for editing
+    bool m_wasEnabled;              // Previous enabled state (for edge detection)
 };

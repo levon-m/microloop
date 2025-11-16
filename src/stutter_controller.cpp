@@ -26,7 +26,8 @@ StutterController::StutterController(AudioEffectStutter& effect)
       m_funcHeld(false),
       m_stutterHeld(false),
       m_lastBlinkTime(0),
-      m_ledBlinkState(false) {
+      m_ledBlinkState(false),
+      m_wasEnabled(false) {
 }
 
 // ========== UTILITY FUNCTIONS FOR BITMAP/NAME MAPPING ==========
@@ -158,8 +159,7 @@ bool StutterController::handleButtonPress(const Command& cmd) {
         }
 
         // Update visual feedback
-        DisplayManager::instance().setLastActivatedEffect(EffectID::STUTTER);
-        DisplayIO::showBitmap(stateToBitmap(m_effect.getState()));
+        DisplayManager::instance().updateDisplay();
         return true;  // Command handled
     }
 
@@ -191,8 +191,7 @@ bool StutterController::handleButtonPress(const Command& cmd) {
         }
 
         // Update visual feedback
-        DisplayManager::instance().setLastActivatedEffect(EffectID::STUTTER);
-        DisplayIO::showBitmap(stateToBitmap(m_effect.getState()));
+        DisplayManager::instance().updateDisplay();
         return true;  // Command handled
     }
 
@@ -259,7 +258,6 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
         // Cancel capture and return to idle
         m_effect.cancelCaptureStart();
         Serial.println("Stutter: CAPTURE CANCELLED (released before start)");
-        DisplayManager::instance().setLastActivatedEffect(EffectID::NONE);
         DisplayManager::instance().updateDisplay();
         return true;  // Command handled
     }
@@ -430,14 +428,8 @@ void StutterController::updateVisualFeedback() {
         Serial.print(static_cast<int>(currentState));
         Serial.println(")");
 
-        // Update display if this effect is active
-        if (currentState != StutterState::IDLE_NO_LOOP && currentState != StutterState::IDLE_WITH_LOOP) {
-            DisplayManager::instance().setLastActivatedEffect(EffectID::STUTTER);
-            DisplayIO::showBitmap(stateToBitmap(currentState));
-        } else if (s_lastState != StutterState::IDLE_NO_LOOP && s_lastState != StutterState::IDLE_WITH_LOOP) {
-            // Transitioned back to idle - clear display priority
-            DisplayManager::instance().updateDisplay();
-        }
+        // Update display whenever state changes
+        DisplayManager::instance().updateDisplay();
 
         s_lastState = currentState;
     }
