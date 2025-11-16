@@ -1,11 +1,10 @@
 #include "display_manager.h"
 
-namespace DisplayManager {
+void DisplayManager::initialize() {
+    m_lastActivatedEffect = EffectID::NONE;
+}
 
-// Last activated effect (for priority tracking)
-static EffectID lastActivatedEffect = EffectID::NONE;
-
-void updateDisplay() {
+void DisplayManager::updateDisplay() {
     // Check if any effects are active (use priority logic)
     AudioEffectBase* freezeEffect = EffectManager::getEffect(EffectID::FREEZE);
     AudioEffectBase* chokeEffect = EffectManager::getEffect(EffectID::CHOKE);
@@ -14,9 +13,9 @@ void updateDisplay() {
     bool chokeActive = chokeEffect && chokeEffect->isEnabled();
 
     // Priority: Last activated effect wins
-    if (lastActivatedEffect == EffectID::FREEZE && freezeActive) {
+    if (m_lastActivatedEffect == EffectID::FREEZE && freezeActive) {
         DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
-    } else if (lastActivatedEffect == EffectID::CHOKE && chokeActive) {
+    } else if (m_lastActivatedEffect == EffectID::CHOKE && chokeActive) {
         DisplayIO::showChoke();
     } else if (freezeActive) {
         // Freeze is active but not last activated (show it anyway)
@@ -30,16 +29,10 @@ void updateDisplay() {
     }
 }
 
-void setLastActivatedEffect(EffectID effectID) {
-    lastActivatedEffect = effectID;
+void DisplayManager::setLastActivatedEffect(EffectID effectID) {
+    m_lastActivatedEffect = effectID;
 }
 
-EffectID getLastActivatedEffect() {
-    return lastActivatedEffect;
-}
-
-void initialize() {
-    lastActivatedEffect = EffectID::NONE;
-}
-
+EffectID DisplayManager::getLastActivatedEffect() const {
+    return m_lastActivatedEffect;
 }

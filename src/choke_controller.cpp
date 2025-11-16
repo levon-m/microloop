@@ -1,16 +1,15 @@
-#include "choke_handler.h"
+#include "choke_controller.h"
 #include "input_io.h"
 #include "display_manager.h"
 #include "timekeeper.h"
 #include <Arduino.h>
 
-namespace ChokeHandler {
+ChokeController::ChokeController(AudioEffectChoke& effect)
+    : m_effect(effect),
+      m_currentParameter(Parameter::LENGTH) {
+}
 
-static AudioEffectChoke* choke = nullptr;
-static Parameter currentParameter = Parameter::LENGTH;
-static bool wasEnabled = false;  // Track previous enabled state for rising edge detection
-
-BitmapID lengthToBitmap(ChokeLength length) {
+BitmapID ChokeController::lengthToBitmap(ChokeLength length) {
     switch (length) {
         case ChokeLength::FREE:      return BitmapID::CHOKE_LENGTH_FREE;
         case ChokeLength::QUANTIZED: return BitmapID::CHOKE_LENGTH_QUANT;
@@ -18,7 +17,7 @@ BitmapID lengthToBitmap(ChokeLength length) {
     }
 }
 
-BitmapID onsetToBitmap(ChokeOnset onset) {
+BitmapID ChokeController::onsetToBitmap(ChokeOnset onset) {
     switch (onset) {
         case ChokeOnset::FREE:      return BitmapID::CHOKE_ONSET_FREE;
         case ChokeOnset::QUANTIZED: return BitmapID::CHOKE_ONSET_QUANT;
@@ -26,7 +25,7 @@ BitmapID onsetToBitmap(ChokeOnset onset) {
     }
 }
 
-const char* lengthName(ChokeLength length) {
+const char* ChokeController::lengthName(ChokeLength length) {
     switch (length) {
         case ChokeLength::FREE:      return "Free";
         case ChokeLength::QUANTIZED: return "Quantized";
@@ -34,7 +33,7 @@ const char* lengthName(ChokeLength length) {
     }
 }
 
-const char* onsetName(ChokeOnset onset) {
+const char* ChokeController::onsetName(ChokeOnset onset) {
     switch (onset) {
         case ChokeOnset::FREE:      return "Free";
         case ChokeOnset::QUANTIZED: return "Quantized";
@@ -42,13 +41,8 @@ const char* onsetName(ChokeOnset onset) {
     }
 }
 
-void initialize(AudioEffectChoke& chokeEffect) {
-    choke = &chokeEffect;
-    currentParameter = Parameter::LENGTH;
-}
-
-bool handleButtonPress(const Command& cmd) {
-    if (!choke || cmd.targetEffect != EffectID::CHOKE) {
+bool ChokeController::handleButtonPress(const Command& cmd) {
+    if (cmd.targetEffect != EffectID::CHOKE) {
         return false;  // Not our effect
     }
 
@@ -56,19 +50,19 @@ bool handleButtonPress(const Command& cmd) {
         return false;  // Not a press command
     }
 
-    ChokeLength lengthMode = choke->getLengthMode();
-    ChokeOnset onsetMode = choke->getOnsetMode();
+    ChokeLength lengthMode = m_effect.getLengthMode();
+    ChokeOnset onsetMode = m_effect.getOnsetMode();
 
     if (onsetMode == ChokeOnset::FREE) {
         // FREE ONSET: Engage immediately
-        choke->enable();
+        m_effect.enable();
 
         if (lengthMode == ChokeLength::QUANTIZED) {
             // FREE ONSET + QUANTIZED LENGTH
             Quantization quant = EffectQuantization::getGlobalQuantization();
             uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
             uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
-            choke->scheduleRelease(releaseSample);
+            m_effect.scheduleRelease(releaseSample);
 
             Serial.print("Choke ENGAGED (Free onset, Quantized length=");
             Serial.print(EffectQuantization::quantizationName(quant));
@@ -80,7 +74,7 @@ bool handleButtonPress(const Command& cmd) {
 
         // Update visual feedback
         InputIO::setLED(EffectID::CHOKE, true);
-        DisplayManager::setLastActivatedEffect(EffectID::CHOKE);
+        DisplayManager::instance().setLastActivatedEffect(EffectID::CHOKE);
         DisplayIO::showChoke();
         return true;  // Command handled
     } else {
@@ -103,13 +97,13 @@ bool handleButtonPress(const Command& cmd) {
         uint64_t onsetSample = currentSample + adjustedSamples;
 
         // Schedule onset in ISR (same as how length scheduling works)
-        choke->scheduleOnset(onsetSample);
+        m_effect.scheduleOnset(onsetSample);
 
         // If length is also quantized, schedule release from onset position
         if (lengthMode == ChokeLength::QUANTIZED) {
             uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
             uint64_t releaseSample = onsetSample + durationSamples;
-            choke->scheduleRelease(releaseSample);
+            m_effect.scheduleRelease(releaseSample);
         }
 
         Serial.print("ONSET DEBUG: currentSample=");
@@ -133,8 +127,8 @@ bool handleButtonPress(const Command& cmd) {
     }
 }
 
-bool handleButtonRelease(const Command& cmd) {
-    if (!choke || cmd.targetEffect != EffectID::CHOKE) {
+bool ChokeController::handleButtonRelease(const Command& cmd) {
+    if (cmd.targetEffect != EffectID::CHOKE) {
         return false;  // Not our effect
     }
 
@@ -142,7 +136,7 @@ bool handleButtonRelease(const Command& cmd) {
         return false;  // Not a release command
     }
 
-    ChokeLength lengthMode = choke->getLengthMode();
+    ChokeLength lengthMode = m_effect.getLengthMode();
 
     if (lengthMode == ChokeLength::QUANTIZED) {
         // QUANTIZED LENGTH: Ignore release (auto-releases)
@@ -152,29 +146,25 @@ bool handleButtonRelease(const Command& cmd) {
 
     // FREE LENGTH: Check if we have scheduled onset via ISR API
     // QUANTIZED ONSET + FREE LENGTH: Cancel scheduled onset
-    choke->cancelScheduledOnset();
+    m_effect.cancelScheduledOnset();
     Serial.println("Choke scheduled onset CANCELLED (button released before beat)");
 
     // FREE ONSET + FREE LENGTH: Fall through to default disable
     return false;  // Let EffectManager handle disable
 }
 
-void updateVisualFeedback() {
-    if (!choke) return;
-
-    bool isEnabled = choke->isEnabled();
-
+void ChokeController::updateVisualFeedback() {
     // Check for ISR-fired onset (QUANTIZED ONSET mode)
-    // Detect TRUE rising edge: transition from disabled to enabled
-    if (isEnabled && !wasEnabled) {
+    // Detect rising edge: choke enabled but display not showing it yet
+    if (m_effect.isEnabled() && DisplayManager::instance().getLastActivatedEffect() != EffectID::CHOKE) {
         // ISR fired onset - update visual feedback
         InputIO::setLED(EffectID::CHOKE, true);
-        DisplayManager::setLastActivatedEffect(EffectID::CHOKE);
-        DisplayManager::updateDisplay();
+        DisplayManager::instance().setLastActivatedEffect(EffectID::CHOKE);
+        DisplayIO::showChoke();
 
         // Determine what happened based on onset/length modes
-        ChokeOnset onsetMode = choke->getOnsetMode();
-        ChokeLength lengthMode = choke->getLengthMode();
+        ChokeOnset onsetMode = m_effect.getOnsetMode();
+        ChokeLength lengthMode = m_effect.getLengthMode();
 
         if (onsetMode == ChokeOnset::QUANTIZED) {
             Quantization quant = EffectQuantization::getGlobalQuantization();
@@ -187,13 +177,13 @@ void updateVisualFeedback() {
     }
 
     // Check for auto-release (QUANTIZED LENGTH mode)
-    // Detect TRUE falling edge: transition from enabled to disabled
-    if (!isEnabled && wasEnabled) {
+    // Detect falling edge: choke disabled but display still showing it
+    if (!m_effect.isEnabled() && DisplayManager::instance().getLastActivatedEffect() == EffectID::CHOKE) {
         // Only auto-release if in QUANTIZED length mode
-        if (choke->getLengthMode() == ChokeLength::QUANTIZED) {
+        if (m_effect.getLengthMode() == ChokeLength::QUANTIZED) {
             // Choke auto-released - update display
-            DisplayManager::setLastActivatedEffect(EffectID::NONE);
-            DisplayManager::updateDisplay();
+            DisplayManager::instance().setLastActivatedEffect(EffectID::NONE);
+            DisplayManager::instance().updateDisplay();
 
             // Update LED to reflect disabled state
             InputIO::setLED(EffectID::CHOKE, false);
@@ -202,17 +192,4 @@ void updateVisualFeedback() {
             Serial.println("Choke auto-released (Quantized mode)");
         }
     }
-
-    // Update previous state for next iteration
-    wasEnabled = isEnabled;
-}
-
-Parameter getCurrentParameter() {
-    return currentParameter;
-}
-
-void setCurrentParameter(Parameter param) {
-    currentParameter = param;
-}
-
 }

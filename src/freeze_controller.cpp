@@ -1,16 +1,15 @@
-#include "freeze_handler.h"
+#include "freeze_controller.h"
 #include "input_io.h"
 #include "display_manager.h"
 #include "timekeeper.h"
 #include <Arduino.h>
 
-namespace FreezeHandler {
+FreezeController::FreezeController(AudioEffectFreeze& effect)
+    : m_effect(effect),
+      m_currentParameter(Parameter::LENGTH) {
+}
 
-static AudioEffectFreeze* freeze = nullptr;
-static Parameter currentParameter = Parameter::LENGTH;
-static bool wasEnabled = false;  // Track previous enabled state for rising edge detection
-
-BitmapID lengthToBitmap(FreezeLength length) {
+BitmapID FreezeController::lengthToBitmap(FreezeLength length) {
     switch (length) {
         case FreezeLength::FREE:      return BitmapID::FREEZE_LENGTH_FREE;
         case FreezeLength::QUANTIZED: return BitmapID::FREEZE_LENGTH_QUANT;
@@ -18,7 +17,7 @@ BitmapID lengthToBitmap(FreezeLength length) {
     }
 }
 
-BitmapID onsetToBitmap(FreezeOnset onset) {
+BitmapID FreezeController::onsetToBitmap(FreezeOnset onset) {
     switch (onset) {
         case FreezeOnset::FREE:      return BitmapID::FREEZE_ONSET_FREE;
         case FreezeOnset::QUANTIZED: return BitmapID::FREEZE_ONSET_QUANT;
@@ -26,7 +25,7 @@ BitmapID onsetToBitmap(FreezeOnset onset) {
     }
 }
 
-const char* lengthName(FreezeLength length) {
+const char* FreezeController::lengthName(FreezeLength length) {
     switch (length) {
         case FreezeLength::FREE:      return "Free";
         case FreezeLength::QUANTIZED: return "Quantized";
@@ -34,7 +33,7 @@ const char* lengthName(FreezeLength length) {
     }
 }
 
-const char* onsetName(FreezeOnset onset) {
+const char* FreezeController::onsetName(FreezeOnset onset) {
     switch (onset) {
         case FreezeOnset::FREE:      return "Free";
         case FreezeOnset::QUANTIZED: return "Quantized";
@@ -42,13 +41,8 @@ const char* onsetName(FreezeOnset onset) {
     }
 }
 
-void initialize(AudioEffectFreeze& freezeEffect) {
-    freeze = &freezeEffect;
-    currentParameter = Parameter::LENGTH;
-}
-
-bool handleButtonPress(const Command& cmd) {
-    if (!freeze || cmd.targetEffect != EffectID::FREEZE) {
+bool FreezeController::handleButtonPress(const Command& cmd) {
+    if (cmd.targetEffect != EffectID::FREEZE) {
         return false;  // Not our effect
     }
 
@@ -56,19 +50,19 @@ bool handleButtonPress(const Command& cmd) {
         return false;  // Not a press command
     }
 
-    FreezeLength lengthMode = freeze->getLengthMode();
-    FreezeOnset onsetMode = freeze->getOnsetMode();
+    FreezeLength lengthMode = m_effect.getLengthMode();
+    FreezeOnset onsetMode = m_effect.getOnsetMode();
 
     if (onsetMode == FreezeOnset::FREE) {
         // FREE ONSET: Engage immediately
-        freeze->enable();
+        m_effect.enable();
 
         if (lengthMode == FreezeLength::QUANTIZED) {
             // FREE ONSET + QUANTIZED LENGTH
             Quantization quant = EffectQuantization::getGlobalQuantization();
             uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
             uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
-            freeze->scheduleRelease(releaseSample);
+            m_effect.scheduleRelease(releaseSample);
 
             Serial.print("Freeze ENGAGED (Free onset, Quantized length=");
             Serial.print(EffectQuantization::quantizationName(quant));
@@ -80,7 +74,7 @@ bool handleButtonPress(const Command& cmd) {
 
         // Update visual feedback
         InputIO::setLED(EffectID::FREEZE, true);
-        DisplayManager::setLastActivatedEffect(EffectID::FREEZE);
+        DisplayManager::instance().setLastActivatedEffect(EffectID::FREEZE);
         DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
         return true;  // Command handled
     } else {
@@ -96,13 +90,13 @@ bool handleButtonPress(const Command& cmd) {
         uint64_t onsetSample = TimeKeeper::getSamplePosition() + adjustedSamples;
 
         // Schedule onset in ISR (same as how length scheduling works)
-        freeze->scheduleOnset(onsetSample);
+        m_effect.scheduleOnset(onsetSample);
 
         // If length is also quantized, schedule release from onset position
         if (lengthMode == FreezeLength::QUANTIZED) {
             uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
             uint64_t releaseSample = onsetSample + durationSamples;
-            freeze->scheduleRelease(releaseSample);
+            m_effect.scheduleRelease(releaseSample);
         }
 
         Serial.print("Freeze ONSET scheduled (");
@@ -117,8 +111,8 @@ bool handleButtonPress(const Command& cmd) {
     }
 }
 
-bool handleButtonRelease(const Command& cmd) {
-    if (!freeze || cmd.targetEffect != EffectID::FREEZE) {
+bool FreezeController::handleButtonRelease(const Command& cmd) {
+    if (cmd.targetEffect != EffectID::FREEZE) {
         return false;  // Not our effect
     }
 
@@ -126,7 +120,7 @@ bool handleButtonRelease(const Command& cmd) {
         return false;  // Not a release command
     }
 
-    FreezeLength lengthMode = freeze->getLengthMode();
+    FreezeLength lengthMode = m_effect.getLengthMode();
 
     if (lengthMode == FreezeLength::QUANTIZED) {
         // QUANTIZED LENGTH: Ignore release (auto-releases)
@@ -136,29 +130,25 @@ bool handleButtonRelease(const Command& cmd) {
 
     // FREE LENGTH: Check if we have scheduled onset via ISR API
     // QUANTIZED ONSET + FREE LENGTH: Cancel scheduled onset
-    freeze->cancelScheduledOnset();
+    m_effect.cancelScheduledOnset();
     Serial.println("Freeze scheduled onset CANCELLED (button released before beat)");
 
     // FREE ONSET + FREE LENGTH: Fall through to default disable
     return false;  // Let EffectManager handle disable
 }
 
-void updateVisualFeedback() {
-    if (!freeze) return;
-
-    bool isEnabled = freeze->isEnabled();
-
+void FreezeController::updateVisualFeedback() {
     // Check for ISR-fired onset (QUANTIZED ONSET mode)
-    // Detect TRUE rising edge: transition from disabled to enabled
-    if (isEnabled && !wasEnabled) {
+    // Detect rising edge: freeze enabled but display not showing it yet
+    if (m_effect.isEnabled() && DisplayManager::instance().getLastActivatedEffect() != EffectID::FREEZE) {
         // ISR fired onset - update visual feedback
         InputIO::setLED(EffectID::FREEZE, true);
-        DisplayManager::setLastActivatedEffect(EffectID::FREEZE);
-        DisplayManager::updateDisplay();
+        DisplayManager::instance().setLastActivatedEffect(EffectID::FREEZE);
+        DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
 
         // Determine what happened based on onset/length modes
-        FreezeOnset onsetMode = freeze->getOnsetMode();
-        FreezeLength lengthMode = freeze->getLengthMode();
+        FreezeOnset onsetMode = m_effect.getOnsetMode();
+        FreezeLength lengthMode = m_effect.getLengthMode();
 
         if (onsetMode == FreezeOnset::QUANTIZED) {
             Quantization quant = EffectQuantization::getGlobalQuantization();
@@ -171,13 +161,13 @@ void updateVisualFeedback() {
     }
 
     // Check for auto-release (QUANTIZED LENGTH mode)
-    // Detect TRUE falling edge: transition from enabled to disabled
-    if (!isEnabled && wasEnabled) {
+    // Detect falling edge: freeze disabled but display still showing it
+    if (!m_effect.isEnabled() && DisplayManager::instance().getLastActivatedEffect() == EffectID::FREEZE) {
         // Only auto-release if in QUANTIZED length mode
-        if (freeze->getLengthMode() == FreezeLength::QUANTIZED) {
+        if (m_effect.getLengthMode() == FreezeLength::QUANTIZED) {
             // Freeze auto-released - update display
-            DisplayManager::setLastActivatedEffect(EffectID::NONE);
-            DisplayManager::updateDisplay();
+            DisplayManager::instance().setLastActivatedEffect(EffectID::NONE);
+            DisplayManager::instance().updateDisplay();
 
             // Update LED to reflect disabled state
             InputIO::setLED(EffectID::FREEZE, false);
@@ -186,17 +176,4 @@ void updateVisualFeedback() {
             Serial.println("Freeze auto-released (Quantized mode)");
         }
     }
-
-    // Update previous state for next iteration
-    wasEnabled = isEnabled;
-}
-
-Parameter getCurrentParameter() {
-    return currentParameter;
-}
-
-void setCurrentParameter(Parameter param) {
-    currentParameter = param;
-}
-
 }
