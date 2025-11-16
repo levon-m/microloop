@@ -23,7 +23,7 @@ public:
 
     void onDisplayUpdate(DisplayUpdateCallback callback);
 
-    bool isTouched() const { return wasTouched; }
+    bool isTouched() const;  // Returns true if actively touched OR within cooldown period
 
     void resetPosition();
 

@@ -160,7 +160,11 @@ static void setupEncoder1() {
             //     DisplayIO::showBitmap(StutterController::captureEndToBitmap(stutter.getCaptureEndMode()));
             // }
         } else {
-            DisplayManager::instance().updateDisplay();
+            // Cooldown expired - only hide menu if NO other encoders are touched
+            if (!s_encoder2->isTouched() && !s_encoder3->isTouched() && !s_encoder4->isTouched()) {
+                DisplayManager::instance().hideMenu();
+                DisplayManager::instance().updateDisplay();
+            }
         }
     });
 }
@@ -243,9 +247,11 @@ static void setupEncoder2() {
             DisplayManager::instance().showMenu(menuData);
             DisplayManager::instance().updateDisplay();
         } else {
-            // Cooldown expired - hide menu and return to effect display
-            DisplayManager::instance().hideMenu();
-            DisplayManager::instance().updateDisplay();
+            // Cooldown expired - only hide menu if NO other encoders are touched
+            if (!s_encoder1->isTouched() && !s_encoder3->isTouched() && !s_encoder4->isTouched()) {
+                DisplayManager::instance().hideMenu();
+                DisplayManager::instance().updateDisplay();
+            }
         }
     });
 }
@@ -337,9 +343,11 @@ static void setupEncoder3() {
             DisplayManager::instance().showMenu(menuData);
             DisplayManager::instance().updateDisplay();
         } else {
-            // Cooldown expired - hide menu and return to effect display
-            DisplayManager::instance().hideMenu();
-            DisplayManager::instance().updateDisplay();
+            // Cooldown expired - only hide menu if NO other encoders are touched
+            if (!s_encoder1->isTouched() && !s_encoder2->isTouched() && !s_encoder4->isTouched()) {
+                DisplayManager::instance().hideMenu();
+                DisplayManager::instance().updateDisplay();
+            }
         }
     });
 }
@@ -386,9 +394,11 @@ static void setupEncoder4() {
             DisplayManager::instance().showMenu(menuData);
             DisplayManager::instance().updateDisplay();
         } else {
-            // Cooldown expired - hide menu and return to effect display
-            DisplayManager::instance().hideMenu();
-            DisplayManager::instance().updateDisplay();
+            // Cooldown expired - only hide menu if NO other encoders are touched
+            if (!s_encoder1->isTouched() && !s_encoder2->isTouched() && !s_encoder3->isTouched()) {
+                DisplayManager::instance().hideMenu();
+                DisplayManager::instance().updateDisplay();
+            }
         }
     });
 }

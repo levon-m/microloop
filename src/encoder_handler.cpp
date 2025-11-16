@@ -104,4 +104,18 @@ void Handler::resetPosition() {
     accumulator = 0;
 }
 
+bool Handler::isTouched() const {
+    // If actively being touched, return true
+    if (wasTouched) return true;
+
+    // If within cooldown period, also return true
+    if (releaseTime > 0) {
+        uint32_t now = millis();
+        return (now - releaseTime < DISPLAY_COOLDOWN_MS);
+    }
+
+    // Otherwise, not touched
+    return false;
+}
+
 }
