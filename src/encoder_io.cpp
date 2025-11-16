@@ -22,10 +22,18 @@ static volatile uint8_t eventQueueTail = 0;  // Read index (main loop)
 
 // ISR: Called when MCP23017 detects any pin change
 static void encoderISR() {
-    // Read the captured pin states from INTCAP registers
-    // These registers freeze the GPIO state at the moment of interrupt
-    // Note: Reading these registers also clears the interrupt
-    uint16_t captured = mcp.getCapturedInterrupt();  // Read INTCAPA/INTCAPB
+    // WORKAROUND: Adafruit's getCapturedInterrupt() returns only 8 bits sometimes
+    // Read INTCAP registers manually to ensure we get all 16 bits
+    // INTCAPA = 0x10, INTCAPB = 0x11 (MCP23017 register addresses)
+
+    Wire.beginTransmission(0x20);  // MCP23017 address
+    Wire.write(0x10);              // INTCAPA register
+    Wire.endTransmission(false);   // Repeated start
+    Wire.requestFrom(0x20, 2);     // Read 2 bytes (INTCAPA + INTCAPB)
+
+    uint8_t intcapA = Wire.read();
+    uint8_t intcapB = Wire.read();
+    uint16_t captured = ((uint16_t)intcapB << 8) | intcapA;
 
     // Add to queue
     uint8_t nextHead = (eventQueueHead + 1) & (EVENT_QUEUE_SIZE - 1);

@@ -24,6 +24,17 @@ enum class BitmapID : uint8_t {
     FREEZE_LENGTH_QUANT = 12, // Freeze length: Quantized mode
     FREEZE_ONSET_FREE = 13,   // Freeze onset: Free mode
     FREEZE_ONSET_QUANT = 14,  // Freeze onset: Quantized mode
+    STUTTER_IDLE_WITH_LOOP = 15,    // Stutter: Loop captured, ready for playback
+    STUTTER_CAPTURING = 16,          // Stutter: Actively capturing
+    STUTTER_PLAYING = 17,            // Stutter: Playing captured loop
+    STUTTER_ONSET_FREE = 18,         // Stutter onset: Free mode
+    STUTTER_ONSET_QUANT = 19,        // Stutter onset: Quantized mode
+    STUTTER_LENGTH_FREE = 20,        // Stutter length: Free mode
+    STUTTER_LENGTH_QUANT = 21,       // Stutter length: Quantized mode
+    STUTTER_CAPTURE_START_FREE = 22, // Stutter capture start: Free mode
+    STUTTER_CAPTURE_START_QUANT = 23,// Stutter capture start: Quantized mode
+    STUTTER_CAPTURE_END_FREE = 24,   // Stutter capture end: Free mode
+    STUTTER_CAPTURE_END_QUANT = 25   // Stutter capture end: Quantized mode
 };
 
 struct DisplayEvent {

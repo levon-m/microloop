@@ -124,7 +124,7 @@ public:
      * Called on MIDI START or when manually snapping to beat grid.
      * Increments beat counter and resets tick counter to 0.
      */
-    static void advanceToBeat();
+    //static void advanceToBeat();
 
     // ========== TRANSPORT CONTROL ==========
 

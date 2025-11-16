@@ -73,9 +73,9 @@ uint32_t getLookaheadOffset() {
     return lookaheadOffset;
 }
 
-void setLookaheadOffset(uint32_t samples) {
-    lookaheadOffset = samples;
-}
+// void setLookaheadOffset(uint32_t samples) {
+//     lookaheadOffset = samples;
+// }
 
 void initialize() {
     globalQuantization = Quantization::QUANT_16;

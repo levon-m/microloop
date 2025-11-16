@@ -271,6 +271,10 @@ add_library(freeze_controller STATIC src/freeze_controller.cpp)
 target_include_directories(freeze_controller PUBLIC include)
 target_link_libraries(freeze_controller teensy_core audio effect_quantization display_manager input_io microloop_utils)
 
+add_library(stutter_controller STATIC src/stutter_controller.cpp)
+target_include_directories(stutter_controller PUBLIC include)
+target_link_libraries(stutter_controller teensy_core audio effect_quantization display_manager input_io microloop_utils)
+
 # App logic (now uses modular subsystems and effect controllers)
 add_library(app_logic STATIC src/app_logic.cpp)
 target_include_directories(app_logic PUBLIC include)
@@ -287,6 +291,7 @@ target_link_libraries(app_logic
     display_manager
     choke_controller
     freeze_controller
+    stutter_controller
 )
 
 add_library(encoder_io STATIC src/encoder_io.cpp)
@@ -319,6 +324,7 @@ target_link_libraries(microloop.elf
     display_manager
     choke_controller
     freeze_controller
+    stutter_controller
     seesaw
     neopixel
     busio

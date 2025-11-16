@@ -40,6 +40,17 @@ static const BitmapData bitmapRegistry[] = {
     { bitmap_choke_length_quant }, // BitmapID::FREEZE_LENGTH_QUANT (placeholder: reuse choke bitmap)
     { bitmap_choke_onset_free },   // BitmapID::FREEZE_ONSET_FREE (placeholder: reuse choke bitmap)
     { bitmap_choke_onset_quant },  // BitmapID::FREEZE_ONSET_QUANT (placeholder: reuse choke bitmap)
+    { bitmap_stutter_idle_with_loop },      // BitmapID::STUTTER_IDLE_WITH_LOOP
+    { bitmap_stutter_capturing },            // BitmapID::STUTTER_CAPTURING
+    { bitmap_stutter_playing },              // BitmapID::STUTTER_PLAYING
+    { bitmap_stutter_onset_free },           // BitmapID::STUTTER_ONSET_FREE
+    { bitmap_stutter_onset_quant },          // BitmapID::STUTTER_ONSET_QUANT
+    { bitmap_stutter_length_free },          // BitmapID::STUTTER_LENGTH_FREE
+    { bitmap_stutter_length_quant },         // BitmapID::STUTTER_LENGTH_QUANT
+    { bitmap_stutter_capture_start_free },   // BitmapID::STUTTER_CAPTURE_START_FREE
+    { bitmap_stutter_capture_start_quant },  // BitmapID::STUTTER_CAPTURE_START_QUANT
+    { bitmap_stutter_capture_end_free },     // BitmapID::STUTTER_CAPTURE_END_FREE
+    { bitmap_stutter_capture_end_quant },    // BitmapID::STUTTER_CAPTURE_END_QUANT
 };
 
 static constexpr uint8_t NUM_BITMAPS = sizeof(bitmapRegistry) / sizeof(BitmapData);

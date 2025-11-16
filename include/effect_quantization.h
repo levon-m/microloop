@@ -32,7 +32,7 @@ void setGlobalQuantization(Quantization quant);
 
 uint32_t getLookaheadOffset();
 
-void setLookaheadOffset(uint32_t samples);
+//void setLookaheadOffset(uint32_t samples);
 
 void initialize();
 

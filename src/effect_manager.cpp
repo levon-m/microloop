@@ -107,28 +107,28 @@ AudioEffectBase* EffectManager::getEffect(EffectID id) {
     return nullptr;
 }
 
-uint32_t EffectManager::getEnabledEffectsMask() {
-    uint32_t mask = 0;
+// uint32_t EffectManager::getEnabledEffectsMask() {
+//     uint32_t mask = 0;
 
-    // Iterate all registered effects
-    for (uint8_t i = 0; i < s_numEffects; i++) {
-        // If effect is enabled, set its bit in the mask
-        if (s_effects[i].effect->isEnabled()) {
-            // Bit position = effect ID
-            uint8_t bitPos = static_cast<uint8_t>(s_effects[i].id);
-            mask |= (1U << bitPos);
-        }
-    }
+//     // Iterate all registered effects
+//     for (uint8_t i = 0; i < s_numEffects; i++) {
+//         // If effect is enabled, set its bit in the mask
+//         if (s_effects[i].effect->isEnabled()) {
+//             // Bit position = effect ID
+//             uint8_t bitPos = static_cast<uint8_t>(s_effects[i].id);
+//             mask |= (1U << bitPos);
+//         }
+//     }
 
-    return mask;
-}
+//     return mask;
+// }
 
-const char* EffectManager::getEffectName(EffectID id) {
-    AudioEffectBase* effect = getEffect(id);
-    if (effect != nullptr) {
-        return effect->getName();
-    }
+// const char* EffectManager::getEffectName(EffectID id) {
+//     AudioEffectBase* effect = getEffect(id);
+//     if (effect != nullptr) {
+//         return effect->getName();
+//     }
 
-    // Effect not found - return generic "Unknown"
-    return "Unknown";
-}
+//     // Effect not found - return generic "Unknown"
+//     return "Unknown";
+// }

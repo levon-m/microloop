@@ -10,6 +10,10 @@ static constexpr uint8_t NEOKEY_I2C_ADDR = 0x30;  // Default Neokey address
 static constexpr uint8_t INT_PIN = 33;             // Teensy pin for Neokey INT
 static constexpr uint8_t NUM_KEYS = 4;             // Neokey has 4 keys
 
+// Interrupt flag: Set by ISR, cleared by threadLoop after reading I2C
+// This defers the I2C read (~20-50µs) out of the ISR context (~1µs)
+static volatile bool interruptPending = false;
+
 static constexpr uint32_t LED_COLOR_RED = 0xFF0000;       // Choke engaged
 static constexpr uint32_t LED_COLOR_GREEN = 0x00FF00;     // Effect disabled (default)
 static constexpr uint32_t LED_COLOR_CYAN = 0x00FFFF;      // Freeze engaged
@@ -34,18 +38,18 @@ struct ButtonMapping {
 };
 
 static const ButtonMapping buttonMappings[] = {
-    // Key 0: Freeze (momentary behavior)
+    // Key 0: Stutter (momentary/capture behavior)
     {
         .keyIndex = 0,
-        .pressCommand = Command(CommandType::EFFECT_ENABLE, EffectID::FREEZE),
-        .releaseCommand = Command(CommandType::EFFECT_DISABLE, EffectID::FREEZE)
+        .pressCommand = Command(CommandType::EFFECT_ENABLE, EffectID::STUTTER),
+        .releaseCommand = Command(CommandType::EFFECT_DISABLE, EffectID::STUTTER)
     },
 
-    // Key 1: Reserved for future feature (currently disabled)
+    // Key 1: Freeze (momentary behavior)
     {
         .keyIndex = 1,
-        .pressCommand = Command(CommandType::NONE, EffectID::NONE),
-        .releaseCommand = Command(CommandType::NONE, EffectID::NONE)
+        .pressCommand = Command(CommandType::EFFECT_ENABLE, EffectID::FREEZE),
+        .releaseCommand = Command(CommandType::EFFECT_DISABLE, EffectID::FREEZE)
     },
 
     // Key 2: Choke (momentary behavior)
@@ -55,15 +59,23 @@ static const ButtonMapping buttonMappings[] = {
         .releaseCommand = Command(CommandType::EFFECT_DISABLE, EffectID::CHOKE)
     },
 
-    // Key 3: Reserved (future - currently disabled)
+    // Key 3: FUNC modifier button
     {
         .keyIndex = 3,
-        .pressCommand = Command(CommandType::NONE, EffectID::NONE),
-        .releaseCommand = Command(CommandType::NONE, EffectID::NONE)
+        .pressCommand = Command(CommandType::EFFECT_ENABLE, EffectID::FUNC),
+        .releaseCommand = Command(CommandType::EFFECT_DISABLE, EffectID::FUNC)
     }
 };
 
 static constexpr size_t NUM_MAPPINGS = sizeof(buttonMappings) / sizeof(buttonMappings[0]);
+
+// ISR: Called when Neokey detects any button change
+// OPTIMIZED: No I2C operations in ISR - just set a flag (<1µs)
+static void neokeyISR() {
+    // Simply flag that an interrupt occurred
+    // The actual I2C read happens in threadLoop() outside ISR context
+    interruptPending = true;
+}
 
 bool InputIO::begin() {
     // Configure INT pin (input with pull-up, active LOW)
@@ -89,57 +101,69 @@ bool InputIO::begin() {
     // This makes INT pin go LOW when any key state changes
     neokey.enableKeypadInterrupt();
 
+    // Attach Teensy interrupt to Neokey INT pin (active LOW, falling edge)
+    attachInterrupt(digitalPinToInterrupt(INT_PIN), neokeyISR, FALLING);
+
     // Set initial LED states
     neokey.pixels.setBrightness(LED_BRIGHTNESS);
-    neokey.pixels.setPixelColor(0, LED_COLOR_GREEN);  // Key 0: Freeze inactive (green)
-    neokey.pixels.setPixelColor(1, 0x000000);         // Key 1: Off (reserved)
+    neokey.pixels.setPixelColor(0, LED_COLOR_GREEN);  // Key 0: Stutter inactive (green)
+    neokey.pixels.setPixelColor(1, LED_COLOR_GREEN);  // Key 1: Freeze inactive (green)
     neokey.pixels.setPixelColor(2, LED_COLOR_GREEN);  // Key 2: Choke inactive (green)
-    neokey.pixels.setPixelColor(3, 0x000000);         // Key 3: Off (reserved)
+    neokey.pixels.setPixelColor(3, LED_COLOR_GREEN);  // Key 3: FUNC inactive (green)
     neokey.pixels.show();
 
-    Serial.println("InputIO: Neokey initialized (I2C 0x30 on Wire2, INT on pin 33)");
+    Serial.println("InputIO: Neokey initialized (I2C 0x30 on Wire2, INT on pin 33, interrupt-driven)");
     return true;
 }
 
 void InputIO::threadLoop() {
     for (;;) {
-        // Read all button states in one I2C transaction
-        uint32_t buttons = neokey.read();
+        // Check if interrupt flag is set (deferred I2C read)
+        if (interruptPending) {
+            // Clear flag atomically to prevent race with ISR
+            noInterrupts();
+            interruptPending = false;
+            interrupts();
 
-        // Check each button mapping
-        for (size_t i = 0; i < NUM_MAPPINGS; i++) {
-            const ButtonMapping& mapping = buttonMappings[i];
-            uint8_t keyIndex = mapping.keyIndex;
+            // Now perform the I2C read outside ISR context
+            // Read all button states in one I2C transaction (~20-50µs)
+            uint32_t buttons = neokey.read();
 
-            // Extract key state from bitmask
-            bool pressed = (buttons & (1 << keyIndex)) != 0;
+            // Check each button mapping
+            for (size_t i = 0; i < NUM_MAPPINGS; i++) {
+                const ButtonMapping& mapping = buttonMappings[i];
+                uint8_t keyIndex = mapping.keyIndex;
 
-            // Detect state change (edge detection)
-            if (pressed != lastKeyState[keyIndex]) {
-                uint32_t now = millis();
+                // Extract key state from bitmask
+                bool pressed = (buttons & (1 << keyIndex)) != 0;
 
-                // Simple time-based debouncing: Only send event if enough time passed
-                if (now - lastEventTime[keyIndex] >= DEBOUNCE_MS) {
-                    // Update timestamp
-                    lastEventTime[keyIndex] = now;
+                // Detect state change (edge detection)
+                if (pressed != lastKeyState[keyIndex]) {
+                    uint32_t now = millis();
 
-                    // Emit appropriate command
-                    Command cmd = pressed ? mapping.pressCommand : mapping.releaseCommand;
+                    // Simple time-based debouncing: Only send event if enough time passed
+                    if (now - lastEventTime[keyIndex] >= DEBOUNCE_MS) {
+                        // Update timestamp
+                        lastEventTime[keyIndex] = now;
 
-                    // Only push non-NONE commands
-                    if (cmd.type != CommandType::NONE) {
-                        commandQueue.push(cmd);
-                        TRACE(TRACE_CHOKE_BUTTON_PRESS + (pressed ? 0 : 1), keyIndex);
+                        // Emit appropriate command
+                        Command cmd = pressed ? mapping.pressCommand : mapping.releaseCommand;
+
+                        // Only push non-NONE commands
+                        if (cmd.type != CommandType::NONE) {
+                            commandQueue.push(cmd);
+                            TRACE(TRACE_CHOKE_BUTTON_PRESS + (pressed ? 0 : 1), keyIndex);
+                        }
                     }
-                }
 
-                // Always update state (even if within debounce period)
-                // This prevents stuck state if button is released quickly
-                lastKeyState[keyIndex] = pressed;
+                    // Always update state (even if within debounce period)
+                    // This prevents stuck state if button is released quickly
+                    lastKeyState[keyIndex] = pressed;
+                }
             }
         }
 
-        // Small delay to limit I2C traffic and give other threads time
+        // Sleep when no events pending (interrupt-driven = 0% CPU when idle)
         threads.delay(5);
     }
 }
@@ -154,8 +178,14 @@ void InputIO::setLED(EffectID effectID, bool enabled) {
     uint32_t disabledColor = LED_COLOR_GREEN;
 
     switch (effectID) {
-        case EffectID::FREEZE:
+        case EffectID::STUTTER:
             keyIndex = 0;
+            enabledColor = LED_COLOR_PURPLE;  // Purple for stutter
+            disabledColor = LED_COLOR_GREEN;
+            break;
+
+        case EffectID::FREEZE:
+            keyIndex = 1;
             enabledColor = LED_COLOR_CYAN;
             disabledColor = LED_COLOR_GREEN;
             break;
@@ -166,21 +196,9 @@ void InputIO::setLED(EffectID effectID, bool enabled) {
             disabledColor = LED_COLOR_GREEN;
             break;
 
-        case EffectID::DELAY:
-            keyIndex = 1;  // Future: Key 1
-            enabledColor = LED_COLOR_BLUE;
-            disabledColor = LED_COLOR_GREEN;
-            break;
-
-        case EffectID::REVERB:
-            keyIndex = 3;  // Future: Key 3
-            enabledColor = LED_COLOR_PURPLE;
-            disabledColor = LED_COLOR_GREEN;
-            break;
-
-        case EffectID::GAIN:
-            keyIndex = 1;  // Future: Key 1 (or 3)
-            enabledColor = LED_COLOR_YELLOW;
+        case EffectID::FUNC:
+            keyIndex = 3;
+            enabledColor = LED_COLOR_YELLOW;  // Yellow for FUNC
             disabledColor = LED_COLOR_GREEN;
             break;
 

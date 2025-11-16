@@ -4,6 +4,7 @@
 #include "encoder_io.h"
 #include "audio_choke.h"
 #include "audio_freeze.h"
+#include "audio_stutter.h"
 #include "effect_manager.h"
 #include "trace.h"
 #include "timekeeper.h"
@@ -12,6 +13,7 @@
 #include "display_manager.h"
 #include "choke_controller.h"
 #include "freeze_controller.h"
+#include "stutter_controller.h"
 #include "app_state.h"
 
 #include <TeensyThreads.h>
@@ -19,6 +21,7 @@
 // External references to audio effects (defined in main.cpp)
 extern AudioEffectChoke choke;
 extern AudioEffectFreeze freeze;
+extern AudioEffectStutter stutter;
 
 // ========== APPLICATION STATE ==========
 static AppState s_appState;  // Application mode and context
@@ -26,6 +29,7 @@ static AppState s_appState;  // Application mode and context
 // ========== EFFECT CONTROLLERS ==========
 static ChokeController* s_chokeController = nullptr;    // Choke effect controller
 static FreezeController* s_freezeController = nullptr;  // Freeze effect controller
+static StutterController* s_stutterController = nullptr;
 
 // ========== LED BEAT INDICATOR STATE ==========
 static constexpr uint8_t LED_PIN = 37;
@@ -43,7 +47,8 @@ static uint32_t s_lastPrint = 0;
 static constexpr uint32_t PRINT_INTERVAL_MS = 1000;
 
 // ========== ENCODER MENU INSTANCES ==========
-static EncoderMenu::Handler* s_encoder1 = nullptr;  // FREEZE parameters
+static EncoderMenu::Handler* s_encoder1 = nullptr;  // STUTTER parameters
+static EncoderMenu::Handler* s_encoder2 = nullptr;  // FREEZE parameters
 static EncoderMenu::Handler* s_encoder3 = nullptr;  // CHOKE parameters
 static EncoderMenu::Handler* s_encoder4 = nullptr;  // Global quantization
 
@@ -51,10 +56,111 @@ static EncoderMenu::Handler* s_encoder4 = nullptr;  // Global quantization
 // These functions configure the behavior of each encoder menu handler
 
 static void setupEncoder1() {
-    s_encoder1 = new EncoderMenu::Handler(0);  // Encoder 1 is index 0
+    s_encoder1 = new EncoderMenu::Handler(0);  // Encoder 1 is index 0 (STUTTER parameters)
+
+    // Button press: Cycle between ONSET → LENGTH → CAPTURE_START → CAPTURE_END
+    s_encoder1->onButtonPress([]() {
+        StutterController::Parameter current = s_stutterController->getCurrentParameter();
+
+        // Cycle to next parameter
+        if (current == StutterController::Parameter::ONSET) {
+            s_stutterController->setCurrentParameter(StutterController::Parameter::LENGTH);
+            Serial.println("Stutter Parameter: LENGTH");
+            DisplayIO::showBitmap(StutterController::lengthToBitmap(stutter.getLengthMode()));
+        } else if (current == StutterController::Parameter::LENGTH) {
+            s_stutterController->setCurrentParameter(StutterController::Parameter::CAPTURE_START);
+            Serial.println("Stutter Parameter: CAPTURE_START");
+            DisplayIO::showBitmap(StutterController::captureStartToBitmap(stutter.getCaptureStartMode()));
+        } else if (current == StutterController::Parameter::CAPTURE_START) {
+            s_stutterController->setCurrentParameter(StutterController::Parameter::CAPTURE_END);
+            Serial.println("Stutter Parameter: CAPTURE_END");
+            DisplayIO::showBitmap(StutterController::captureEndToBitmap(stutter.getCaptureEndMode()));
+        } else {  // CAPTURE_END
+            s_stutterController->setCurrentParameter(StutterController::Parameter::ONSET);
+            Serial.println("Stutter Parameter: ONSET");
+            DisplayIO::showBitmap(StutterController::onsetToBitmap(stutter.getOnsetMode()));
+        }
+    });
+
+    // Value change: Adjust current parameter
+    s_encoder1->onValueChange([](int8_t delta) {
+        StutterController::Parameter param = s_stutterController->getCurrentParameter();
+
+        if (param == StutterController::Parameter::ONSET) {
+            int8_t currentIndex = static_cast<int8_t>(stutter.getOnsetMode());
+            int8_t newIndex = currentIndex + delta;
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex > 1) newIndex = 1;
+            if (newIndex != currentIndex) {
+                StutterOnset newOnset = static_cast<StutterOnset>(newIndex);
+                stutter.setOnsetMode(newOnset);
+                DisplayIO::showBitmap(StutterController::onsetToBitmap(newOnset));
+                Serial.print("Stutter Onset: ");
+                Serial.println(StutterController::onsetName(newOnset));
+            }
+        } else if (param == StutterController::Parameter::LENGTH) {
+            int8_t currentIndex = static_cast<int8_t>(stutter.getLengthMode());
+            int8_t newIndex = currentIndex + delta;
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex > 1) newIndex = 1;
+            if (newIndex != currentIndex) {
+                StutterLength newLength = static_cast<StutterLength>(newIndex);
+                stutter.setLengthMode(newLength);
+                DisplayIO::showBitmap(StutterController::lengthToBitmap(newLength));
+                Serial.print("Stutter Length: ");
+                Serial.println(StutterController::lengthName(newLength));
+            }
+        } else if (param == StutterController::Parameter::CAPTURE_START) {
+            int8_t currentIndex = static_cast<int8_t>(stutter.getCaptureStartMode());
+            int8_t newIndex = currentIndex + delta;
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex > 1) newIndex = 1;
+            if (newIndex != currentIndex) {
+                StutterCaptureStart newCaptureStart = static_cast<StutterCaptureStart>(newIndex);
+                stutter.setCaptureStartMode(newCaptureStart);
+                DisplayIO::showBitmap(StutterController::captureStartToBitmap(newCaptureStart));
+                Serial.print("Stutter Capture Start: ");
+                Serial.println(StutterController::captureStartName(newCaptureStart));
+            }
+        } else {  // CAPTURE_END
+            int8_t currentIndex = static_cast<int8_t>(stutter.getCaptureEndMode());
+            int8_t newIndex = currentIndex + delta;
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex > 1) newIndex = 1;
+            if (newIndex != currentIndex) {
+                StutterCaptureEnd newCaptureEnd = static_cast<StutterCaptureEnd>(newIndex);
+                stutter.setCaptureEndMode(newCaptureEnd);
+                DisplayIO::showBitmap(StutterController::captureEndToBitmap(newCaptureEnd));
+                Serial.print("Stutter Capture End: ");
+                Serial.println(StutterController::captureEndName(newCaptureEnd));
+            }
+        }
+    });
+
+    // Display update: Show current parameter or return to effect display
+    s_encoder1->onDisplayUpdate([](bool isTouched) {
+        if (isTouched) {
+            StutterController::Parameter param = s_stutterController->getCurrentParameter();
+            if (param == StutterController::Parameter::ONSET) {
+                DisplayIO::showBitmap(StutterController::onsetToBitmap(stutter.getOnsetMode()));
+            } else if (param == StutterController::Parameter::LENGTH) {
+                DisplayIO::showBitmap(StutterController::lengthToBitmap(stutter.getLengthMode()));
+            } else if (param == StutterController::Parameter::CAPTURE_START) {
+                DisplayIO::showBitmap(StutterController::captureStartToBitmap(stutter.getCaptureStartMode()));
+            } else {  // CAPTURE_END
+                DisplayIO::showBitmap(StutterController::captureEndToBitmap(stutter.getCaptureEndMode()));
+            }
+        } else {
+            DisplayManager::instance().updateDisplay();
+        }
+    });
+}
+
+static void setupEncoder2() {
+    s_encoder2 = new EncoderMenu::Handler(1);  // Encoder 2 is index 1 (FREEZE parameters)
 
     // Button press: Cycle between LENGTH and ONSET parameters
-    s_encoder1->onButtonPress([]() {
+    s_encoder2->onButtonPress([]() {
         FreezeController::Parameter current = s_freezeController->getCurrentParameter();
         if (current == FreezeController::Parameter::LENGTH) {
             s_freezeController->setCurrentParameter(FreezeController::Parameter::ONSET);
@@ -68,18 +174,14 @@ static void setupEncoder1() {
     });
 
     // Value change: Adjust current parameter
-    s_encoder1->onValueChange([](int8_t delta) {
+    s_encoder2->onValueChange([](int8_t delta) {
         FreezeController::Parameter param = s_freezeController->getCurrentParameter();
 
         if (param == FreezeController::Parameter::LENGTH) {
-            // Update LENGTH parameter
             int8_t currentIndex = static_cast<int8_t>(freeze.getLengthMode());
             int8_t newIndex = currentIndex + delta;
-
-            // Clamp to valid range (0-1)
             if (newIndex < 0) newIndex = 0;
             if (newIndex > 1) newIndex = 1;
-
             if (newIndex != currentIndex) {
                 FreezeLength newLength = static_cast<FreezeLength>(newIndex);
                 freeze.setLengthMode(newLength);
@@ -88,14 +190,10 @@ static void setupEncoder1() {
                 Serial.println(FreezeController::lengthName(newLength));
             }
         } else {  // ONSET parameter
-            // Update ONSET parameter
             int8_t currentIndex = static_cast<int8_t>(freeze.getOnsetMode());
             int8_t newIndex = currentIndex + delta;
-
-            // Clamp to valid range (0-1)
             if (newIndex < 0) newIndex = 0;
             if (newIndex > 1) newIndex = 1;
-
             if (newIndex != currentIndex) {
                 FreezeOnset newOnset = static_cast<FreezeOnset>(newIndex);
                 freeze.setOnsetMode(newOnset);
@@ -107,9 +205,8 @@ static void setupEncoder1() {
     });
 
     // Display update: Show current parameter or return to effect display
-    s_encoder1->onDisplayUpdate([](bool isTouched) {
+    s_encoder2->onDisplayUpdate([](bool isTouched) {
         if (isTouched) {
-            // Show current parameter
             FreezeController::Parameter param = s_freezeController->getCurrentParameter();
             if (param == FreezeController::Parameter::LENGTH) {
                 DisplayIO::showBitmap(FreezeController::lengthToBitmap(freeze.getLengthMode()));
@@ -117,14 +214,13 @@ static void setupEncoder1() {
                 DisplayIO::showBitmap(FreezeController::onsetToBitmap(freeze.getOnsetMode()));
             }
         } else {
-            // Cooldown expired - return to effect display
             DisplayManager::instance().updateDisplay();
         }
     });
 }
 
 static void setupEncoder3() {
-    s_encoder3 = new EncoderMenu::Handler(2);  // Encoder 3 is index 2
+    s_encoder3 = new EncoderMenu::Handler(2);  // Encoder 3 is index 2 (CHOKE parameters)
 
     // Button press: Cycle between LENGTH and ONSET parameters
     s_encoder3->onButtonPress([]() {
@@ -255,6 +351,19 @@ static void processInputCommands() {
             } else if (cmd.type == CommandType::EFFECT_DISABLE) {
                 handled = s_freezeController->handleButtonRelease(cmd);
             }
+        } else if (cmd.targetEffect == EffectID::STUTTER && s_stutterController) {
+            if (cmd.type == CommandType::EFFECT_ENABLE || cmd.type == CommandType::EFFECT_TOGGLE) {
+                handled = s_stutterController->handleButtonPress(cmd);
+            } else if (cmd.type == CommandType::EFFECT_DISABLE) {
+                handled = s_stutterController->handleButtonRelease(cmd);
+            }
+        } else if (cmd.targetEffect == EffectID::FUNC && s_stutterController) {
+            // FUNC is handled by stutter controller (modifier button)
+            if (cmd.type == CommandType::EFFECT_ENABLE) {
+                handled = s_stutterController->handleButtonPress(cmd);
+            } else if (cmd.type == CommandType::EFFECT_DISABLE) {
+                handled = s_stutterController->handleButtonRelease(cmd);
+            }
         }
 
         // If handler didn't intercept, execute via EffectManager
@@ -285,7 +394,8 @@ static void processInputCommands() {
  */
 static void updateEncoders() {
     EncoderIO::update();  // Process hardware events
-    s_encoder1->update();   // FREEZE parameters
+    s_encoder1->update();   // STUTTER parameters
+    s_encoder2->update();   // FREEZE parameters
     s_encoder3->update();   // CHOKE parameters
     s_encoder4->update();   // Global quantization
 }
@@ -300,6 +410,9 @@ static void updateEffectHandlers() {
     }
     if (s_freezeController) {
         s_freezeController->updateVisualFeedback();
+    }
+    if (s_stutterController) {
+        s_stutterController->updateVisualFeedback();
     }
 }
 
@@ -406,9 +519,11 @@ void AppLogic::begin() {
     // Create effect controllers
     s_chokeController = new ChokeController(choke);
     s_freezeController = new FreezeController(freeze);
+    s_stutterController = new StutterController(stutter);
 
     // Setup encoders
-    setupEncoder1();  // FREEZE parameters
+    setupEncoder1();  // STUTTER parameters
+    setupEncoder2();  // FREEZE parameters
     setupEncoder3();  // CHOKE parameters
     setupEncoder4();  // Global quantization
 

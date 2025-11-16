@@ -71,12 +71,10 @@ enum class CommandType : uint8_t {
  */
 enum class EffectID : uint8_t {
     NONE = 0,       // No effect (used for NONE commands)
-    FREEZE = 1,     // Audio freeze effect (momentary - loops captured buffer)
-    CHOKE = 2,      // Audio mute effect (momentary or toggle)
-    DELAY = 3,      // Future: Delay/echo effect
-    REVERB = 4,     // Future: Reverb effect
-    GAIN = 5,       // Future: Volume/gain control
-    // Add more effects here as needed (max 255)
+    STUTTER = 1,    // Audio stutter effect (capture and loop playback)
+    FREEZE = 2,     // Audio freeze effect (momentary - loops captured buffer)
+    CHOKE = 3,      // Audio mute effect (momentary or toggle)
+    FUNC = 4        // Function modifier button (no standalone effect)
 };
 
 /**

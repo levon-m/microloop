@@ -14,15 +14,15 @@ public:
 
     static AudioEffectBase* getEffect(EffectID id);
 
-    static uint32_t getEnabledEffectsMask();
+    //static uint32_t getEnabledEffectsMask();
 
-    static const char* getEffectName(EffectID id);
+    //static const char* getEffectName(EffectID id);
 
     static uint8_t getNumEffects() { return s_numEffects; }
 
 private:
     struct EffectEntry {
-        EffectID id;                // Effect identifier (e.g., CHOKE, DELAY)
+        EffectID id;                // Effect identifier
         AudioEffectBase* effect;    // Non-owning pointer to effect object
 
         // Default constructor (for static array initialization)

@@ -8,6 +8,7 @@
 #include "encoder_io.h"
 #include "audio_freeze.h"
 #include "audio_choke.h"
+#include "audio_stutter.h"
 #include "effect_manager.h"
 #include "trace.h"
 #include "timekeeper.h"
@@ -17,17 +18,20 @@ AudioInputI2S i2s_in;
 AudioTimeKeeper timekeeper;  // Tracks sample position
 AudioEffectFreeze freeze;    // Circular buffer freeze effect
 AudioEffectChoke choke;      // Smooth mute effect
+AudioEffectStutter stutter;
 AudioOutputI2S i2s_out;
 
 // Audio connections (stereo L+R)
 AudioConnection patchCord1(i2s_in, 0, timekeeper, 0);   // Left in → TimeKeeper
 AudioConnection patchCord2(i2s_in, 1, timekeeper, 1);   // Right in → TimeKeeper
-AudioConnection patchCord3(timekeeper, 0, freeze, 0);   // TimeKeeper → Freeze (L)
-AudioConnection patchCord4(timekeeper, 1, freeze, 1);   // TimeKeeper → Freeze (R)
-AudioConnection patchCord5(freeze, 0, choke, 0);        // Freeze → Choke (L)
-AudioConnection patchCord6(freeze, 1, choke, 1);        // Freeze → Choke (R)
-AudioConnection patchCord7(choke, 0, i2s_out, 0);       // Choke → Left out
-AudioConnection patchCord8(choke, 1, i2s_out, 1);       // Choke → Right out
+AudioConnection patchCord3(timekeeper, 0, stutter, 0);
+AudioConnection patchCord4(timekeeper, 1, stutter, 1);
+AudioConnection patchCord5(stutter, 0, freeze, 0);
+AudioConnection patchCord6(stutter, 1, freeze, 1);
+AudioConnection patchCord7(freeze, 1, choke, 0);
+AudioConnection patchCord8(freeze, 1, choke, 1);
+AudioConnection patchCord9(choke, 0, i2s_out, 0);       // Choke → Left out
+AudioConnection patchCord10(choke, 1, i2s_out, 1);       // Choke → Right out
 
 // Teensy Audio Library SGTL5000 control
 AudioControlSGTL5000 codec;
@@ -117,6 +121,14 @@ void setup() {
     }
     Serial.println("Encoder I/O: OK (MCP23017 on I2C 0x20 / Wire, ISR capture mode)");
 
+    if (!EffectManager::registerEffect(EffectID::STUTTER, &stutter)) {
+        Serial.println("FATAL: Failed to register stutter effect!");
+        while (1) {
+            // Blink LED rapidly to indicate error
+            digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+            delay(100);
+        }
+    }
     if (!EffectManager::registerEffect(EffectID::FREEZE, &freeze)) {
         Serial.println("FATAL: Failed to register freeze effect!");
         while (1) {
