@@ -9,22 +9,6 @@ ChokeController::ChokeController(AudioEffectChoke& effect)
       m_currentParameter(Parameter::LENGTH) {
 }
 
-BitmapID ChokeController::lengthToBitmap(ChokeLength length) {
-    switch (length) {
-        case ChokeLength::FREE:      return BitmapID::CHOKE_LENGTH_FREE;
-        case ChokeLength::QUANTIZED: return BitmapID::CHOKE_LENGTH_QUANT;
-        default: return BitmapID::CHOKE_LENGTH_FREE;
-    }
-}
-
-BitmapID ChokeController::onsetToBitmap(ChokeOnset onset) {
-    switch (onset) {
-        case ChokeOnset::FREE:      return BitmapID::CHOKE_ONSET_FREE;
-        case ChokeOnset::QUANTIZED: return BitmapID::CHOKE_ONSET_QUANT;
-        default: return BitmapID::CHOKE_ONSET_FREE;
-    }
-}
-
 const char* ChokeController::lengthName(ChokeLength length) {
     switch (length) {
         case ChokeLength::FREE:      return "Free";

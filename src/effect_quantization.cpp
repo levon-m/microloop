@@ -41,16 +41,6 @@ uint32_t samplesToNextQuantizedBoundary(Quantization quant) {
     return TimeKeeper::samplesToNextSubdivision(subdivision);
 }
 
-BitmapID quantizationToBitmap(Quantization quant) {
-    switch (quant) {
-        case Quantization::QUANT_32: return BitmapID::QUANT_32;
-        case Quantization::QUANT_16: return BitmapID::QUANT_16;
-        case Quantization::QUANT_8:  return BitmapID::QUANT_8;
-        case Quantization::QUANT_4:  return BitmapID::QUANT_4;
-        default: return BitmapID::QUANT_16;  // Default fallback
-    }
-}
-
 const char* quantizationName(Quantization quant) {
     switch (quant) {
         case Quantization::QUANT_32: return "1/32";

@@ -66,19 +66,23 @@ static void setupEncoder1() {
         if (current == StutterController::Parameter::ONSET) {
             s_stutterController->setCurrentParameter(StutterController::Parameter::LENGTH);
             Serial.println("Stutter Parameter: LENGTH");
-            DisplayIO::showBitmap(StutterController::lengthToBitmap(stutter.getLengthMode()));
+            // TODO: Uncomment when stutter parameter bitmaps are added
+            // DisplayIO::showBitmap(StutterController::lengthToBitmap(stutter.getLengthMode()));
         } else if (current == StutterController::Parameter::LENGTH) {
             s_stutterController->setCurrentParameter(StutterController::Parameter::CAPTURE_START);
             Serial.println("Stutter Parameter: CAPTURE_START");
-            DisplayIO::showBitmap(StutterController::captureStartToBitmap(stutter.getCaptureStartMode()));
+            // TODO: Uncomment when stutter parameter bitmaps are added
+            // DisplayIO::showBitmap(StutterController::captureStartToBitmap(stutter.getCaptureStartMode()));
         } else if (current == StutterController::Parameter::CAPTURE_START) {
             s_stutterController->setCurrentParameter(StutterController::Parameter::CAPTURE_END);
             Serial.println("Stutter Parameter: CAPTURE_END");
-            DisplayIO::showBitmap(StutterController::captureEndToBitmap(stutter.getCaptureEndMode()));
+            // TODO: Uncomment when stutter parameter bitmaps are added
+            // DisplayIO::showBitmap(StutterController::captureEndToBitmap(stutter.getCaptureEndMode()));
         } else {  // CAPTURE_END
             s_stutterController->setCurrentParameter(StutterController::Parameter::ONSET);
             Serial.println("Stutter Parameter: ONSET");
-            DisplayIO::showBitmap(StutterController::onsetToBitmap(stutter.getOnsetMode()));
+            // TODO: Uncomment when stutter parameter bitmaps are added
+            // DisplayIO::showBitmap(StutterController::onsetToBitmap(stutter.getOnsetMode()));
         }
     });
 
@@ -94,9 +98,10 @@ static void setupEncoder1() {
             if (newIndex != currentIndex) {
                 StutterOnset newOnset = static_cast<StutterOnset>(newIndex);
                 stutter.setOnsetMode(newOnset);
-                DisplayIO::showBitmap(StutterController::onsetToBitmap(newOnset));
                 Serial.print("Stutter Onset: ");
                 Serial.println(StutterController::onsetName(newOnset));
+                // TODO: Uncomment when stutter parameter bitmaps are added
+                // DisplayIO::showBitmap(StutterController::onsetToBitmap(newOnset));
             }
         } else if (param == StutterController::Parameter::LENGTH) {
             int8_t currentIndex = static_cast<int8_t>(stutter.getLengthMode());
@@ -106,9 +111,10 @@ static void setupEncoder1() {
             if (newIndex != currentIndex) {
                 StutterLength newLength = static_cast<StutterLength>(newIndex);
                 stutter.setLengthMode(newLength);
-                DisplayIO::showBitmap(StutterController::lengthToBitmap(newLength));
                 Serial.print("Stutter Length: ");
                 Serial.println(StutterController::lengthName(newLength));
+                // TODO: Uncomment when stutter parameter bitmaps are added
+                // DisplayIO::showBitmap(StutterController::lengthToBitmap(newLength));
             }
         } else if (param == StutterController::Parameter::CAPTURE_START) {
             int8_t currentIndex = static_cast<int8_t>(stutter.getCaptureStartMode());
@@ -118,9 +124,10 @@ static void setupEncoder1() {
             if (newIndex != currentIndex) {
                 StutterCaptureStart newCaptureStart = static_cast<StutterCaptureStart>(newIndex);
                 stutter.setCaptureStartMode(newCaptureStart);
-                DisplayIO::showBitmap(StutterController::captureStartToBitmap(newCaptureStart));
                 Serial.print("Stutter Capture Start: ");
                 Serial.println(StutterController::captureStartName(newCaptureStart));
+                // TODO: Uncomment when stutter parameter bitmaps are added
+                // DisplayIO::showBitmap(StutterController::captureStartToBitmap(newCaptureStart));
             }
         } else {  // CAPTURE_END
             int8_t currentIndex = static_cast<int8_t>(stutter.getCaptureEndMode());
@@ -130,9 +137,10 @@ static void setupEncoder1() {
             if (newIndex != currentIndex) {
                 StutterCaptureEnd newCaptureEnd = static_cast<StutterCaptureEnd>(newIndex);
                 stutter.setCaptureEndMode(newCaptureEnd);
-                DisplayIO::showBitmap(StutterController::captureEndToBitmap(newCaptureEnd));
                 Serial.print("Stutter Capture End: ");
                 Serial.println(StutterController::captureEndName(newCaptureEnd));
+                // TODO: Uncomment when stutter parameter bitmaps are added
+                // DisplayIO::showBitmap(StutterController::captureEndToBitmap(newCaptureEnd));
             }
         }
     });
@@ -140,16 +148,17 @@ static void setupEncoder1() {
     // Display update: Show current parameter or return to effect display
     s_encoder1->onDisplayUpdate([](bool isTouched) {
         if (isTouched) {
-            StutterController::Parameter param = s_stutterController->getCurrentParameter();
-            if (param == StutterController::Parameter::ONSET) {
-                DisplayIO::showBitmap(StutterController::onsetToBitmap(stutter.getOnsetMode()));
-            } else if (param == StutterController::Parameter::LENGTH) {
-                DisplayIO::showBitmap(StutterController::lengthToBitmap(stutter.getLengthMode()));
-            } else if (param == StutterController::Parameter::CAPTURE_START) {
-                DisplayIO::showBitmap(StutterController::captureStartToBitmap(stutter.getCaptureStartMode()));
-            } else {  // CAPTURE_END
-                DisplayIO::showBitmap(StutterController::captureEndToBitmap(stutter.getCaptureEndMode()));
-            }
+            // TODO: Uncomment when stutter parameter bitmaps are added and menu system is implemented
+            // StutterController::Parameter param = s_stutterController->getCurrentParameter();
+            // if (param == StutterController::Parameter::ONSET) {
+            //     DisplayIO::showBitmap(StutterController::onsetToBitmap(stutter.getOnsetMode()));
+            // } else if (param == StutterController::Parameter::LENGTH) {
+            //     DisplayIO::showBitmap(StutterController::lengthToBitmap(stutter.getLengthMode()));
+            // } else if (param == StutterController::Parameter::CAPTURE_START) {
+            //     DisplayIO::showBitmap(StutterController::captureStartToBitmap(stutter.getCaptureStartMode()));
+            // } else {  // CAPTURE_END
+            //     DisplayIO::showBitmap(StutterController::captureEndToBitmap(stutter.getCaptureEndMode()));
+            // }
         } else {
             DisplayManager::instance().updateDisplay();
         }
@@ -165,12 +174,11 @@ static void setupEncoder2() {
         if (current == FreezeController::Parameter::LENGTH) {
             s_freezeController->setCurrentParameter(FreezeController::Parameter::ONSET);
             Serial.println("Freeze Parameter: ONSET");
-            DisplayIO::showBitmap(FreezeController::onsetToBitmap(freeze.getOnsetMode()));
         } else {
             s_freezeController->setCurrentParameter(FreezeController::Parameter::LENGTH);
             Serial.println("Freeze Parameter: LENGTH");
-            DisplayIO::showBitmap(FreezeController::lengthToBitmap(freeze.getLengthMode()));
         }
+        // Display update handled by onDisplayUpdate callback
     });
 
     // Value change: Adjust current parameter
@@ -185,9 +193,9 @@ static void setupEncoder2() {
             if (newIndex != currentIndex) {
                 FreezeLength newLength = static_cast<FreezeLength>(newIndex);
                 freeze.setLengthMode(newLength);
-                DisplayIO::showBitmap(FreezeController::lengthToBitmap(newLength));
                 Serial.print("Freeze Length: ");
                 Serial.println(FreezeController::lengthName(newLength));
+                // Display update handled by onDisplayUpdate callback
             }
         } else {  // ONSET parameter
             int8_t currentIndex = static_cast<int8_t>(freeze.getOnsetMode());
@@ -197,9 +205,9 @@ static void setupEncoder2() {
             if (newIndex != currentIndex) {
                 FreezeOnset newOnset = static_cast<FreezeOnset>(newIndex);
                 freeze.setOnsetMode(newOnset);
-                DisplayIO::showBitmap(FreezeController::onsetToBitmap(newOnset));
                 Serial.print("Freeze Onset: ");
                 Serial.println(FreezeController::onsetName(newOnset));
+                // Display update handled by onDisplayUpdate callback
             }
         }
     });
@@ -208,12 +216,27 @@ static void setupEncoder2() {
     s_encoder2->onDisplayUpdate([](bool isTouched) {
         if (isTouched) {
             FreezeController::Parameter param = s_freezeController->getCurrentParameter();
+
+            // Build menu data
+            MenuDisplayData menuData;
             if (param == FreezeController::Parameter::LENGTH) {
-                DisplayIO::showBitmap(FreezeController::lengthToBitmap(freeze.getLengthMode()));
-            } else {
-                DisplayIO::showBitmap(FreezeController::onsetToBitmap(freeze.getOnsetMode()));
+                menuData.topText = "FREEZE->Length";
+                menuData.middleText = FreezeController::lengthName(freeze.getLengthMode());
+                menuData.numOptions = 2;
+                menuData.selectedIndex = static_cast<uint8_t>(freeze.getLengthMode());
+            } else {  // ONSET
+                menuData.topText = "FREEZE->Onset";
+                menuData.middleText = FreezeController::onsetName(freeze.getOnsetMode());
+                menuData.numOptions = 2;
+                menuData.selectedIndex = static_cast<uint8_t>(freeze.getOnsetMode());
             }
+
+            // Show menu via DisplayManager (takes priority over effects)
+            DisplayManager::instance().showMenu(menuData);
+            DisplayManager::instance().updateDisplay();
         } else {
+            // Cooldown expired - hide menu and return to effect display
+            DisplayManager::instance().hideMenu();
             DisplayManager::instance().updateDisplay();
         }
     });
@@ -228,12 +251,11 @@ static void setupEncoder3() {
         if (current == ChokeController::Parameter::LENGTH) {
             s_chokeController->setCurrentParameter(ChokeController::Parameter::ONSET);
             Serial.println("Choke Parameter: ONSET");
-            DisplayIO::showBitmap(ChokeController::onsetToBitmap(choke.getOnsetMode()));
         } else {
             s_chokeController->setCurrentParameter(ChokeController::Parameter::LENGTH);
             Serial.println("Choke Parameter: LENGTH");
-            DisplayIO::showBitmap(ChokeController::lengthToBitmap(choke.getLengthMode()));
         }
+        // Display update handled by onDisplayUpdate callback
     });
 
     // Value change: Adjust current parameter
@@ -252,9 +274,9 @@ static void setupEncoder3() {
             if (newIndex != currentIndex) {
                 ChokeLength newLength = static_cast<ChokeLength>(newIndex);
                 choke.setLengthMode(newLength);
-                DisplayIO::showBitmap(ChokeController::lengthToBitmap(newLength));
                 Serial.print("Choke Length: ");
                 Serial.println(ChokeController::lengthName(newLength));
+                // Display update handled by onDisplayUpdate callback
             }
         } else {  // ONSET parameter
             // Update ONSET parameter
@@ -268,9 +290,9 @@ static void setupEncoder3() {
             if (newIndex != currentIndex) {
                 ChokeOnset newOnset = static_cast<ChokeOnset>(newIndex);
                 choke.setOnsetMode(newOnset);
-                DisplayIO::showBitmap(ChokeController::onsetToBitmap(newOnset));
                 Serial.print("Choke Onset: ");
                 Serial.println(ChokeController::onsetName(newOnset));
+                // Display update handled by onDisplayUpdate callback
             }
         }
     });
@@ -280,13 +302,27 @@ static void setupEncoder3() {
         if (isTouched) {
             // Show current parameter
             ChokeController::Parameter param = s_chokeController->getCurrentParameter();
+
+            // Build menu data
+            MenuDisplayData menuData;
             if (param == ChokeController::Parameter::LENGTH) {
-                DisplayIO::showBitmap(ChokeController::lengthToBitmap(choke.getLengthMode()));
-            } else {
-                DisplayIO::showBitmap(ChokeController::onsetToBitmap(choke.getOnsetMode()));
+                menuData.topText = "CHOKE->Length";
+                menuData.middleText = ChokeController::lengthName(choke.getLengthMode());
+                menuData.numOptions = 2;
+                menuData.selectedIndex = static_cast<uint8_t>(choke.getLengthMode());
+            } else {  // ONSET
+                menuData.topText = "CHOKE->Onset";
+                menuData.middleText = ChokeController::onsetName(choke.getOnsetMode());
+                menuData.numOptions = 2;
+                menuData.selectedIndex = static_cast<uint8_t>(choke.getOnsetMode());
             }
+
+            // Show menu via DisplayManager (takes priority over effects)
+            DisplayManager::instance().showMenu(menuData);
+            DisplayManager::instance().updateDisplay();
         } else {
-            // Cooldown expired - return to effect display
+            // Cooldown expired - hide menu and return to effect display
+            DisplayManager::instance().hideMenu();
             DisplayManager::instance().updateDisplay();
         }
     });
@@ -307,9 +343,9 @@ static void setupEncoder4() {
         if (newIndex != currentIndex) {
             Quantization newQuant = static_cast<Quantization>(newIndex);
             EffectQuantization::setGlobalQuantization(newQuant);
-            DisplayIO::showBitmap(EffectQuantization::quantizationToBitmap(newQuant));
             Serial.print("Global Quantization: ");
             Serial.println(EffectQuantization::quantizationName(newQuant));
+            // Display update handled by onDisplayUpdate callback
         }
     });
 
@@ -318,9 +354,20 @@ static void setupEncoder4() {
         if (isTouched) {
             // Show current quantization
             Quantization quant = EffectQuantization::getGlobalQuantization();
-            DisplayIO::showBitmap(EffectQuantization::quantizationToBitmap(quant));
+
+            // Build menu data
+            MenuDisplayData menuData;
+            menuData.topText = "Global Quantization";
+            menuData.middleText = EffectQuantization::quantizationName(quant);
+            menuData.numOptions = 4;  // QUANT_32, QUANT_16, QUANT_8, QUANT_4
+            menuData.selectedIndex = static_cast<uint8_t>(quant);
+
+            // Show menu via DisplayManager (takes priority over effects)
+            DisplayManager::instance().showMenu(menuData);
+            DisplayManager::instance().updateDisplay();
         } else {
-            // Cooldown expired - return to effect display
+            // Cooldown expired - hide menu and return to effect display
+            DisplayManager::instance().hideMenu();
             DisplayManager::instance().updateDisplay();
         }
     });

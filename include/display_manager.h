@@ -47,9 +47,10 @@ public:
      * Update display based on current effect states
      *
      * Priority logic:
-     * 1. Last activated effect (if still active)
-     * 2. Any active effect
-     * 3. Default/idle screen
+     * 1. Menu screen (if menu is active)
+     * 2. Last activated effect (if still active)
+     * 3. Any active effect
+     * 4. Default/idle screen
      */
     void updateDisplay();
 
@@ -67,13 +68,34 @@ public:
      */
     EffectID getLastActivatedEffect() const;
 
+    /**
+     * Show menu screen (takes priority over effect displays)
+     *
+     * @param menuData Menu information to display
+     */
+    void showMenu(const MenuDisplayData& menuData);
+
+    /**
+     * Hide menu and return to effect/idle display
+     */
+    void hideMenu();
+
+    /**
+     * Check if menu is currently showing
+     *
+     * @return true if menu is active
+     */
+    bool isMenuShowing() const;
+
 private:
     // Private constructor (singleton pattern)
-    DisplayManager() : m_lastActivatedEffect(EffectID::NONE) {}
+    DisplayManager() : m_lastActivatedEffect(EffectID::NONE), m_menuShowing(false) {}
 
     // Delete copy constructor and assignment (singleton)
     DisplayManager(const DisplayManager&) = delete;
     DisplayManager& operator=(const DisplayManager&) = delete;
 
     EffectID m_lastActivatedEffect;  // Last activated effect for priority tracking
+    bool m_menuShowing;              // True if menu is currently showing
+    MenuDisplayData m_currentMenu;   // Current menu data
 };

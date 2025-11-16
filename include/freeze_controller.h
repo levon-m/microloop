@@ -67,9 +67,7 @@ public:
      */
     void setCurrentParameter(Parameter param) { m_currentParameter = param; }
 
-    // Utility functions for bitmap/name mapping
-    static BitmapID lengthToBitmap(FreezeLength length);
-    static BitmapID onsetToBitmap(FreezeOnset onset);
+    // Utility functions for name mapping
     static const char* lengthName(FreezeLength length);
     static const char* onsetName(FreezeOnset onset);
 

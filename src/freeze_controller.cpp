@@ -9,22 +9,6 @@ FreezeController::FreezeController(AudioEffectFreeze& effect)
       m_currentParameter(Parameter::LENGTH) {
 }
 
-BitmapID FreezeController::lengthToBitmap(FreezeLength length) {
-    switch (length) {
-        case FreezeLength::FREE:      return BitmapID::FREEZE_LENGTH_FREE;
-        case FreezeLength::QUANTIZED: return BitmapID::FREEZE_LENGTH_QUANT;
-        default: return BitmapID::FREEZE_LENGTH_FREE;
-    }
-}
-
-BitmapID FreezeController::onsetToBitmap(FreezeOnset onset) {
-    switch (onset) {
-        case FreezeOnset::FREE:      return BitmapID::FREEZE_ONSET_FREE;
-        case FreezeOnset::QUANTIZED: return BitmapID::FREEZE_ONSET_QUANT;
-        default: return BitmapID::FREEZE_ONSET_FREE;
-    }
-}
-
 const char* FreezeController::lengthName(FreezeLength length) {
     switch (length) {
         case FreezeLength::FREE:      return "Free";

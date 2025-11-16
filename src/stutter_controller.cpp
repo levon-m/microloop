@@ -31,6 +31,8 @@ StutterController::StutterController(AudioEffectStutter& effect)
 
 // ========== UTILITY FUNCTIONS FOR BITMAP/NAME MAPPING ==========
 
+// TODO: Re-enable when stutter parameter bitmaps are added
+/*
 BitmapID StutterController::onsetToBitmap(StutterOnset onset) {
     switch (onset) {
         case StutterOnset::FREE:      return BitmapID::STUTTER_ONSET_FREE;
@@ -62,18 +64,15 @@ BitmapID StutterController::captureEndToBitmap(StutterCaptureEnd captureEnd) {
         default: return BitmapID::STUTTER_CAPTURE_END_FREE;
     }
 }
+*/
 
 BitmapID StutterController::stateToBitmap(StutterState state) {
+    // Simplified: Use STUTTER_ACTIVE for all non-idle states
     switch (state) {
-        case StutterState::IDLE_NO_LOOP:        return BitmapID::DEFAULT;  // Show default screen
-        case StutterState::IDLE_WITH_LOOP:      return BitmapID::STUTTER_IDLE_WITH_LOOP;
-        case StutterState::WAIT_CAPTURE_START:  return BitmapID::STUTTER_CAPTURING;  // Use capturing bitmap for visual feedback
-        case StutterState::CAPTURING:           return BitmapID::STUTTER_CAPTURING;
-        case StutterState::WAIT_CAPTURE_END:    return BitmapID::STUTTER_CAPTURING;
-        case StutterState::WAIT_PLAYBACK_ONSET: return BitmapID::STUTTER_PLAYING;  // Use playing bitmap for visual feedback
-        case StutterState::PLAYING:             return BitmapID::STUTTER_PLAYING;
-        case StutterState::WAIT_PLAYBACK_LENGTH: return BitmapID::STUTTER_PLAYING;
-        default: return BitmapID::DEFAULT;
+        case StutterState::IDLE_NO_LOOP:
+            return BitmapID::DEFAULT;
+        default:
+            return BitmapID::STUTTER_ACTIVE;  // All active states use same bitmap
     }
 }
 

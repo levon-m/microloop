@@ -74,10 +74,11 @@ public:
     void setCurrentParameter(Parameter param) { m_currentParameter = param; }
 
     // Utility functions for bitmap/name mapping
-    static BitmapID onsetToBitmap(StutterOnset onset);
-    static BitmapID lengthToBitmap(StutterLength length);
-    static BitmapID captureStartToBitmap(StutterCaptureStart captureStart);
-    static BitmapID captureEndToBitmap(StutterCaptureEnd captureEnd);
+    // TODO: Re-enable when stutter parameter bitmaps are added
+    // static BitmapID onsetToBitmap(StutterOnset onset);
+    // static BitmapID lengthToBitmap(StutterLength length);
+    // static BitmapID captureStartToBitmap(StutterCaptureStart captureStart);
+    // static BitmapID captureEndToBitmap(StutterCaptureEnd captureEnd);
     static BitmapID stateToBitmap(StutterState state);
 
     static const char* onsetName(StutterOnset onset);
