@@ -9,7 +9,7 @@
 #include "trace.h"
 #include "timekeeper.h"
 #include "effect_quantization.h"
-#include "encoder_menu.h"
+#include "encoder_handler.h"
 #include "display_manager.h"
 #include "choke_controller.h"
 #include "freeze_controller.h"
@@ -46,17 +46,17 @@ static uint32_t s_avgTickPeriodUs = 20833;  // ~20.8ms @ 120BPM
 static uint32_t s_lastPrint = 0;
 static constexpr uint32_t PRINT_INTERVAL_MS = 1000;
 
-// ========== ENCODER MENU INSTANCES ==========
-static EncoderMenu::Handler* s_encoder1 = nullptr;  // STUTTER parameters
-static EncoderMenu::Handler* s_encoder2 = nullptr;  // FREEZE parameters
-static EncoderMenu::Handler* s_encoder3 = nullptr;  // CHOKE parameters
-static EncoderMenu::Handler* s_encoder4 = nullptr;  // Global quantization
+// ========== ENCODER HANDLER INSTANCES ==========
+static EncoderHandler::Handler* s_encoder1 = nullptr;  // STUTTER parameters
+static EncoderHandler::Handler* s_encoder2 = nullptr;  // FREEZE parameters
+static EncoderHandler::Handler* s_encoder3 = nullptr;  // CHOKE parameters
+static EncoderHandler::Handler* s_encoder4 = nullptr;  // Global quantization
 
 // ========== ENCODER SETUP FUNCTIONS ==========
-// These functions configure the behavior of each encoder menu handler
+// These functions configure the behavior of each encoder handler
 
 static void setupEncoder1() {
-    s_encoder1 = new EncoderMenu::Handler(0);  // Encoder 1 is index 0 (STUTTER parameters)
+    s_encoder1 = new EncoderHandler::Handler(0);  // Encoder 1 is index 0 (STUTTER parameters)
 
     // Button press: Cycle between ONSET → LENGTH → CAPTURE_START → CAPTURE_END
     s_encoder1->onButtonPress([]() {
@@ -157,7 +157,7 @@ static void setupEncoder1() {
 }
 
 static void setupEncoder2() {
-    s_encoder2 = new EncoderMenu::Handler(1);  // Encoder 2 is index 1 (FREEZE parameters)
+    s_encoder2 = new EncoderHandler::Handler(1);  // Encoder 2 is index 1 (FREEZE parameters)
 
     // Button press: Cycle between LENGTH and ONSET parameters
     s_encoder2->onButtonPress([]() {
@@ -220,7 +220,7 @@ static void setupEncoder2() {
 }
 
 static void setupEncoder3() {
-    s_encoder3 = new EncoderMenu::Handler(2);  // Encoder 3 is index 2 (CHOKE parameters)
+    s_encoder3 = new EncoderHandler::Handler(2);  // Encoder 3 is index 2 (CHOKE parameters)
 
     // Button press: Cycle between LENGTH and ONSET parameters
     s_encoder3->onButtonPress([]() {
@@ -293,7 +293,7 @@ static void setupEncoder3() {
 }
 
 static void setupEncoder4() {
-    s_encoder4 = new EncoderMenu::Handler(3);  // Encoder 4 is index 3
+    s_encoder4 = new EncoderHandler::Handler(3);  // Encoder 4 is index 3
 
     // Value change: Adjust global quantization
     s_encoder4->onValueChange([](int8_t delta) {
@@ -389,7 +389,7 @@ static void processInputCommands() {
 }
 
 /**
- * Update encoder menu handlers
+ * Update encoder handlers
  * Polls encoder hardware and triggers callbacks
  */
 static void updateEncoders() {

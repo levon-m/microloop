@@ -20,13 +20,28 @@ static volatile EncoderEvent eventQueue[EVENT_QUEUE_SIZE];
 static volatile uint8_t eventQueueHead = 0;  // Write index (ISR)
 static volatile uint8_t eventQueueTail = 0;  // Read index (main loop)
 
-// Flag set by ISR when interrupt occurs
-static volatile bool interruptPending = false;
-
 // ISR: Called when MCP23017 detects any pin change
-// Kept minimal - just set a flag, no I2C operations!
+// CRITICAL: Must read INTCAP immediately to capture state before next interrupt overwrites it
 static void encoderISR() {
-    interruptPending = true;
+    // Read INTCAP registers directly to get the captured pin states
+    // This is the state at the moment the interrupt fired
+    // INTCAPA = 0x10, INTCAPB = 0x11 (MCP23017 register addresses)
+    Wire.beginTransmission(0x20);
+    Wire.write(0x10);
+    Wire.endTransmission(false);
+    Wire.requestFrom(0x20, 2);
+
+    uint8_t intcapA = Wire.read();
+    uint8_t intcapB = Wire.read();
+    uint16_t captured = ((uint16_t)intcapB << 8) | intcapA;
+
+    // Add to queue (fast, no decoding)
+    uint8_t nextHead = (eventQueueHead + 1) & (EVENT_QUEUE_SIZE - 1);
+    if (nextHead != eventQueueTail) {
+        eventQueue[eventQueueHead].capturedPins = captured;
+        eventQueue[eventQueueHead].timestamp = millis();
+        eventQueueHead = nextHead;
+    }
 }
 
 // Encoder pin configurations
@@ -104,36 +119,7 @@ bool begin() {
 }
 
 void update() {
-    // Handle any pending interrupts by reading I2C (moved out of ISR for better practice)
-    while (interruptPending) {
-        // Clear flag first (new interrupts can still set it while we're processing)
-        interruptPending = false;
-
-        // WORKAROUND: Adafruit's getCapturedInterrupt() returns only 8 bits sometimes
-        // Read INTCAP registers manually to ensure we get all 16 bits
-        // INTCAPA = 0x10, INTCAPB = 0x11 (MCP23017 register addresses)
-        Wire.beginTransmission(0x20);  // MCP23017 address
-        Wire.write(0x10);              // INTCAPA register
-        Wire.endTransmission(false);   // Repeated start
-        Wire.requestFrom(0x20, 2);     // Read 2 bytes (INTCAPA + INTCAPB)
-
-        uint8_t intcapA = Wire.read();
-        uint8_t intcapB = Wire.read();
-        uint16_t captured = ((uint16_t)intcapB << 8) | intcapA;
-
-        // Add to queue
-        uint8_t nextHead = (eventQueueHead + 1) & (EVENT_QUEUE_SIZE - 1);
-
-        // Check for queue overflow (should never happen if main loop keeps up)
-        if (nextHead != eventQueueTail) {
-            eventQueue[eventQueueHead].capturedPins = captured;
-            eventQueue[eventQueueHead].timestamp = millis();
-            eventQueueHead = nextHead;
-        }
-        // If overflow, we drop this event (main loop can't keep up)
-    }
-
-    // Process all queued events
+    // Process all queued events (ISR captures them directly)
     while (eventQueueTail != eventQueueHead) {
         // Get next event from queue (copy volatile data to local)
         uint16_t pins = eventQueue[eventQueueTail].capturedPins;

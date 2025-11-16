@@ -255,9 +255,9 @@ add_library(effect_quantization STATIC src/effect_quantization.cpp)
 target_include_directories(effect_quantization PUBLIC include)
 target_link_libraries(effect_quantization teensy_core microloop_utils)
 
-add_library(encoder_menu STATIC src/encoder_menu.cpp)
-target_include_directories(encoder_menu PUBLIC include)
-target_link_libraries(encoder_menu teensy_core encoder_io)
+add_library(encoder_handler STATIC src/encoder_handler.cpp)
+target_include_directories(encoder_handler PUBLIC include)
+target_link_libraries(encoder_handler teensy_core encoder_io)
 
 add_library(display_manager STATIC src/display_manager.cpp)
 target_include_directories(display_manager PUBLIC include)
@@ -287,7 +287,7 @@ target_link_libraries(app_logic
     effect_manager
     microloop_utils
     effect_quantization
-    encoder_menu
+    encoder_handler
     display_manager
     choke_controller
     freeze_controller
@@ -320,7 +320,7 @@ target_link_libraries(microloop.elf
     app_logic
     effect_manager
     effect_quantization
-    encoder_menu
+    encoder_handler
     display_manager
     choke_controller
     freeze_controller
