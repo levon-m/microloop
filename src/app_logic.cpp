@@ -195,7 +195,11 @@ static void setupEncoder2() {
                 freeze.setLengthMode(newLength);
                 Serial.print("Freeze Length: ");
                 Serial.println(FreezeController::lengthName(newLength));
-                // Display update handled by onDisplayUpdate callback
+
+                // Update menu display immediately
+                MenuDisplayData menuData("FREEZE->Length", FreezeController::lengthName(newLength), 2, newIndex);
+                DisplayManager::instance().showMenu(menuData);
+                DisplayManager::instance().updateDisplay();
             }
         } else {  // ONSET parameter
             int8_t currentIndex = static_cast<int8_t>(freeze.getOnsetMode());
@@ -207,7 +211,11 @@ static void setupEncoder2() {
                 freeze.setOnsetMode(newOnset);
                 Serial.print("Freeze Onset: ");
                 Serial.println(FreezeController::onsetName(newOnset));
-                // Display update handled by onDisplayUpdate callback
+
+                // Update menu display immediately
+                MenuDisplayData menuData("FREEZE->Onset", FreezeController::onsetName(newOnset), 2, newIndex);
+                DisplayManager::instance().showMenu(menuData);
+                DisplayManager::instance().updateDisplay();
             }
         }
     });
@@ -276,7 +284,11 @@ static void setupEncoder3() {
                 choke.setLengthMode(newLength);
                 Serial.print("Choke Length: ");
                 Serial.println(ChokeController::lengthName(newLength));
-                // Display update handled by onDisplayUpdate callback
+
+                // Update menu display immediately
+                MenuDisplayData menuData("CHOKE->Length", ChokeController::lengthName(newLength), 2, newIndex);
+                DisplayManager::instance().showMenu(menuData);
+                DisplayManager::instance().updateDisplay();
             }
         } else {  // ONSET parameter
             // Update ONSET parameter
@@ -292,7 +304,11 @@ static void setupEncoder3() {
                 choke.setOnsetMode(newOnset);
                 Serial.print("Choke Onset: ");
                 Serial.println(ChokeController::onsetName(newOnset));
-                // Display update handled by onDisplayUpdate callback
+
+                // Update menu display immediately
+                MenuDisplayData menuData("CHOKE->Onset", ChokeController::onsetName(newOnset), 2, newIndex);
+                DisplayManager::instance().showMenu(menuData);
+                DisplayManager::instance().updateDisplay();
             }
         }
     });
@@ -345,7 +361,11 @@ static void setupEncoder4() {
             EffectQuantization::setGlobalQuantization(newQuant);
             Serial.print("Global Quantization: ");
             Serial.println(EffectQuantization::quantizationName(newQuant));
-            // Display update handled by onDisplayUpdate callback
+
+            // Update menu display immediately
+            MenuDisplayData menuData("Global Quantization", EffectQuantization::quantizationName(newQuant), 4, newIndex);
+            DisplayManager::instance().showMenu(menuData);
+            DisplayManager::instance().updateDisplay();
         }
     });
 
