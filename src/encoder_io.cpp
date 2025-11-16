@@ -6,7 +6,7 @@ namespace EncoderIO {
 static Adafruit_MCP23X17 mcp;
 
 // Interrupt pin (Teensy pin connected to MCP23017 INTA or INTB in mirror mode)
-static const uint8_t INT_PIN = 36;
+static const uint8_t INT_PIN = 39;
 
 // Event queue to pass captured states from ISR to main loop
 struct EncoderEvent {

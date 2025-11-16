@@ -32,7 +32,7 @@ static FreezeController* s_freezeController = nullptr;  // Freeze effect control
 static StutterController* s_stutterController = nullptr;
 
 // ========== LED BEAT INDICATOR STATE ==========
-static constexpr uint8_t LED_PIN = 37;
+static constexpr uint8_t LED_PIN = 38;
 static uint64_t s_ledOffSample = 0;  // Sample position when LED should turn off (0 = LED off)
 
 // ========== TRANSPORT STATE ==========
@@ -511,6 +511,14 @@ void AppLogic::begin() {
     // Configure LED pin
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
+
+    // Configure RGB LED pins (for STUTTER effect visual feedback)
+    pinMode(28, OUTPUT);  // R pin (PWM)
+    pinMode(36, OUTPUT);  // G pin (PWM)
+    pinMode(37, OUTPUT);  // B pin (PWM)
+    analogWrite(28, 0);   // R off
+    analogWrite(36, 0);   // G off
+    analogWrite(37, 0);   // B off
 
     // Initialize subsystems
     EffectQuantization::initialize();

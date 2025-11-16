@@ -8,6 +8,18 @@
 EXTMEM int16_t AudioEffectStutter::m_stutterBufferL[AudioEffectStutter::STUTTER_BUFFER_SAMPLES];
 EXTMEM int16_t AudioEffectStutter::m_stutterBufferR[AudioEffectStutter::STUTTER_BUFFER_SAMPLES];
 
+// ========== RGB LED PIN DEFINITIONS ==========
+static constexpr uint8_t RGB_LED_R_PIN = 28;  // Red (PWM capable)
+static constexpr uint8_t RGB_LED_G_PIN = 36;  // Green (PWM capable)
+static constexpr uint8_t RGB_LED_B_PIN = 37;  // Blue (PWM capable)
+
+// ========== RGB LED FADE STATE ==========
+static uint8_t s_fadeValue = 0;          // Current PWM value (0-255)
+static int8_t s_fadeDirection = 1;       // +1 = fading in, -1 = fading out
+static uint32_t s_lastFadeUpdate = 0;    // Timestamp of last fade update
+static constexpr uint8_t FADE_STEP = 15; // PWM change per update (higher = faster fade)
+static constexpr uint8_t FADE_INTERVAL_MS = 20;  // Update every 20ms (50Hz)
+
 StutterController::StutterController(AudioEffectStutter& effect)
     : m_effect(effect),
       m_currentParameter(Parameter::ONSET),  // Default to ONSET (first in cycle)
@@ -334,47 +346,70 @@ void StutterController::updateVisualFeedback() {
             m_ledBlinkState = !m_ledBlinkState;
             m_lastBlinkTime = now;
 
-            // Determine LED color based on state
-            uint32_t ledColor;
-            if (currentState == StutterState::WAIT_CAPTURE_START) {
-                ledColor = m_ledBlinkState ? 0xFF0000 : 0x000000;  // RED blinking
-            } else {  // WAIT_PLAYBACK_ONSET
-                ledColor = m_ledBlinkState ? 0x0000FF : 0x000000;  // BLUE blinking
-            }
-
-            // Update Neokey LED directly (bypass InputIO::setLED which doesn't support colors)
-            // Note: This would need to be implemented in InputIO or we use the existing setLED
-            // For now, use InputIO::setLED with boolean
+            // Update Neokey LED (blinking for armed states)
+            // Note: Could differentiate WAIT_CAPTURE_START (red) vs WAIT_PLAYBACK_ONSET (blue)
+            // once InputIO supports RGB colors
             InputIO::setLED(EffectID::STUTTER, m_ledBlinkState);
         }
     } else {
-        // ========== SOLID LED FOR NON-BLINKING STATES ==========
-        switch (currentState) {
-            case StutterState::IDLE_NO_LOOP:
-                // LED OFF
-                InputIO::setLED(EffectID::STUTTER, false);
-                break;
+        // ========== RGB LED FADE FOR CAPTURE STATES ==========
+        if (currentState == StutterState::CAPTURING || currentState == StutterState::WAIT_CAPTURE_END) {
+            // Fast red fade in/out (breathing effect)
+            if (now - s_lastFadeUpdate >= FADE_INTERVAL_MS) {
+                // Update fade value
+                s_fadeValue += s_fadeDirection * FADE_STEP;
 
-            case StutterState::IDLE_WITH_LOOP:
-                // LED WHITE (would need InputIO support for colors)
-                // For now, use GREEN as fallback
-                InputIO::setLED(EffectID::STUTTER, false);  // Off for now
-                break;
+                // Reverse direction at boundaries
+                if (s_fadeValue >= 255) {
+                    s_fadeValue = 255;
+                    s_fadeDirection = -1;  // Start fading out
+                } else if (s_fadeValue <= 0) {
+                    s_fadeValue = 0;
+                    s_fadeDirection = 1;   // Start fading in
+                }
 
-            case StutterState::CAPTURING:
-            case StutterState::WAIT_CAPTURE_END:
-                // LED RED (solid)
-                InputIO::setLED(EffectID::STUTTER, true);  // RED (choke color)
-                break;
+                // Write PWM values (red only)
+                analogWrite(RGB_LED_R_PIN, s_fadeValue);
+                analogWrite(RGB_LED_G_PIN, 0);  // Green off
+                analogWrite(RGB_LED_B_PIN, 0);  // Blue off
 
-            case StutterState::PLAYING:
-            case StutterState::WAIT_PLAYBACK_LENGTH:
-                // LED BLUE (solid)
-                InputIO::setLED(EffectID::STUTTER, true);  // Will show as current effect color
-                break;
+                s_lastFadeUpdate = now;
+            }
 
-            default:
-                break;
+            // Also update Neokey LED (keep existing behavior)
+            InputIO::setLED(EffectID::STUTTER, true);
+        } else {
+            // ========== SOLID LED FOR NON-CAPTURE STATES ==========
+            // Turn off RGB LED for non-capture states
+            analogWrite(RGB_LED_R_PIN, 0);
+            analogWrite(RGB_LED_G_PIN, 0);
+            analogWrite(RGB_LED_B_PIN, 0);
+
+            // Reset fade state when leaving capture mode
+            s_fadeValue = 0;
+            s_fadeDirection = 1;
+
+            switch (currentState) {
+                case StutterState::IDLE_NO_LOOP:
+                    // LED OFF
+                    InputIO::setLED(EffectID::STUTTER, false);
+                    break;
+
+                case StutterState::IDLE_WITH_LOOP:
+                    // LED WHITE (would need InputIO support for colors)
+                    // For now, use GREEN as fallback
+                    InputIO::setLED(EffectID::STUTTER, false);  // Off for now
+                    break;
+
+                case StutterState::PLAYING:
+                case StutterState::WAIT_PLAYBACK_LENGTH:
+                    // LED BLUE (solid)
+                    InputIO::setLED(EffectID::STUTTER, true);  // Will show as current effect color
+                    break;
+
+                default:
+                    break;
+            }
         }
     }
 
