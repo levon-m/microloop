@@ -26,11 +26,14 @@ StutterController::StutterController(AudioEffectStutter& effect)
       m_funcHeld(false),
       m_stutterHeld(false),
       m_lastBlinkTime(0),
-      m_ledBlinkState(false) {
+      m_ledBlinkState(false),
+      m_wasEnabled(false) {
 }
 
 // ========== UTILITY FUNCTIONS FOR BITMAP/NAME MAPPING ==========
 
+// TODO: Re-enable when stutter parameter bitmaps are added
+/*
 BitmapID StutterController::onsetToBitmap(StutterOnset onset) {
     switch (onset) {
         case StutterOnset::FREE:      return BitmapID::STUTTER_ONSET_FREE;
@@ -62,18 +65,15 @@ BitmapID StutterController::captureEndToBitmap(StutterCaptureEnd captureEnd) {
         default: return BitmapID::STUTTER_CAPTURE_END_FREE;
     }
 }
+*/
 
 BitmapID StutterController::stateToBitmap(StutterState state) {
+    // Simplified: Use STUTTER_ACTIVE for all non-idle states
     switch (state) {
-        case StutterState::IDLE_NO_LOOP:        return BitmapID::DEFAULT;  // Show default screen
-        case StutterState::IDLE_WITH_LOOP:      return BitmapID::STUTTER_IDLE_WITH_LOOP;
-        case StutterState::WAIT_CAPTURE_START:  return BitmapID::STUTTER_CAPTURING;  // Use capturing bitmap for visual feedback
-        case StutterState::CAPTURING:           return BitmapID::STUTTER_CAPTURING;
-        case StutterState::WAIT_CAPTURE_END:    return BitmapID::STUTTER_CAPTURING;
-        case StutterState::WAIT_PLAYBACK_ONSET: return BitmapID::STUTTER_PLAYING;  // Use playing bitmap for visual feedback
-        case StutterState::PLAYING:             return BitmapID::STUTTER_PLAYING;
-        case StutterState::WAIT_PLAYBACK_LENGTH: return BitmapID::STUTTER_PLAYING;
-        default: return BitmapID::DEFAULT;
+        case StutterState::IDLE_NO_LOOP:
+            return BitmapID::DEFAULT;
+        default:
+            return BitmapID::STUTTER_ACTIVE;  // All active states use same bitmap
     }
 }
 
@@ -159,8 +159,7 @@ bool StutterController::handleButtonPress(const Command& cmd) {
         }
 
         // Update visual feedback
-        DisplayManager::instance().setLastActivatedEffect(EffectID::STUTTER);
-        DisplayIO::showBitmap(stateToBitmap(m_effect.getState()));
+        DisplayManager::instance().updateDisplay();
         return true;  // Command handled
     }
 
@@ -192,8 +191,7 @@ bool StutterController::handleButtonPress(const Command& cmd) {
         }
 
         // Update visual feedback
-        DisplayManager::instance().setLastActivatedEffect(EffectID::STUTTER);
-        DisplayIO::showBitmap(stateToBitmap(m_effect.getState()));
+        DisplayManager::instance().updateDisplay();
         return true;  // Command handled
     }
 
@@ -234,7 +232,7 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
             }
 
             // Update visual feedback
-            DisplayIO::showBitmap(stateToBitmap(m_effect.getState()));
+            DisplayManager::instance().updateDisplay();
         }
 
         return true;  // Command handled
@@ -260,7 +258,6 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
         // Cancel capture and return to idle
         m_effect.cancelCaptureStart();
         Serial.println("Stutter: CAPTURE CANCELLED (released before start)");
-        DisplayManager::instance().setLastActivatedEffect(EffectID::NONE);
         DisplayManager::instance().updateDisplay();
         return true;  // Command handled
     }
@@ -285,8 +282,7 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
             Serial.println(", STUTTER released)");
         }
 
-        // Update visual feedback
-        DisplayIO::showBitmap(stateToBitmap(m_effect.getState()));
+        // Update visual feedback (let edge detection handle it)
         return true;  // Command handled
     }
 
@@ -298,7 +294,7 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
         // Actually, better to cancel so we don't have orphaned scheduled events
         m_effect.stopPlayback();  // Transition to IDLE_WITH_LOOP
         Serial.println("Stutter: PLAYBACK CANCELLED (released before onset)");
-        DisplayIO::showBitmap(stateToBitmap(m_effect.getState()));
+        // Update visual feedback (let edge detection handle it)
         return true;  // Command handled
     }
 
@@ -321,8 +317,7 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
             Serial.println(")");
         }
 
-        // Update visual feedback
-        DisplayIO::showBitmap(stateToBitmap(m_effect.getState()));
+        // Update visual feedback (let edge detection handle it)
         return true;  // Command handled
     }
 
@@ -413,33 +408,37 @@ void StutterController::updateVisualFeedback() {
         }
     }
 
-    // ========== DISPLAY UPDATE ==========
-    // Update display bitmap if effect is active and last activated
-    if (DisplayManager::instance().getLastActivatedEffect() == EffectID::STUTTER) {
-        DisplayIO::showBitmap(stateToBitmap(currentState));
-    }
-
     // ========== ISR STATE TRANSITION DETECTION ==========
     // Check for state changes that happened in ISR (scheduled events fired)
     static StutterState s_lastState = StutterState::IDLE_NO_LOOP;
 
     if (currentState != s_lastState) {
-        // State changed - update display
+        // State changed - log it
         Serial.print("Stutter: State changed (");
         Serial.print(static_cast<int>(s_lastState));
         Serial.print(" → ");
         Serial.print(static_cast<int>(currentState));
         Serial.println(")");
 
-        // Update display if this effect is active
-        if (currentState != StutterState::IDLE_NO_LOOP && currentState != StutterState::IDLE_WITH_LOOP) {
-            DisplayManager::instance().setLastActivatedEffect(EffectID::STUTTER);
-            DisplayIO::showBitmap(stateToBitmap(currentState));
-        } else if (s_lastState != StutterState::IDLE_NO_LOOP && s_lastState != StutterState::IDLE_WITH_LOOP) {
-            // Transitioned back to idle - clear display priority
-            DisplayManager::instance().updateDisplay();
-        }
-
         s_lastState = currentState;
     }
+
+    // ========== EDGE DETECTION FOR DISPLAY UPDATES ==========
+    // Only update display when enabled state changes (not on every internal state transition)
+    bool isEnabled = m_effect.isEnabled();
+
+    // Detect rising edge: effect just became enabled
+    if (isEnabled && !m_wasEnabled) {
+        // Effect became active - update display
+        DisplayManager::instance().updateDisplay();
+    }
+
+    // Detect falling edge: effect just became disabled
+    if (!isEnabled && m_wasEnabled) {
+        // Effect became inactive - update display
+        DisplayManager::instance().updateDisplay();
+    }
+
+    // Update state for next call
+    m_wasEnabled = isEnabled;
 }

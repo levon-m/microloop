@@ -67,13 +67,12 @@ public:
      */
     void setCurrentParameter(Parameter param) { m_currentParameter = param; }
 
-    // Utility functions for bitmap/name mapping
-    static BitmapID lengthToBitmap(ChokeLength length);
-    static BitmapID onsetToBitmap(ChokeOnset onset);
+    // Utility functions for name mapping
     static const char* lengthName(ChokeLength length);
     static const char* onsetName(ChokeOnset onset);
 
 private:
     AudioEffectChoke& m_effect;     // Reference to audio effect (DSP)
     Parameter m_currentParameter;   // Currently selected parameter for editing
+    bool m_wasEnabled;              // Previous enabled state (for edge detection)
 };

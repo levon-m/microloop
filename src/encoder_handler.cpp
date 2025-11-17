@@ -19,7 +19,7 @@ Handler::Handler(uint8_t encoderIndex)
 }
 
 void Handler::update() {
-    // Check for button press
+    // Check for button press (EncoderIO already handles edge detection and debouncing)
     if (buttonPressCallback && EncoderIO::getButton(encoderIndex)) {
         buttonPressCallback();
         // Mark as touched to reset cooldown
@@ -102,6 +102,20 @@ void Handler::onDisplayUpdate(DisplayUpdateCallback callback) {
 void Handler::resetPosition() {
     lastPosition = EncoderIO::getPosition(encoderIndex);
     accumulator = 0;
+}
+
+bool Handler::isTouched() const {
+    // If actively being touched, return true
+    if (wasTouched) return true;
+
+    // If within cooldown period, also return true
+    if (releaseTime > 0) {
+        uint32_t now = millis();
+        return (now - releaseTime < DISPLAY_COOLDOWN_MS);
+    }
+
+    // Otherwise, not touched
+    return false;
 }
 
 }

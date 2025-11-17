@@ -22,8 +22,6 @@ uint32_t calculateQuantizedDuration(Quantization quant);
 
 uint32_t samplesToNextQuantizedBoundary(Quantization quant);
 
-BitmapID quantizationToBitmap(Quantization quant);
-
 const char* quantizationName(Quantization quant);
 
 Quantization getGlobalQuantization();

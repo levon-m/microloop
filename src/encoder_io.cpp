@@ -93,8 +93,10 @@ bool begin() {
         bool b = mcp.digitalRead(encoderPins[i].pinB);
         encoders[i].lastState = (b << 1) | a;
         encoders[i].buttonLastState = mcp.digitalRead(encoderPins[i].pinSW);
+        encoders[i].buttonCurrentlyDown = false;
         encoders[i].position = 0;
-        encoders[i].lastDebounceTime = 0;
+        encoders[i].lastPressTime = 0;
+        encoders[i].lastReleaseTime = 0;
     }
 
     // Enable interrupt-on-change for all pins
@@ -150,10 +152,34 @@ void update() {
 
             // Detect button press (edge: HIGH -> LOW, active low)
             if (buttonState == LOW && encoders[i].buttonLastState == HIGH) {
-                // Debounce check
-                if ((timestamp - encoders[i].lastDebounceTime) > DEBOUNCE_TIME_MS) {
-                    encoders[i].buttonPressed = true;
-                    encoders[i].lastDebounceTime = timestamp;
+                // Opportunistically clear buttonCurrentlyDown if release was stable
+                if (encoders[i].buttonCurrentlyDown && encoders[i].lastReleaseTime > 0) {
+                    if ((timestamp - encoders[i].lastReleaseTime) > DEBOUNCE_TIME_MS) {
+                        encoders[i].buttonCurrentlyDown = false;  // Release was stable
+                    }
+                }
+
+                // Only accept press if button was released first (prevents release bounce)
+                if (!encoders[i].buttonCurrentlyDown) {
+                    // Time-based debouncing: only accept press if 20ms elapsed since last press
+                    if ((timestamp - encoders[i].lastPressTime) > DEBOUNCE_TIME_MS) {
+                        encoders[i].buttonPressed = true;
+                        encoders[i].buttonCurrentlyDown = true;  // Mark button as down
+                        encoders[i].lastPressTime = timestamp;
+                    }
+                }
+            }
+            // Detect button release (edge: LOW -> HIGH)
+            else if (buttonState == HIGH && encoders[i].buttonLastState == LOW) {
+                // Record release time but don't clear buttonCurrentlyDown yet (debounce release)
+                encoders[i].lastReleaseTime = timestamp;
+            }
+
+            // Clear buttonCurrentlyDown only after stable HIGH for debounce period
+            if (buttonState == HIGH && encoders[i].buttonCurrentlyDown) {
+                if (encoders[i].lastReleaseTime > 0 &&
+                    (timestamp - encoders[i].lastReleaseTime) > DEBOUNCE_TIME_MS) {
+                    encoders[i].buttonCurrentlyDown = false;  // Release is stable, ready for next press
                 }
             }
 

@@ -8,12 +8,11 @@
  *
  * DESIGN:
  * - Singleton pattern (single global instance)
- * - Priority-based display: Last activated effect takes precedence
- * - Stateful: Remembers which effect was last activated
+ * - Priority-based display: Audio chain order determines priority (CHOKE > FREEZE > STUTTER)
+ * - Stateful: Tracks menu state and manages display transitions
  *
  * USAGE:
  *   DisplayManager::instance().updateDisplay();
- *   DisplayManager::instance().setLastActivatedEffect(EffectID::CHOKE);
  */
 
 #pragma once
@@ -46,15 +45,21 @@ public:
     /**
      * Update display based on current effect states
      *
-     * Priority logic:
-     * 1. Last activated effect (if still active)
-     * 2. Any active effect
-     * 3. Default/idle screen
+     * Priority logic (effects always override menu):
+     * 1. CHOKE effect (if active) - highest effect priority
+     * 2. FREEZE effect (if active) - middle priority
+     * 3. STUTTER effect (if active) - lowest effect priority
+     * 4. Menu screen (if menu is active and no effects active)
+     * 5. Default/idle screen
      */
     void updateDisplay();
 
     /**
-     * Set which effect was last activated (for display priority)
+     * Set which effect was last activated
+     *
+     * NOTE: This method is deprecated and no longer used for display priority.
+     * Display priority is now based on fixed audio chain order.
+     * Kept for backward compatibility.
      *
      * @param effectID Effect to mark as last activated
      */
@@ -63,17 +68,41 @@ public:
     /**
      * Get which effect was last activated
      *
+     * NOTE: This method is deprecated and no longer used for display priority.
+     * Kept for backward compatibility.
+     *
      * @return EffectID of last activated effect, or NONE
      */
     EffectID getLastActivatedEffect() const;
 
+    /**
+     * Show menu screen (takes priority over effect displays)
+     *
+     * @param menuData Menu information to display
+     */
+    void showMenu(const MenuDisplayData& menuData);
+
+    /**
+     * Hide menu and return to effect/idle display
+     */
+    void hideMenu();
+
+    /**
+     * Check if menu is currently showing
+     *
+     * @return true if menu is active
+     */
+    bool isMenuShowing() const;
+
 private:
     // Private constructor (singleton pattern)
-    DisplayManager() : m_lastActivatedEffect(EffectID::NONE) {}
+    DisplayManager() : m_lastActivatedEffect(EffectID::NONE), m_menuShowing(false) {}
 
     // Delete copy constructor and assignment (singleton)
     DisplayManager(const DisplayManager&) = delete;
     DisplayManager& operator=(const DisplayManager&) = delete;
 
     EffectID m_lastActivatedEffect;  // Last activated effect for priority tracking
+    bool m_menuShowing;              // True if menu is currently showing
+    MenuDisplayData m_currentMenu;   // Current menu data
 };

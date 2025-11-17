@@ -12,13 +12,18 @@ static constexpr uint8_t DISPLAY_WIDTH = 128;
 static constexpr uint8_t DISPLAY_HEIGHT = 64;
 static constexpr int8_t RESET_PIN = -1;  // No reset pin (using I2C reset)
 
-static constexpr uint32_t IDLE_DELAY_MS = 50;  // Delay when queue empty (low CPU usage)
+static constexpr uint32_t IDLE_DELAY_MS = 5;  // Delay when queue empty (more responsive)
 
 static Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire1, RESET_PIN);
 
-static SPSCQueue<DisplayEvent, 16> commandQueue;
+static SPSCQueue<DisplayEvent, 32> commandQueue;  // Increased from 16 to handle spam
 
 static volatile BitmapID currentBitmap = BitmapID::DEFAULT;
+static volatile bool isShowingMenu = false;  // Track if menu is currently displayed
+
+// Debouncing: Track last requested bitmap to prevent queue flooding
+static volatile BitmapID lastRequestedBitmap = BitmapID::DEFAULT;
+static volatile bool lastRequestedWasMenu = false;
 
 struct BitmapData {
     const uint8_t* data;  // Pointer to PROGMEM bitmap array
@@ -28,32 +33,68 @@ static const BitmapData bitmapRegistry[] = {
     { bitmap_default },            // BitmapID::DEFAULT
     { bitmap_freeze_active },      // BitmapID::FREEZE_ACTIVE
     { bitmap_choke_active },       // BitmapID::CHOKE_ACTIVE
-    { bitmap_quant_32 },           // BitmapID::QUANT_32
-    { bitmap_quant_16 },           // BitmapID::QUANT_16
-    { bitmap_quant_8 },            // BitmapID::QUANT_8
-    { bitmap_quant_4 },            // BitmapID::QUANT_4
-    { bitmap_choke_length_free },  // BitmapID::CHOKE_LENGTH_FREE
-    { bitmap_choke_length_quant }, // BitmapID::CHOKE_LENGTH_QUANT
-    { bitmap_choke_onset_free },   // BitmapID::CHOKE_ONSET_FREE
-    { bitmap_choke_onset_quant },  // BitmapID::CHOKE_ONSET_QUANT
-    { bitmap_choke_length_free },  // BitmapID::FREEZE_LENGTH_FREE (placeholder: reuse choke bitmap)
-    { bitmap_choke_length_quant }, // BitmapID::FREEZE_LENGTH_QUANT (placeholder: reuse choke bitmap)
-    { bitmap_choke_onset_free },   // BitmapID::FREEZE_ONSET_FREE (placeholder: reuse choke bitmap)
-    { bitmap_choke_onset_quant },  // BitmapID::FREEZE_ONSET_QUANT (placeholder: reuse choke bitmap)
-    { bitmap_stutter_idle_with_loop },      // BitmapID::STUTTER_IDLE_WITH_LOOP
-    { bitmap_stutter_capturing },            // BitmapID::STUTTER_CAPTURING
-    { bitmap_stutter_playing },              // BitmapID::STUTTER_PLAYING
-    { bitmap_stutter_onset_free },           // BitmapID::STUTTER_ONSET_FREE
-    { bitmap_stutter_onset_quant },          // BitmapID::STUTTER_ONSET_QUANT
-    { bitmap_stutter_length_free },          // BitmapID::STUTTER_LENGTH_FREE
-    { bitmap_stutter_length_quant },         // BitmapID::STUTTER_LENGTH_QUANT
-    { bitmap_stutter_capture_start_free },   // BitmapID::STUTTER_CAPTURE_START_FREE
-    { bitmap_stutter_capture_start_quant },  // BitmapID::STUTTER_CAPTURE_START_QUANT
-    { bitmap_stutter_capture_end_free },     // BitmapID::STUTTER_CAPTURE_END_FREE
-    { bitmap_stutter_capture_end_quant },    // BitmapID::STUTTER_CAPTURE_END_QUANT
+    { bitmap_stutter_active }      // BitmapID::STUTTER_ACTIVE
 };
 
 static constexpr uint8_t NUM_BITMAPS = sizeof(bitmapRegistry) / sizeof(BitmapData);
+
+// Section heights for menu layout
+static constexpr uint8_t TOP_SECTION_HEIGHT = 16;
+static constexpr uint8_t MIDDLE_SECTION_HEIGHT = 32;
+static constexpr uint8_t BOTTOM_SECTION_HEIGHT = 16;
+
+// Circle indicator settings
+static constexpr uint8_t INDICATOR_RADIUS = 4;
+static constexpr uint8_t INDICATOR_SPACING = 12;
+
+static void drawMenu(const MenuDisplayData& menuData) {
+    isShowingMenu = true;  // Mark that menu is being displayed
+    lastRequestedWasMenu = true;  // Reset debouncing state
+
+    // Clear display buffer
+    display.clearDisplay();
+
+    // --- TOP SECTION (16px): Effect->Parameter text ---
+    display.setTextSize(1);  // Standard 5x8 font
+    display.setTextColor(WHITE);
+    display.setCursor(0, 4);  // Top-left aligned, 4px from top for vertical centering
+    display.print(menuData.topText);
+
+    // --- MIDDLE SECTION (32px): Current value text ---
+    display.setTextSize(2);  // 2x scaled = 10x16 font
+    // Calculate center position for text
+    int16_t x1, y1;
+    uint16_t w, h;
+    display.getTextBounds(menuData.middleText, 0, 0, &x1, &y1, &w, &h);
+    uint8_t textX = (DISPLAY_WIDTH - w) / 2;
+    uint8_t textY = TOP_SECTION_HEIGHT + (MIDDLE_SECTION_HEIGHT - h) / 2;
+    display.setCursor(textX, textY);
+    display.print(menuData.middleText);
+
+    // --- BOTTOM SECTION (16px): Circle indicators ---
+    uint8_t bottomSectionY = TOP_SECTION_HEIGHT + MIDDLE_SECTION_HEIGHT;
+    uint8_t centerY = bottomSectionY + (BOTTOM_SECTION_HEIGHT / 2);
+
+    // Calculate starting X position to center all circles
+    uint8_t totalWidth = (menuData.numOptions - 1) * INDICATOR_SPACING;
+    uint8_t startX = (DISPLAY_WIDTH - totalWidth) / 2;
+
+    // Draw circles
+    for (uint8_t i = 0; i < menuData.numOptions; i++) {
+        uint8_t circleX = startX + (i * INDICATOR_SPACING);
+
+        if (i == menuData.selectedIndex) {
+            // Filled circle for selected option
+            display.fillCircle(circleX, centerY, INDICATOR_RADIUS, WHITE);
+        } else {
+            // Outline circle for unselected options
+            display.drawCircle(circleX, centerY, INDICATOR_RADIUS, WHITE);
+        }
+    }
+
+    // Push to display
+    display.display();
+}
 
 static void drawBitmap(BitmapID id) {
     uint8_t index = static_cast<uint8_t>(id);
@@ -78,6 +119,8 @@ static void drawBitmap(BitmapID id) {
 
     // Update state
     currentBitmap = id;
+    isShowingMenu = false;  // No longer showing menu
+    lastRequestedWasMenu = false;  // Reset debouncing state
 }
 
 bool DisplayIO::begin() {
@@ -123,6 +166,10 @@ void DisplayIO::threadLoop() {
                 case DisplayCommand::SHOW_CUSTOM:
                     drawBitmap(event.bitmapID);
                     break;
+
+                case DisplayCommand::SHOW_MENU:
+                    drawMenu(event.menuData);
+                    break;
             }
         }
 
@@ -134,18 +181,50 @@ void DisplayIO::threadLoop() {
 }
 
 void DisplayIO::showDefault() {
+    // Debounce: Skip if we just requested default bitmap and not transitioning from menu
+    if (lastRequestedBitmap == BitmapID::DEFAULT && !lastRequestedWasMenu) {
+        return;
+    }
+
     DisplayEvent event(DisplayCommand::SHOW_DEFAULT);
-    commandQueue.push(event);
+    if (commandQueue.push(event)) {
+        lastRequestedBitmap = BitmapID::DEFAULT;
+        lastRequestedWasMenu = false;
+    }
 }
 
 void DisplayIO::showChoke() {
+    // Debounce: Skip if we just requested choke bitmap and not transitioning from menu
+    if (lastRequestedBitmap == BitmapID::CHOKE_ACTIVE && !lastRequestedWasMenu) {
+        return;
+    }
+
     DisplayEvent event(DisplayCommand::SHOW_CHOKE);
-    commandQueue.push(event);
+    if (commandQueue.push(event)) {
+        lastRequestedBitmap = BitmapID::CHOKE_ACTIVE;
+        lastRequestedWasMenu = false;
+    }
 }
 
 void DisplayIO::showBitmap(BitmapID id) {
+    // Debounce: Skip if we just requested this same bitmap and not transitioning from menu
+    if (lastRequestedBitmap == id && !lastRequestedWasMenu) {
+        return;
+    }
+
     DisplayEvent event(DisplayCommand::SHOW_CUSTOM, id);
-    commandQueue.push(event);
+    if (commandQueue.push(event)) {
+        lastRequestedBitmap = id;
+        lastRequestedWasMenu = false;
+    }
+}
+
+void DisplayIO::showMenu(const MenuDisplayData& menuData) {
+    // Always push menu commands (menu content may change)
+    DisplayEvent event(DisplayCommand::SHOW_MENU, menuData);
+    if (commandQueue.push(event)) {
+        lastRequestedWasMenu = true;
+    }
 }
 
 BitmapID DisplayIO::getCurrentBitmap() {

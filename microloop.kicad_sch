@@ -5971,6 +5971,16 @@
 	)
 	(wire
 		(pts
+			(xy 259.08 208.28) (xy 270.51 208.28)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "034eac32-cc77-46ae-9639-82951c92958d")
+	)
+	(wire
+		(pts
 			(xy 212.09 80.01) (xy 217.17 80.01)
 		)
 		(stroke
@@ -5988,6 +5998,16 @@
 			(type default)
 		)
 		(uuid "09552bcb-484c-408e-827a-cc8c3ff686d8")
+	)
+	(wire
+		(pts
+			(xy 273.05 107.95) (xy 281.94 107.95)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0ba838d2-ee49-4c17-81f1-3e7775023a7c")
 	)
 	(wire
 		(pts
@@ -6048,6 +6068,16 @@
 			(type default)
 		)
 		(uuid "1947a17d-9f54-49e5-9b12-66ff613ec5f6")
+	)
+	(wire
+		(pts
+			(xy 196.85 210.82) (xy 208.28 210.82)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "19e4eccc-51ac-4f68-8da2-f9281aff6496")
 	)
 	(wire
 		(pts
@@ -6138,6 +6168,26 @@
 			(type default)
 		)
 		(uuid "227b85a0-e18e-4dbc-bd27-9dad897a9f44")
+	)
+	(wire
+		(pts
+			(xy 200.66 241.3) (xy 210.82 241.3)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "22859213-1753-417e-b0eb-4c4be944d513")
+	)
+	(wire
+		(pts
+			(xy 200.66 238.76) (xy 210.82 238.76)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "238bd426-42b1-4f4f-8f0e-1dbfa966fdd1")
 	)
 	(wire
 		(pts
@@ -6301,6 +6351,16 @@
 	)
 	(wire
 		(pts
+			(xy 87.63 63.5) (xy 96.52 63.5)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "40c1c6c3-4c46-4a49-9e01-b468ec6d670f")
+	)
+	(wire
+		(pts
 			(xy 273.05 92.71) (xy 279.4 92.71)
 		)
 		(stroke
@@ -6331,7 +6391,7 @@
 	)
 	(wire
 		(pts
-			(xy 273.05 100.33) (xy 283.21 100.33)
+			(xy 273.05 100.33) (xy 285.75 100.33)
 		)
 		(stroke
 			(width 0)
@@ -6378,6 +6438,16 @@
 			(type default)
 		)
 		(uuid "5254f490-9373-4ef8-8055-719952c8eca3")
+	)
+	(wire
+		(pts
+			(xy 273.05 118.11) (xy 283.21 118.11)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "545a53a8-510f-4299-b61e-47c2c55e22e9")
 	)
 	(wire
 		(pts
@@ -6431,6 +6501,16 @@
 	)
 	(wire
 		(pts
+			(xy 273.05 123.19) (xy 284.48 123.19)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5c872013-e14d-46d2-8aef-a3885dc7a76c")
+	)
+	(wire
+		(pts
 			(xy 273.05 85.09) (xy 281.94 85.09)
 		)
 		(stroke
@@ -6468,6 +6548,16 @@
 			(type default)
 		)
 		(uuid "6211429d-ff16-4dc1-a820-79cc6791c100")
+	)
+	(wire
+		(pts
+			(xy 259.08 205.74) (xy 270.51 205.74)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6534b343-9edc-428b-b8b8-010aa35e1e49")
 	)
 	(wire
 		(pts
@@ -6571,7 +6661,7 @@
 	)
 	(wire
 		(pts
-			(xy 87.63 83.82) (xy 96.52 83.82)
+			(xy 82.55 83.82) (xy 96.52 83.82)
 		)
 		(stroke
 			(width 0)
@@ -6598,16 +6688,6 @@
 			(type default)
 		)
 		(uuid "829e9a90-8bff-456f-80d4-fcb72f0860ac")
-	)
-	(wire
-		(pts
-			(xy 198.12 210.82) (xy 208.28 210.82)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "8cd00b21-95f6-452e-a68f-7debe88512a0")
 	)
 	(wire
 		(pts
@@ -6851,6 +6931,16 @@
 	)
 	(wire
 		(pts
+			(xy 273.05 120.65) (xy 283.21 120.65)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b62957ba-f610-4511-87ac-4c15f198ca3f")
+	)
+	(wire
+		(pts
 			(xy 266.7 180.34) (xy 270.51 180.34)
 		)
 		(stroke
@@ -6871,7 +6961,7 @@
 	)
 	(wire
 		(pts
-			(xy 205.74 198.12) (xy 208.28 198.12)
+			(xy 207.01 198.12) (xy 208.28 198.12)
 		)
 		(stroke
 			(width 0)
@@ -6961,6 +7051,16 @@
 	)
 	(wire
 		(pts
+			(xy 87.63 78.74) (xy 96.52 78.74)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d32caebc-e669-49d8-aeb7-ae8b497b1066")
+	)
+	(wire
+		(pts
 			(xy 273.05 87.63) (xy 283.21 87.63)
 		)
 		(stroke
@@ -6978,6 +7078,16 @@
 			(type default)
 		)
 		(uuid "db84574c-09d3-4f0c-938b-3837676beb00")
+	)
+	(wire
+		(pts
+			(xy 87.63 60.96) (xy 96.52 60.96)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "de5cc2a9-9967-4e0b-8881-14add49ced84")
 	)
 	(wire
 		(pts
@@ -7109,6 +7219,16 @@
 		)
 		(uuid "ff3753c1-c6ea-46db-83c8-fb6f0b23dd13")
 	)
+	(label "Serial8_TX"
+		(at 273.05 118.11 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "0153f14c-a521-4cc7-a79d-d2df9a5c691f")
+	)
 	(label "AA_3"
 		(at 297.18 71.12 0)
 		(effects
@@ -7128,6 +7248,16 @@
 			(justify left bottom)
 		)
 		(uuid "047bb8d4-4a54-44f2-bfa0-3030b55d11b5")
+	)
+	(label "Wire1_CLK"
+		(at 200.66 238.76 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "0bb443e2-f58e-4585-bde3-56c3fa05db4e")
 	)
 	(label "AA_12"
 		(at 295.91 93.98 0)
@@ -7189,6 +7319,16 @@
 		)
 		(uuid "187faefd-5ad4-4788-9218-a7af2dbcd234")
 	)
+	(label "Wire1_SDA"
+		(at 200.66 241.3 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "1a5de8bd-bf31-459f-800a-5efb7bb374df")
+	)
 	(label "AA_3"
 		(at 212.09 74.93 0)
 		(effects
@@ -7238,6 +7378,16 @@
 			(justify left bottom)
 		)
 		(uuid "242d1f74-88a4-4f55-900d-452f9b6bf6e0")
+	)
+	(label "MCP_INT"
+		(at 273.05 107.95 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "246342f5-2c4c-4644-baaf-4752fb0dc5f4")
 	)
 	(label "AA_6"
 		(at 297.18 78.74 0)
@@ -7419,6 +7569,16 @@
 		)
 		(uuid "61c76eb8-796e-4620-9d78-56cefecfec7e")
 	)
+	(label "Serial8_TX"
+		(at 259.08 208.28 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "66c76a50-f53b-43c3-9f61-991c019d64f1")
+	)
 	(label "AA_5"
 		(at 297.18 76.2 0)
 		(effects
@@ -7459,15 +7619,15 @@
 		)
 		(uuid "7a0c4fa2-7c33-4f6d-a912-46a70195d967")
 	)
-	(label "Wire2_INT"
-		(at 198.12 210.82 0)
+	(label "Wire_SDA"
+		(at 87.63 60.96 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "7d9958f7-a94b-4cf5-90e8-dc5ec6ab5564")
+		(uuid "7a5a030e-b172-4ace-8400-e4de9e522b1f")
 	)
 	(label "AA_6"
 		(at 212.09 82.55 0)
@@ -7498,6 +7658,16 @@
 			(justify left bottom)
 		)
 		(uuid "84c95406-060a-49e6-a95c-92ab19529aa2")
+	)
+	(label "Serial8_RX"
+		(at 259.08 205.74 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "84f9ae0e-06cc-4af0-b282-15d3f3459d15")
 	)
 	(label "AA_14"
 		(at 273.05 95.25 0)
@@ -7559,6 +7729,16 @@
 		)
 		(uuid "a6172739-0ddc-4d6f-9d80-cd286f52b3c2")
 	)
+	(label "MCP_INT"
+		(at 87.63 78.74 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "a718e620-7ef7-4e9b-b950-86f8f8b34c85")
+	)
 	(label "AA_23"
 		(at 358.14 127 0)
 		(effects
@@ -7568,6 +7748,16 @@
 			(justify left bottom)
 		)
 		(uuid "aa177cf6-b6b7-45f0-8433-456a8357eea2")
+	)
+	(label "NeoKey_INT"
+		(at 273.05 123.19 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "ae41be85-0753-4426-b806-da4d918236cd")
 	)
 	(label "AA_12"
 		(at 210.82 97.79 0)
@@ -7619,6 +7809,16 @@
 		)
 		(uuid "b5fbe245-a95e-492b-963b-83c808fbffb6")
 	)
+	(label "Wire_CLK"
+		(at 87.63 63.5 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "b766da5b-d212-43f0-bc96-6c065e0a3a5d")
+	)
 	(label "AA_21"
 		(at 295.91 129.54 0)
 		(effects
@@ -7638,6 +7838,16 @@
 			(justify left bottom)
 		)
 		(uuid "badb8671-cea3-423b-b611-a698c7bfeec1")
+	)
+	(label "Serial8_RX"
+		(at 273.05 120.65 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "bb2396aa-89a5-40d3-9ff3-1856cd704877")
 	)
 	(label "Wire1_SDA"
 		(at 292.1 119.38 0)
@@ -7718,6 +7928,16 @@
 			(justify left bottom)
 		)
 		(uuid "e882ca29-4323-4820-abf3-4bbbf637c6d3")
+	)
+	(label "NeoKey_INT"
+		(at 196.85 210.82 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "e8d9e1a0-7ff4-4a52-b5a9-9d8a897d0629")
 	)
 	(symbol
 		(lib_id "power:GND")
@@ -7939,7 +8159,7 @@
 				)
 			)
 		)
-		(property "Value" "LED"
+		(property "Value" "Preset LED"
 			(at 133.6675 146.05 0)
 			(effects
 				(font
@@ -8222,7 +8442,7 @@
 				)
 			)
 		)
-		(property "Value" "LED"
+		(property "Value" "Preset LED"
 			(at 171.7675 146.05 0)
 			(effects
 				(font
@@ -8568,7 +8788,7 @@
 				)
 			)
 		)
-		(property "Value" "LED"
+		(property "Value" "Beat LED"
 			(at 358.4575 168.91 0)
 			(effects
 				(font
@@ -8646,7 +8866,7 @@
 				)
 			)
 		)
-		(property "Value" "LED"
+		(property "Value" "Preset LED"
 			(at 95.5675 146.05 0)
 			(effects
 				(font
@@ -8922,7 +9142,7 @@
 				)
 			)
 		)
-		(property "Value" "Teensy4.1"
+		(property "Value" "Teensy 4.1"
 			(at 245.11 55.88 0)
 			(effects
 				(font
@@ -9251,7 +9471,7 @@
 				)
 			)
 		)
-		(property "Value" "AudioJack3"
+		(property "Value" "Stereo Input"
 			(at 384.302 88.9 0)
 			(effects
 				(font
@@ -9792,7 +10012,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "128×64 OLED"
+		(property "Value" "OLED 128×64"
 			(at 224.79 238.7599 0)
 			(effects
 				(font
@@ -9851,7 +10071,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 283.21 100.33 0)
+		(at 285.75 100.33 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -9860,7 +10080,7 @@
 		(fields_autoplaced yes)
 		(uuid "6e3127cb-6b88-4fb7-973b-cb9bfa0b911f")
 		(property "Reference" "#PWR01"
-			(at 283.21 106.68 0)
+			(at 285.75 106.68 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9869,7 +10089,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 283.21 105.41 0)
+			(at 285.75 105.41 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9877,7 +10097,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 283.21 100.33 0)
+			(at 285.75 100.33 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9886,7 +10106,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 283.21 100.33 0)
+			(at 285.75 100.33 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9895,7 +10115,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 283.21 100.33 0)
+			(at 285.75 100.33 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9933,7 +10153,7 @@
 				)
 			)
 		)
-		(property "Value" "RotaryEncoder_Switch"
+		(property "Value" "Rotary Encoder + Button"
 			(at 129.54 165.1 0)
 			(effects
 				(font
@@ -9994,7 +10214,7 @@
 	)
 	(symbol
 		(lib_id "power:+3.3V")
-		(at 87.63 83.82 0)
+		(at 82.55 83.82 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -10003,7 +10223,7 @@
 		(fields_autoplaced yes)
 		(uuid "6f1c926a-443e-4027-86ea-82476234402d")
 		(property "Reference" "#PWR026"
-			(at 87.63 87.63 0)
+			(at 82.55 87.63 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10012,7 +10232,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 87.63 78.74 0)
+			(at 82.55 78.74 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10020,7 +10240,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 87.63 83.82 0)
+			(at 82.55 83.82 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10029,7 +10249,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 87.63 83.82 0)
+			(at 82.55 83.82 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10038,7 +10258,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 87.63 83.82 0)
+			(at 82.55 83.82 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10076,7 +10296,7 @@
 				)
 			)
 		)
-		(property "Value" "RotaryEncoder_Switch"
+		(property "Value" "Rotary Encoder + Button"
 			(at 167.64 165.1 0)
 			(effects
 				(font
@@ -10153,7 +10373,7 @@
 				)
 			)
 		)
-		(property "Value" "RotaryEncoder_Switch"
+		(property "Value" "Rotary Encoder + Button"
 			(at 53.34 165.1 0)
 			(effects
 				(font
@@ -10495,7 +10715,7 @@
 				)
 			)
 		)
-		(property "Value" "Teensy4.0_AudioShield_REVD"
+		(property "Value" "Teensy Audio Shield (Rev D)"
 			(at 330.2 55.88 0)
 			(effects
 				(font
@@ -10813,15 +11033,15 @@
 		(dnp no)
 		(uuid "93187158-ee99-4103-af50-6956fa43dbcd")
 		(property "Reference" "U5"
-			(at 104.394 53.848 0)
+			(at 105.664 52.832 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "MCP23017_SO"
-			(at 104.394 56.388 0)
+		(property "Value" "MCP23017"
+			(at 105.664 55.372 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10969,7 +11189,7 @@
 				)
 			)
 		)
-		(property "Value" "SW_Push"
+		(property "Value" "Preset Button"
 			(at 93.98 129.54 0)
 			(effects
 				(font
@@ -11021,7 +11241,7 @@
 	)
 	(symbol
 		(lib_id "power:+3.3V")
-		(at 205.74 198.12 0)
+		(at 207.01 198.12 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -11030,7 +11250,7 @@
 		(fields_autoplaced yes)
 		(uuid "a28178cd-a232-49cc-bb78-83c9aea77c3f")
 		(property "Reference" "#PWR04"
-			(at 205.74 201.93 0)
+			(at 207.01 201.93 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11039,7 +11259,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 205.74 193.04 0)
+			(at 207.01 193.04 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11047,7 +11267,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 205.74 198.12 0)
+			(at 207.01 198.12 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11056,7 +11276,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 205.74 198.12 0)
+			(at 207.01 198.12 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11065,7 +11285,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 205.74 198.12 0)
+			(at 207.01 198.12 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11239,7 +11459,7 @@
 				)
 			)
 		)
-		(property "Value" "SW_Push"
+		(property "Value" "Preset Button"
 			(at 170.18 129.54 0)
 			(effects
 				(font
@@ -11307,7 +11527,7 @@
 				)
 			)
 		)
-		(property "Value" "RotaryEncoder_Switch"
+		(property "Value" "Rotary Encoder + Button"
 			(at 91.44 165.1 0)
 			(effects
 				(font
@@ -11468,7 +11688,7 @@
 				)
 			)
 		)
-		(property "Value" "LED"
+		(property "Value" "Preset LED"
 			(at 57.4675 146.05 0)
 			(effects
 				(font
@@ -11546,7 +11766,7 @@
 				)
 			)
 		)
-		(property "Value" "SW_Push"
+		(property "Value" "Preset Button"
 			(at 55.88 129.54 0)
 			(effects
 				(font
@@ -11963,7 +12183,7 @@
 				)
 			)
 		)
-		(property "Value" "SW_Push"
+		(property "Value" "Preset Button"
 			(at 132.08 129.54 0)
 			(effects
 				(font
@@ -12031,7 +12251,7 @@
 				)
 			)
 		)
-		(property "Value" "AudioJack3"
+		(property "Value" "Stereo Output"
 			(at 384.556 102.87 0)
 			(effects
 				(font
@@ -12158,18 +12378,17 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "ebb30bc2-468a-4137-84c1-6800868d3421")
 		(property "Reference" "D1"
-			(at 361.95 191.77 0)
+			(at 367.538 192.532 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "LED_ARGB"
-			(at 361.95 194.31 0)
+		(property "Value" "Indicator RGB LED"
+			(at 367.538 195.072 0)
 			(effects
 				(font
 					(size 1.27 1.27)

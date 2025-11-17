@@ -74,10 +74,11 @@ public:
     void setCurrentParameter(Parameter param) { m_currentParameter = param; }
 
     // Utility functions for bitmap/name mapping
-    static BitmapID onsetToBitmap(StutterOnset onset);
-    static BitmapID lengthToBitmap(StutterLength length);
-    static BitmapID captureStartToBitmap(StutterCaptureStart captureStart);
-    static BitmapID captureEndToBitmap(StutterCaptureEnd captureEnd);
+    // TODO: Re-enable when stutter parameter bitmaps are added
+    // static BitmapID onsetToBitmap(StutterOnset onset);
+    // static BitmapID lengthToBitmap(StutterLength length);
+    // static BitmapID captureStartToBitmap(StutterCaptureStart captureStart);
+    // static BitmapID captureEndToBitmap(StutterCaptureEnd captureEnd);
     static BitmapID stateToBitmap(StutterState state);
 
     static const char* onsetName(StutterOnset onset);
@@ -97,4 +98,7 @@ private:
     uint32_t m_lastBlinkTime;       // Timestamp of last LED toggle
     bool m_ledBlinkState;           // Current LED blink state (on/off)
     static constexpr uint32_t BLINK_INTERVAL_MS = 250;  // 250ms on/off (4Hz blink)
+
+    // Effect state tracking for edge detection
+    bool m_wasEnabled;              // Previous enabled state (for edge detection)
 };
