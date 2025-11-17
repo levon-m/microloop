@@ -21,6 +21,10 @@ static SPSCQueue<DisplayEvent, 32> commandQueue;  // Increased from 16 to handle
 static volatile BitmapID currentBitmap = BitmapID::DEFAULT;
 static volatile bool isShowingMenu = false;  // Track if menu is currently displayed
 
+// Debouncing: Track last requested bitmap to prevent queue flooding
+static volatile BitmapID lastRequestedBitmap = BitmapID::DEFAULT;
+static volatile bool lastRequestedWasMenu = false;
+
 struct BitmapData {
     const uint8_t* data;  // Pointer to PROGMEM bitmap array
 };
@@ -45,6 +49,7 @@ static constexpr uint8_t INDICATOR_SPACING = 12;
 
 static void drawMenu(const MenuDisplayData& menuData) {
     isShowingMenu = true;  // Mark that menu is being displayed
+    lastRequestedWasMenu = true;  // Reset debouncing state
 
     // Clear display buffer
     display.clearDisplay();
@@ -115,6 +120,7 @@ static void drawBitmap(BitmapID id) {
     // Update state
     currentBitmap = id;
     isShowingMenu = false;  // No longer showing menu
+    lastRequestedWasMenu = false;  // Reset debouncing state
 }
 
 bool DisplayIO::begin() {
@@ -175,23 +181,50 @@ void DisplayIO::threadLoop() {
 }
 
 void DisplayIO::showDefault() {
+    // Debounce: Skip if we just requested default bitmap and not transitioning from menu
+    if (lastRequestedBitmap == BitmapID::DEFAULT && !lastRequestedWasMenu) {
+        return;
+    }
+
     DisplayEvent event(DisplayCommand::SHOW_DEFAULT);
-    commandQueue.push(event);
+    if (commandQueue.push(event)) {
+        lastRequestedBitmap = BitmapID::DEFAULT;
+        lastRequestedWasMenu = false;
+    }
 }
 
 void DisplayIO::showChoke() {
+    // Debounce: Skip if we just requested choke bitmap and not transitioning from menu
+    if (lastRequestedBitmap == BitmapID::CHOKE_ACTIVE && !lastRequestedWasMenu) {
+        return;
+    }
+
     DisplayEvent event(DisplayCommand::SHOW_CHOKE);
-    commandQueue.push(event);
+    if (commandQueue.push(event)) {
+        lastRequestedBitmap = BitmapID::CHOKE_ACTIVE;
+        lastRequestedWasMenu = false;
+    }
 }
 
 void DisplayIO::showBitmap(BitmapID id) {
+    // Debounce: Skip if we just requested this same bitmap and not transitioning from menu
+    if (lastRequestedBitmap == id && !lastRequestedWasMenu) {
+        return;
+    }
+
     DisplayEvent event(DisplayCommand::SHOW_CUSTOM, id);
-    commandQueue.push(event);
+    if (commandQueue.push(event)) {
+        lastRequestedBitmap = id;
+        lastRequestedWasMenu = false;
+    }
 }
 
 void DisplayIO::showMenu(const MenuDisplayData& menuData) {
+    // Always push menu commands (menu content may change)
     DisplayEvent event(DisplayCommand::SHOW_MENU, menuData);
-    commandQueue.push(event);
+    if (commandQueue.push(event)) {
+        lastRequestedWasMenu = true;
+    }
 }
 
 BitmapID DisplayIO::getCurrentBitmap() {
