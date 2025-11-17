@@ -45,11 +45,11 @@ public:
     /**
      * Update display based on current effect states
      *
-     * Priority logic (based on audio chain order):
-     * 1. Menu screen (if menu is active)
-     * 2. CHOKE effect (if active) - highest effect priority
-     * 3. FREEZE effect (if active) - middle priority
-     * 4. STUTTER effect (if active) - lowest effect priority
+     * Priority logic (effects always override menu):
+     * 1. CHOKE effect (if active) - highest effect priority
+     * 2. FREEZE effect (if active) - middle priority
+     * 3. STUTTER effect (if active) - lowest effect priority
+     * 4. Menu screen (if menu is active and no effects active)
      * 5. Default/idle screen
      */
     void updateDisplay();

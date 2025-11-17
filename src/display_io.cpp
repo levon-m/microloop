@@ -12,13 +12,14 @@ static constexpr uint8_t DISPLAY_WIDTH = 128;
 static constexpr uint8_t DISPLAY_HEIGHT = 64;
 static constexpr int8_t RESET_PIN = -1;  // No reset pin (using I2C reset)
 
-static constexpr uint32_t IDLE_DELAY_MS = 50;  // Delay when queue empty (low CPU usage)
+static constexpr uint32_t IDLE_DELAY_MS = 5;  // Delay when queue empty (more responsive)
 
 static Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire1, RESET_PIN);
 
-static SPSCQueue<DisplayEvent, 16> commandQueue;
+static SPSCQueue<DisplayEvent, 32> commandQueue;  // Increased from 16 to handle spam
 
 static volatile BitmapID currentBitmap = BitmapID::DEFAULT;
+static volatile bool isShowingMenu = false;  // Track if menu is currently displayed
 
 struct BitmapData {
     const uint8_t* data;  // Pointer to PROGMEM bitmap array
@@ -43,6 +44,8 @@ static constexpr uint8_t INDICATOR_RADIUS = 4;
 static constexpr uint8_t INDICATOR_SPACING = 12;
 
 static void drawMenu(const MenuDisplayData& menuData) {
+    isShowingMenu = true;  // Mark that menu is being displayed
+
     // Clear display buffer
     display.clearDisplay();
 
@@ -111,6 +114,7 @@ static void drawBitmap(BitmapID id) {
 
     // Update state
     currentBitmap = id;
+    isShowingMenu = false;  // No longer showing menu
 }
 
 bool DisplayIO::begin() {
