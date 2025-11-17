@@ -19,7 +19,9 @@ struct EncoderState {
     uint8_t lastState;          // Last AB state (2 bits)
     bool buttonPressed;         // One-shot flag: true when button press detected
     bool buttonLastState;       // Previous button state for edge detection
-    uint32_t lastDebounceTime;  // Time of last button press (for debouncing)
+    bool buttonCurrentlyDown;   // True when button is physically pressed down
+    uint32_t lastPressTime;     // Time of last accepted button press
+    uint32_t lastReleaseTime;   // Time when release edge detected (for debouncing release)
 };
 
 bool begin();
