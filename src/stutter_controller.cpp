@@ -410,27 +410,37 @@ void StutterController::updateVisualFeedback() {
         }
     }
 
-    // ========== DISPLAY UPDATE ==========
-    // Update display bitmap if effect is active and last activated
-    if (DisplayManager::instance().getLastActivatedEffect() == EffectID::STUTTER) {
-        DisplayIO::showBitmap(stateToBitmap(currentState));
-    }
-
     // ========== ISR STATE TRANSITION DETECTION ==========
     // Check for state changes that happened in ISR (scheduled events fired)
     static StutterState s_lastState = StutterState::IDLE_NO_LOOP;
 
     if (currentState != s_lastState) {
-        // State changed - update display
+        // State changed - log it
         Serial.print("Stutter: State changed (");
         Serial.print(static_cast<int>(s_lastState));
         Serial.print(" → ");
         Serial.print(static_cast<int>(currentState));
         Serial.println(")");
 
-        // Update display whenever state changes
-        DisplayManager::instance().updateDisplay();
-
         s_lastState = currentState;
     }
+
+    // ========== EDGE DETECTION FOR DISPLAY UPDATES ==========
+    // Only update display when enabled state changes (not on every internal state transition)
+    bool isEnabled = m_effect.isEnabled();
+
+    // Detect rising edge: effect just became enabled
+    if (isEnabled && !m_wasEnabled) {
+        // Effect became active - update display
+        DisplayManager::instance().updateDisplay();
+    }
+
+    // Detect falling edge: effect just became disabled
+    if (!isEnabled && m_wasEnabled) {
+        // Effect became inactive - update display
+        DisplayManager::instance().updateDisplay();
+    }
+
+    // Update state for next call
+    m_wasEnabled = isEnabled;
 }
