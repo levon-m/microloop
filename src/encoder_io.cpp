@@ -93,8 +93,6 @@ bool begin() {
         bool b = mcp.digitalRead(encoderPins[i].pinB);
         encoders[i].lastState = (b << 1) | a;
         encoders[i].buttonLastState = mcp.digitalRead(encoderPins[i].pinSW);
-        encoders[i].buttonIsHeld = false;
-        encoders[i].buttonReleaseTime = 0;
         encoders[i].position = 0;
         encoders[i].lastDebounceTime = 0;
     }
@@ -152,36 +150,10 @@ void update() {
 
             // Detect button press (edge: HIGH -> LOW, active low)
             if (buttonState == LOW && encoders[i].buttonLastState == HIGH) {
-                // Opportunistically clear buttonIsHeld if enough time passed since release                // (handles case where user presses again before any "stable HIGH" events)
-                if (encoders[i].buttonIsHeld && encoders[i].buttonReleaseTime > 0 &&
-                    (timestamp - encoders[i].buttonReleaseTime) > DEBOUNCE_TIME_MS) {
-                    encoders[i].buttonIsHeld = false;
-                }
-
-                // Only trigger if button is not already held (prevents bounce re-trigger)
-                if (!encoders[i].buttonIsHeld) {
-                    // Debounce check
-                    if ((timestamp - encoders[i].lastDebounceTime) > DEBOUNCE_TIME_MS) {
-                        encoders[i].buttonPressed = true;
-                        encoders[i].buttonIsHeld = true;  // Mark as held
-                        encoders[i].buttonReleaseTime = 0;  // Clear release time
-                        encoders[i].lastDebounceTime = timestamp;
-                    }
-                }
-            }
-            // Detect button release (edge: LOW -> HIGH)
-            else if (buttonState == HIGH && encoders[i].buttonLastState == LOW) {
-                // Mark the time of release
-                encoders[i].buttonReleaseTime = timestamp;
-                encoders[i].lastDebounceTime = timestamp;
-            }
-
-            // Clear buttonIsHeld only after button has been stable HIGH for debounce period
-            // Check buttonLastState==HIGH to ensure this isn't the same event as the release edge
-            if (buttonState == HIGH && encoders[i].buttonLastState == HIGH &&
-                encoders[i].buttonIsHeld && encoders[i].buttonReleaseTime > 0) {
-                if ((timestamp - encoders[i].buttonReleaseTime) > DEBOUNCE_TIME_MS) {
-                    encoders[i].buttonIsHeld = false;  // Ready for next press
+                // Simple time-based debouncing: only accept press if 20ms elapsed since last press
+                if ((timestamp - encoders[i].lastDebounceTime) > DEBOUNCE_TIME_MS) {
+                    encoders[i].buttonPressed = true;
+                    encoders[i].lastDebounceTime = timestamp;
                 }
             }
 
