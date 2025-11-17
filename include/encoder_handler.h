@@ -36,7 +36,6 @@ private:
     int32_t accumulator;         // Accumulated steps since last turn
     bool wasTouched;             // Encoder recently touched
     uint32_t releaseTime;        // Time when encoder was released
-    bool lastButtonState;        // Previous button state (for edge detection)
 
     // Callbacks
     ValueChangeCallback valueChangeCallback;
