@@ -17,9 +17,11 @@ struct EncoderPins {
 struct EncoderState {
     int32_t position;           // Current position in raw steps
     uint8_t lastState;          // Last AB state (2 bits)
-    bool buttonPressed;         // Current button state
+    bool buttonPressed;         // One-shot flag: true when button press detected
     bool buttonLastState;       // Previous button state for edge detection
-    uint32_t lastDebounceTime;  // For button debouncing
+    bool buttonIsHeld;          // True when button is actively held (prevents re-trigger)
+    uint32_t lastDebounceTime;  // Time of last button event (press or release)
+    uint32_t buttonReleaseTime; // Time when button was released (0 = not released yet)
 };
 
 bool begin();
