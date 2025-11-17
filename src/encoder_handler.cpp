@@ -10,6 +10,7 @@ Handler::Handler(uint8_t encoderIndex)
     , accumulator(0)
     , wasTouched(false)
     , releaseTime(0)
+    , lastButtonState(false)
     , valueChangeCallback(nullptr)
     , buttonPressCallback(nullptr)
     , displayUpdateCallback(nullptr)
@@ -19,8 +20,12 @@ Handler::Handler(uint8_t encoderIndex)
 }
 
 void Handler::update() {
-    // Check for button press
-    if (buttonPressCallback && EncoderIO::getButton(encoderIndex)) {
+    // Check for button press with edge detection
+    bool currentButtonState = EncoderIO::getButton(encoderIndex);
+
+    // Detect rising edge (button just pressed)
+    if (buttonPressCallback && currentButtonState && !lastButtonState) {
+        // Rising edge detected - button was just pressed
         buttonPressCallback();
         // Mark as touched to reset cooldown
         if (!wasTouched) {
@@ -31,6 +36,9 @@ void Handler::update() {
         }
         releaseTime = 0;  // Reset cooldown
     }
+
+    // Update button state for next iteration
+    lastButtonState = currentButtonState;
 
     // Get current encoder position
     int32_t currentPosition = EncoderIO::getPosition(encoderIndex);

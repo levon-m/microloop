@@ -127,7 +127,7 @@ static void setupEncoder1() {
                 Serial.println(StutterController::captureStartName(newCaptureStart));
 
                 // Update menu display immediately
-                MenuDisplayData menuData("STUTTER->Capture Start", StutterController::captureStartName(newCaptureStart), 2, newIndex);
+                MenuDisplayData menuData("STUTTER->Cap. Start", StutterController::captureStartName(newCaptureStart), 2, newIndex);
                 DisplayManager::instance().showMenu(menuData);
                 DisplayManager::instance().updateDisplay();
             }
@@ -143,7 +143,7 @@ static void setupEncoder1() {
                 Serial.println(StutterController::captureEndName(newCaptureEnd));
 
                 // Update menu display immediately
-                MenuDisplayData menuData("STUTTER->Capture End", StutterController::captureEndName(newCaptureEnd), 2, newIndex);
+                MenuDisplayData menuData("STUTTER->Cap. End", StutterController::captureEndName(newCaptureEnd), 2, newIndex);
                 DisplayManager::instance().showMenu(menuData);
                 DisplayManager::instance().updateDisplay();
             }
@@ -168,12 +168,12 @@ static void setupEncoder1() {
                 menuData.numOptions = 2;
                 menuData.selectedIndex = static_cast<uint8_t>(stutter.getLengthMode());
             } else if (param == StutterController::Parameter::CAPTURE_START) {
-                menuData.topText = "STUTTER->Capture Start";
+                menuData.topText = "STUTTER->Cap. Start";
                 menuData.middleText = StutterController::captureStartName(stutter.getCaptureStartMode());
                 menuData.numOptions = 2;
                 menuData.selectedIndex = static_cast<uint8_t>(stutter.getCaptureStartMode());
             } else {  // CAPTURE_END
-                menuData.topText = "STUTTER->Capture End";
+                menuData.topText = "STUTTER->Cap. End";
                 menuData.middleText = StutterController::captureEndName(stutter.getCaptureEndMode());
                 menuData.numOptions = 2;
                 menuData.selectedIndex = static_cast<uint8_t>(stutter.getCaptureEndMode());
