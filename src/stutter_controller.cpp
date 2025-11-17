@@ -232,7 +232,7 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
             }
 
             // Update visual feedback
-            DisplayIO::showBitmap(stateToBitmap(m_effect.getState()));
+            DisplayManager::instance().updateDisplay();
         }
 
         return true;  // Command handled
@@ -282,8 +282,7 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
             Serial.println(", STUTTER released)");
         }
 
-        // Update visual feedback
-        DisplayIO::showBitmap(stateToBitmap(m_effect.getState()));
+        // Update visual feedback (let edge detection handle it)
         return true;  // Command handled
     }
 
@@ -295,7 +294,7 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
         // Actually, better to cancel so we don't have orphaned scheduled events
         m_effect.stopPlayback();  // Transition to IDLE_WITH_LOOP
         Serial.println("Stutter: PLAYBACK CANCELLED (released before onset)");
-        DisplayIO::showBitmap(stateToBitmap(m_effect.getState()));
+        // Update visual feedback (let edge detection handle it)
         return true;  // Command handled
     }
 
@@ -318,8 +317,7 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
             Serial.println(")");
         }
 
-        // Update visual feedback
-        DisplayIO::showBitmap(stateToBitmap(m_effect.getState()));
+        // Update visual feedback (let edge detection handle it)
         return true;  // Command handled
     }
 
