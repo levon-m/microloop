@@ -66,24 +66,17 @@ static void setupEncoder1() {
         if (current == StutterController::Parameter::ONSET) {
             s_stutterController->setCurrentParameter(StutterController::Parameter::LENGTH);
             Serial.println("Stutter Parameter: LENGTH");
-            // TODO: Uncomment when stutter parameter bitmaps are added
-            // DisplayIO::showBitmap(StutterController::lengthToBitmap(stutter.getLengthMode()));
         } else if (current == StutterController::Parameter::LENGTH) {
             s_stutterController->setCurrentParameter(StutterController::Parameter::CAPTURE_START);
             Serial.println("Stutter Parameter: CAPTURE_START");
-            // TODO: Uncomment when stutter parameter bitmaps are added
-            // DisplayIO::showBitmap(StutterController::captureStartToBitmap(stutter.getCaptureStartMode()));
         } else if (current == StutterController::Parameter::CAPTURE_START) {
             s_stutterController->setCurrentParameter(StutterController::Parameter::CAPTURE_END);
             Serial.println("Stutter Parameter: CAPTURE_END");
-            // TODO: Uncomment when stutter parameter bitmaps are added
-            // DisplayIO::showBitmap(StutterController::captureEndToBitmap(stutter.getCaptureEndMode()));
         } else {  // CAPTURE_END
             s_stutterController->setCurrentParameter(StutterController::Parameter::ONSET);
             Serial.println("Stutter Parameter: ONSET");
-            // TODO: Uncomment when stutter parameter bitmaps are added
-            // DisplayIO::showBitmap(StutterController::onsetToBitmap(stutter.getOnsetMode()));
         }
+        // Display update handled by onDisplayUpdate callback
     });
 
     // Value change: Adjust current parameter
@@ -100,8 +93,11 @@ static void setupEncoder1() {
                 stutter.setOnsetMode(newOnset);
                 Serial.print("Stutter Onset: ");
                 Serial.println(StutterController::onsetName(newOnset));
-                // TODO: Uncomment when stutter parameter bitmaps are added
-                // DisplayIO::showBitmap(StutterController::onsetToBitmap(newOnset));
+
+                // Update menu display immediately
+                MenuDisplayData menuData("STUTTER->Onset", StutterController::onsetName(newOnset), 2, newIndex);
+                DisplayManager::instance().showMenu(menuData);
+                DisplayManager::instance().updateDisplay();
             }
         } else if (param == StutterController::Parameter::LENGTH) {
             int8_t currentIndex = static_cast<int8_t>(stutter.getLengthMode());
@@ -113,8 +109,11 @@ static void setupEncoder1() {
                 stutter.setLengthMode(newLength);
                 Serial.print("Stutter Length: ");
                 Serial.println(StutterController::lengthName(newLength));
-                // TODO: Uncomment when stutter parameter bitmaps are added
-                // DisplayIO::showBitmap(StutterController::lengthToBitmap(newLength));
+
+                // Update menu display immediately
+                MenuDisplayData menuData("STUTTER->Length", StutterController::lengthName(newLength), 2, newIndex);
+                DisplayManager::instance().showMenu(menuData);
+                DisplayManager::instance().updateDisplay();
             }
         } else if (param == StutterController::Parameter::CAPTURE_START) {
             int8_t currentIndex = static_cast<int8_t>(stutter.getCaptureStartMode());
@@ -126,8 +125,11 @@ static void setupEncoder1() {
                 stutter.setCaptureStartMode(newCaptureStart);
                 Serial.print("Stutter Capture Start: ");
                 Serial.println(StutterController::captureStartName(newCaptureStart));
-                // TODO: Uncomment when stutter parameter bitmaps are added
-                // DisplayIO::showBitmap(StutterController::captureStartToBitmap(newCaptureStart));
+
+                // Update menu display immediately
+                MenuDisplayData menuData("STUTTER->Capture Start", StutterController::captureStartName(newCaptureStart), 2, newIndex);
+                DisplayManager::instance().showMenu(menuData);
+                DisplayManager::instance().updateDisplay();
             }
         } else {  // CAPTURE_END
             int8_t currentIndex = static_cast<int8_t>(stutter.getCaptureEndMode());
@@ -139,8 +141,11 @@ static void setupEncoder1() {
                 stutter.setCaptureEndMode(newCaptureEnd);
                 Serial.print("Stutter Capture End: ");
                 Serial.println(StutterController::captureEndName(newCaptureEnd));
-                // TODO: Uncomment when stutter parameter bitmaps are added
-                // DisplayIO::showBitmap(StutterController::captureEndToBitmap(newCaptureEnd));
+
+                // Update menu display immediately
+                MenuDisplayData menuData("STUTTER->Capture End", StutterController::captureEndName(newCaptureEnd), 2, newIndex);
+                DisplayManager::instance().showMenu(menuData);
+                DisplayManager::instance().updateDisplay();
             }
         }
     });
@@ -148,17 +153,35 @@ static void setupEncoder1() {
     // Display update: Show current parameter or return to effect display
     s_encoder1->onDisplayUpdate([](bool isTouched) {
         if (isTouched) {
-            // TODO: Uncomment when stutter parameter bitmaps are added and menu system is implemented
-            // StutterController::Parameter param = s_stutterController->getCurrentParameter();
-            // if (param == StutterController::Parameter::ONSET) {
-            //     DisplayIO::showBitmap(StutterController::onsetToBitmap(stutter.getOnsetMode()));
-            // } else if (param == StutterController::Parameter::LENGTH) {
-            //     DisplayIO::showBitmap(StutterController::lengthToBitmap(stutter.getLengthMode()));
-            // } else if (param == StutterController::Parameter::CAPTURE_START) {
-            //     DisplayIO::showBitmap(StutterController::captureStartToBitmap(stutter.getCaptureStartMode()));
-            // } else {  // CAPTURE_END
-            //     DisplayIO::showBitmap(StutterController::captureEndToBitmap(stutter.getCaptureEndMode()));
-            // }
+            StutterController::Parameter param = s_stutterController->getCurrentParameter();
+
+            // Build menu data
+            MenuDisplayData menuData;
+            if (param == StutterController::Parameter::ONSET) {
+                menuData.topText = "STUTTER->Onset";
+                menuData.middleText = StutterController::onsetName(stutter.getOnsetMode());
+                menuData.numOptions = 2;
+                menuData.selectedIndex = static_cast<uint8_t>(stutter.getOnsetMode());
+            } else if (param == StutterController::Parameter::LENGTH) {
+                menuData.topText = "STUTTER->Length";
+                menuData.middleText = StutterController::lengthName(stutter.getLengthMode());
+                menuData.numOptions = 2;
+                menuData.selectedIndex = static_cast<uint8_t>(stutter.getLengthMode());
+            } else if (param == StutterController::Parameter::CAPTURE_START) {
+                menuData.topText = "STUTTER->Capture Start";
+                menuData.middleText = StutterController::captureStartName(stutter.getCaptureStartMode());
+                menuData.numOptions = 2;
+                menuData.selectedIndex = static_cast<uint8_t>(stutter.getCaptureStartMode());
+            } else {  // CAPTURE_END
+                menuData.topText = "STUTTER->Capture End";
+                menuData.middleText = StutterController::captureEndName(stutter.getCaptureEndMode());
+                menuData.numOptions = 2;
+                menuData.selectedIndex = static_cast<uint8_t>(stutter.getCaptureEndMode());
+            }
+
+            // Show menu via DisplayManager (takes priority over effects)
+            DisplayManager::instance().showMenu(menuData);
+            DisplayManager::instance().updateDisplay();
         } else {
             // Cooldown expired - only hide menu if NO other encoders are touched
             if (!s_encoder2->isTouched() && !s_encoder3->isTouched() && !s_encoder4->isTouched()) {
