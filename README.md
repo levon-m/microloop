@@ -2,7 +2,7 @@
 
 MIDI-synced micro-looper with effects, inspired by the French House and Electro sounds of *Ed Banger Records*
 
-![MicroLoop Hardware](images/microloop.jpg)
+![MicroLoop Hardware](media/microloop.jpg)
 
 ## Features
 
@@ -52,3 +52,4 @@ MIDI-synced micro-looper with effects, inspired by the French House and Electro 
 - **Professional timing**: EMA-smoothed MIDI clock with atomic beat boundary detection
 - **Click-free audio**: 3ms linear crossfades on all effect transitions
 - **Zero missed steps**: Hardware-frozen encoder state via MCP23017 INTCAP registers
+
