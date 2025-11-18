@@ -8,6 +8,7 @@ NeoKey 1X4 mechanical key switch board w/ LEDs,1,U7,Adafruit Industries LLC,4980
 Translucent keycaps,1,,Adafruit Industries LLC,4956,1528-4956-ND,$4.95
 MCP23017 I2C I/O expander,1,U5,Microchip Technology,MCP23017-E/SP,MCP23017-E/SP-ND,$1.69
 Rotary encoders with push buttons (20 detents) + knob caps,1,"SW1, SW2, SW3, SW4",Amazon,https://www.amazon.com/dp/B07DM2YMT4,,$8.89
+128GB microSD card (can go as low as 8GB),1,,Amazon,https://www.amazon.com/dp/B0B7NTY2S6,,$16.99
 "OLED I2C module (monochrome white, 128x64)",1,U6,Amazon,https://www.amazon.com/dp/B09JWN8K99,,$12.99
 Stackable (long-tail) headers,1,,Amazon,https://www.amazon.com/dp/B0778M5P1W,,$6.99
 3.5mm stereo jacks to screw terminals,1,"J1, J2",Amazon,https://www.amazon.com/dp/B017CBTLJK,,$5.79
@@ -19,4 +20,4 @@ RGB LED,1,D1,Inolux,HV-5RGB60,1830-1014-ND,$1.06
 100 Ohm Resistors,2,"R7, R8",Stackpole Electronics Inc,CF14JT100R,CF14JT100RCT-ND,$0.20
 100 nF Capacitor,1,C1,Vishay Beyschlag/Draloric/BC Components,K104K15X7RF5TL2,BC1084CT-ND,$0.25
 ,,,,,,
-,,,,,,$110.33
+,,,,,,$127.32

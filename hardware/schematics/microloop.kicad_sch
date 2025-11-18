@@ -5737,9 +5737,19 @@
 		)
 		(uuid "48586e76-1231-4419-ab7a-e41f72cd674b")
 	)
+	(text "microSD card goes in Teensy's port, NOT the Audio Adapter's."
+		(exclude_from_sim no)
+		(at 270.764 146.05 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "756b3dd2-c590-402c-a08e-cef2c2850124")
+	)
 	(text "APS6404L 8 MB PSRAM chip soldered on underside pads,\nbetween pins 31-32 and 33-34."
 		(exclude_from_sim no)
-		(at 270.51 148.844 0)
+		(at 270.51 151.638 0)
 		(effects
 			(font
 				(size 1.27 1.27)
