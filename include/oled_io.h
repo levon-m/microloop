@@ -43,7 +43,7 @@ struct DisplayEvent {
     DisplayEvent(DisplayCommand cmd, const MenuDisplayData& menu) : command(cmd), menuData(menu) {}
 };
 
-namespace DisplayIO {
+namespace OledIO {
     bool begin();
 
     void threadLoop();

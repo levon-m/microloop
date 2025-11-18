@@ -24,8 +24,9 @@ struct EncoderState {
     bool     buttonPressed;         // One-shot flag: true when button press detected
 };
 
-// Extra MCP button state (NeoKey-style debouncing)
-struct AuxButtonState {
+// Preset button state (NeoKey-style debouncing)
+// These buttons are reserved for future preset recall feature
+struct PresetButtonState {
     bool     lastState;         // Last stable button state
     uint32_t lastEventTime;     // Time of last accepted state change
     bool     pressedFlag;       // One-shot flag: true when button press detected
@@ -41,7 +42,7 @@ int32_t getPosition(uint8_t encoderNum);
 
 bool getEncoderButton(uint8_t encoderNum);  // Returns and consumes one-shot flag
 
-bool getAuxButton(uint8_t buttonNum);  // Returns and consumes one-shot flag for extra MCP buttons
+bool getPresetButton(uint8_t buttonNum);  // Returns and consumes one-shot flag for preset buttons (1-4)
 
 void resetPosition(uint8_t encoderNum);
 

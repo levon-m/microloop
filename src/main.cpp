@@ -4,7 +4,7 @@
 #include "midi_io.h"
 #include "app_logic.h"
 #include "neokey_io.h"
-#include "display_io.h"
+#include "oled_io.h"
 #include "mcp_io.h"
 #include "audio_freeze.h"
 #include "audio_choke.h"
@@ -49,7 +49,7 @@ void mcpThreadEntry() {
 }
 
 void displayThreadEntry() {
-    DisplayIO::threadLoop();  // Never returns
+    OledIO::threadLoop();  // Never returns
 }
 
 void appThreadEntry() {
@@ -118,7 +118,7 @@ void setup() {
     }
     Serial.println("MCP I/O: OK (MCP23017 on I2C 0x20 / Wire, ISR capture mode)");
 
-    if (!DisplayIO::begin()) {
+    if (!OledIO::begin()) {
         Serial.println("WARNING: Display init failed (will continue without display)");
         // Continue anyway - display is optional for basic functionality
     } else {

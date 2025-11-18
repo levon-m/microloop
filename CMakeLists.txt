@@ -242,9 +242,9 @@ add_library(neokey_io STATIC src/neokey_io.cpp)
 target_include_directories(neokey_io PUBLIC include)
 target_link_libraries(neokey_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
 
-add_library(display_io STATIC src/display_io.cpp)
-target_include_directories(display_io PUBLIC include)
-target_link_libraries(display_io teensy_core teensy_threads ssd1306 gfx wire microloop_utils)
+add_library(oled_io STATIC src/oled_io.cpp)
+target_include_directories(oled_io PUBLIC include)
+target_link_libraries(oled_io teensy_core teensy_threads ssd1306 gfx wire microloop_utils)
 
 add_library(effect_manager STATIC src/effect_manager.cpp)
 target_include_directories(effect_manager PUBLIC include)
@@ -261,7 +261,7 @@ target_link_libraries(encoder_handler teensy_core mcp_io)
 
 add_library(display_manager STATIC src/display_manager.cpp)
 target_include_directories(display_manager PUBLIC include)
-target_link_libraries(display_manager teensy_core display_io effect_manager)
+target_link_libraries(display_manager teensy_core oled_io effect_manager)
 
 add_library(choke_controller STATIC src/choke_controller.cpp)
 target_include_directories(choke_controller PUBLIC include)
@@ -283,7 +283,7 @@ target_link_libraries(app_logic
     teensy_threads
     midi_io
     neokey_io
-    display_io
+    oled_io
     effect_manager
     microloop_utils
     effect_quantization
@@ -316,7 +316,7 @@ target_link_libraries(microloop.elf
     teensy_threads
     midi_io
     neokey_io
-    display_io
+    oled_io
     app_logic
     effect_manager
     effect_quantization

@@ -4,7 +4,7 @@
 #include "effect_manager.h"
 #include "audio_choke.h"
 #include "audio_freeze.h"
-#include "display_io.h"
+#include "oled_io.h"
 #include "neokey_io.h"
 #include "timekeeper.h"
 

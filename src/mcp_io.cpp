@@ -66,20 +66,19 @@ static constexpr EncoderPins encoderPins[4] = {
     {7, 6, 5}     // Encoder 4: A=GPA7, B=GPA6, SW=GPA5
 };
 
-// Extra MCP button pin assignments (example, adjust as needed)
-// Using remaining available MCP pins
-static constexpr uint8_t auxButtonPins[4] = {
-    0,   // AUX 0: GPA0
-    1,   // AUX 1: GPA1
-    14,  // AUX 2: GPB6
-    15   // AUX 3: GPB7
+// Preset button pin assignments (for future preset recall feature)
+static constexpr uint8_t presetButtonPins[4] = {
+    1,   // Preset 1: GPA1
+    0,   // Preset 2: GPA0
+    14,  // Preset 3: GPB6
+    15   // Preset 4: GPB7
 };
 
 // Encoder state tracking
 static EncoderState encoders[4] = {};
 
-// Extra button state tracking
-static AuxButtonState auxButtons[4] = {};
+// Preset button state tracking
+static PresetButtonState presetButtons[4] = {};
 
 // Debounce time for all buttons (NeoKey uses 20ms)
 static constexpr uint32_t DEBOUNCE_MS = 20;
@@ -185,18 +184,18 @@ static void processEvent(const McpEvent &ev) {
                      "ENC");
     }
 
-    // Process extra MCP buttons
+    // Process preset buttons (for future preset recall feature)
     for (int j = 0; j < 4; j++) {
-        bool rawBit = (ev.pins >> auxButtonPins[j]) & 1;
+        bool rawBit = (ev.pins >> presetButtonPins[j]) & 1;
         bool rawPressed = (rawBit == 0);  // Active-low buttons
 
-        processButton(auxButtons[j].lastState,
-                     auxButtons[j].lastEventTime,
-                     auxButtons[j].pressedFlag,
+        processButton(presetButtons[j].lastState,
+                     presetButtons[j].lastEventTime,
+                     presetButtons[j].pressedFlag,
                      rawPressed,
                      ev.timestamp,
                      j,
-                     "AUX");
+                     "PRESET");
     }
 }
 
@@ -230,15 +229,15 @@ bool begin() {
         encoders[i].position = 0;
     }
 
-    // Configure extra MCP button pins as inputs with pull-ups
+    // Configure preset button pins as inputs with pull-ups (for future preset feature)
     for (int j = 0; j < 4; j++) {
-        mcp.pinMode(auxButtonPins[j], INPUT_PULLUP);
+        mcp.pinMode(presetButtonPins[j], INPUT_PULLUP);
 
         // Initialize button state
-        bool bit = mcp.digitalRead(auxButtonPins[j]);
-        auxButtons[j].lastState = (bit == 0);  // Convert to pressed/released
-        auxButtons[j].lastEventTime = 0;
-        auxButtons[j].pressedFlag = false;
+        bool bit = mcp.digitalRead(presetButtonPins[j]);
+        presetButtons[j].lastState = (bit == 0);  // Convert to pressed/released
+        presetButtons[j].lastEventTime = 0;
+        presetButtons[j].pressedFlag = false;
     }
 
     // Enable interrupt-on-change for all pins
@@ -252,9 +251,9 @@ bool begin() {
         mcp.setupInterruptPin(encoderPins[i].pinSW, CHANGE);
     }
 
-    // Enable interrupt-on-change for all extra button pins
+    // Enable interrupt-on-change for all preset button pins
     for (int j = 0; j < 4; j++) {
-        mcp.setupInterruptPin(auxButtonPins[j], CHANGE);
+        mcp.setupInterruptPin(presetButtonPins[j], CHANGE);
     }
 
     // Clear any pending interrupts by reading the capture registers
@@ -264,7 +263,7 @@ bool begin() {
     pinMode(INT_PIN, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(INT_PIN), mcpISR, FALLING);
 
-    Serial.println("McpIO: MCP23017 initialized (I2C 0x20, INT on pin 36, 4 encoders + 4 aux buttons)");
+    Serial.println("McpIO: MCP23017 initialized (I2C 0x20, INT on pin 39, 4 encoders + 4 preset buttons)");
     return true;
 }
 
@@ -318,17 +317,17 @@ bool getEncoderButton(uint8_t encoderNum) {
     return false;
 }
 
-bool getAuxButton(uint8_t buttonNum) {
+bool getPresetButton(uint8_t buttonNum) {
     if (buttonNum < 4) {
         bool pressed;
         noInterrupts();
-        pressed = auxButtons[buttonNum].pressedFlag;
-        auxButtons[buttonNum].pressedFlag = false;  // Consume the button press
+        pressed = presetButtons[buttonNum].pressedFlag;
+        presetButtons[buttonNum].pressedFlag = false;  // Consume the button press
         interrupts();
 
 #if MCP_DEBUG
         if (pressed) {
-            Serial.printf("getAuxButton(%d) consumed press at %lu ms\n",
+            Serial.printf("getPresetButton(%d) consumed press at %lu ms\n",
                           buttonNum, millis());
         }
 #endif
