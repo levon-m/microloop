@@ -1,0 +1,25 @@
+---
+config:
+  theme: redux
+  look: neo
+  layout: elk
+---
+stateDiagram
+  direction TB
+  [*] --> idleWithNoLoop
+  waitForCaptureEnd --> Playing:Global Quant grid boundary reached via MIDI ticks (STUTTER Held, Loop Captured)
+  waitForCaptureEnd --> idleWithWrittenLoop:Global Quant grid boundary reached via MIDI ticks (STUTTER Not Held, Loop Captured)
+  waitForCaptureStart --> Capturing:Global Quant grid boundary reached via MIDI ticks
+  waitForPlaybackOnset --> Playing:Global Quant grid boundary reached via MIDI ticks
+  waitForPlaybackLength --> idleWithWrittenLoop:Global Quant grid boundary reached via MIDI ticks (Playback continues until grid boundary)
+  Playing --> idleWithWrittenLoop:Length->Free, STUTTER Not Held (Playback stops immediately)
+  Playing --> waitForPlaybackLength:Length->Quant, STUTTER Not held
+  idleWithNoLoop --> waitForCaptureStart:captureStart->Quant, FUNC+STUTTER Pressed
+  idleWithNoLoop --> Capturing:captureStart->Free, FUNC+STUTTER Held
+  Capturing --> Playing:captureEnd->Free, FUNC Not Held, STUTTER Held (Loop Captured)
+  Capturing --> idleWithWrittenLoop:captureEnd->Free, STUTTER Not Held (Loop Captured, if one was available)
+  Capturing --> waitForCaptureEnd:captureEnd->Quant
+  idleWithWrittenLoop --> waitForPlaybackOnset:Onset->Quant, STUTTER Pressed
+  idleWithWrittenLoop --> Playing:Onset->Free, STUTTER Held
+  idleWithWrittenLoop --> Capturing:captureStart->Free, FUNC+STUTTER Held/Pressed (Current loop deleted)
+  idleWithWrittenLoop --> waitForCaptureStart:captureStart->Quant, FUNC+STUTTER Pressed (Current loop deleted)
