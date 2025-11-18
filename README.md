@@ -1,6 +1,6 @@
-# μLoop: Live Performance Looper/Sampler
+# μLoop
 
-MIDI-synced micro-looper with effects, inspired by the French House and Electro sounds of *Ed Banger Records*
+μLoop is a hardware looper/sampler quantized to external MIDI clock, inspired by the French House and Electro sounds of *Ed Banger Records*.
 
 ![MicroLoop Hardware](media/microloop.jpg)
 
@@ -52,4 +52,5 @@ MIDI-synced micro-looper with effects, inspired by the French House and Electro 
 - **Professional timing**: EMA-smoothed MIDI clock with atomic beat boundary detection
 - **Click-free audio**: 3ms linear crossfades on all effect transitions
 - **Zero missed steps**: Hardware-frozen encoder state via MCP23017 INTCAP registers
+
 
