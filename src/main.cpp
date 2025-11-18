@@ -3,9 +3,9 @@
 #include <TeensyThreads.h>
 #include "midi_io.h"
 #include "app_logic.h"
-#include "input_io.h"
+#include "neokey_io.h"
 #include "display_io.h"
-#include "encoder_io.h"
+#include "mcp_io.h"
 #include "audio_freeze.h"
 #include "audio_choke.h"
 #include "audio_stutter.h"
@@ -41,7 +41,11 @@ void ioThreadEntry() {
 }
 
 void inputThreadEntry() {
-    InputIO::threadLoop();  // Never returns
+    NeokeyIO::threadLoop();  // Never returns
+}
+
+void mcpThreadEntry() {
+    McpIO::threadLoop();  // Never returns
 }
 
 void displayThreadEntry() {
@@ -94,15 +98,25 @@ void setup() {
     AppLogic::begin();
     Serial.println("App Logic: OK");
 
-    if (!InputIO::begin()) {
-        Serial.println("ERROR: Input I/O init failed!");
+    if (!NeokeyIO::begin()) {
+        Serial.println("ERROR: NeoKey I/O init failed!");
         while (1) {
             // Blink LED rapidly to indicate error
             digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
             delay(100);
         }
     }
-    Serial.println("Input I/O: OK (Neokey on I2C 0x30 / Wire2)");
+    Serial.println("NeoKey I/O: OK (Neokey on I2C 0x30 / Wire2)");
+
+    if (!McpIO::begin()) {
+        Serial.println("ERROR: MCP I/O init failed!");
+        while (1) {
+            // Blink LED rapidly to indicate error
+            digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+            delay(100);
+        }
+    }
+    Serial.println("MCP I/O: OK (MCP23017 on I2C 0x20 / Wire, ISR capture mode)");
 
     if (!DisplayIO::begin()) {
         Serial.println("WARNING: Display init failed (will continue without display)");
@@ -110,16 +124,6 @@ void setup() {
     } else {
         Serial.println("Display: OK (SSD1306 on I2C 0x3C / Wire1)");
     }
-
-    if (!EncoderIO::begin()) {
-        Serial.println("ERROR: Encoder I/O init failed!");
-        while (1) {
-            // Blink LED rapidly to indicate error
-            digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-            delay(100);
-        }
-    }
-    Serial.println("Encoder I/O: OK (MCP23017 on I2C 0x20 / Wire, ISR capture mode)");
 
     if (!EffectManager::registerEffect(EffectID::STUTTER, &stutter)) {
         Serial.println("FATAL: Failed to register stutter effect!");
@@ -151,10 +155,11 @@ void setup() {
 
     int ioThreadId = threads.addThread(ioThreadEntry, 2048);
     int inputThreadId = threads.addThread(inputThreadEntry, 2048);
+    int mcpThreadId = threads.addThread(mcpThreadEntry, 2048);
     int displayThreadId = threads.addThread(displayThreadEntry, 2048);
     int appThreadId = threads.addThread(appThreadEntry, 3072);
 
-    if (ioThreadId < 0 || inputThreadId < 0 || displayThreadId < 0 || appThreadId < 0) {
+    if (ioThreadId < 0 || inputThreadId < 0 || mcpThreadId < 0 || displayThreadId < 0 || appThreadId < 0) {
         Serial.println("ERROR: Thread creation failed!");
         while (1);  // Halt
     }
@@ -173,9 +178,6 @@ void setup() {
 }
 
 void loop() {
-    // Process encoder events (drains queue from ISR)
-    EncoderIO::update();
-
     // Check for serial commands (non-blocking)
     if (Serial.available()) {
         char cmd = Serial.read();

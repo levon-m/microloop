@@ -1,5 +1,5 @@
 #include "choke_controller.h"
-#include "input_io.h"
+#include "neokey_io.h"
 #include "display_manager.h"
 #include "timekeeper.h"
 #include <Arduino.h>
@@ -58,7 +58,7 @@ bool ChokeController::handleButtonPress(const Command& cmd) {
         }
 
         // Update visual feedback
-        InputIO::setLED(EffectID::CHOKE, true);
+        NeokeyIO::setLED(EffectID::CHOKE, true);
         DisplayManager::instance().updateDisplay();
         return true;  // Command handled
     } else {
@@ -143,7 +143,7 @@ void ChokeController::updateVisualFeedback() {
     // Detect rising edge: effect just became enabled
     if (isEnabled && !m_wasEnabled) {
         // ISR fired onset or immediate enable - update visual feedback
-        InputIO::setLED(EffectID::CHOKE, true);
+        NeokeyIO::setLED(EffectID::CHOKE, true);
         DisplayManager::instance().updateDisplay();
 
         // Determine what happened based on onset/length modes
@@ -163,7 +163,7 @@ void ChokeController::updateVisualFeedback() {
     // Detect falling edge: effect just became disabled
     if (!isEnabled && m_wasEnabled) {
         // Update LED to reflect disabled state
-        InputIO::setLED(EffectID::CHOKE, false);
+        NeokeyIO::setLED(EffectID::CHOKE, false);
         DisplayManager::instance().updateDisplay();
 
         // Check if this was auto-release (quantized length mode)

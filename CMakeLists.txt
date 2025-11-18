@@ -238,9 +238,9 @@ add_library(midi_io STATIC src/midi_io.cpp)
 target_include_directories(midi_io PUBLIC include)
 target_link_libraries(midi_io teensy_core midi teensy_threads microloop_utils)
 
-add_library(input_io STATIC src/input_io.cpp)
-target_include_directories(input_io PUBLIC include)
-target_link_libraries(input_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
+add_library(neokey_io STATIC src/neokey_io.cpp)
+target_include_directories(neokey_io PUBLIC include)
+target_link_libraries(neokey_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
 
 add_library(display_io STATIC src/display_io.cpp)
 target_include_directories(display_io PUBLIC include)
@@ -257,7 +257,7 @@ target_link_libraries(effect_quantization teensy_core microloop_utils)
 
 add_library(encoder_handler STATIC src/encoder_handler.cpp)
 target_include_directories(encoder_handler PUBLIC include)
-target_link_libraries(encoder_handler teensy_core encoder_io)
+target_link_libraries(encoder_handler teensy_core mcp_io)
 
 add_library(display_manager STATIC src/display_manager.cpp)
 target_include_directories(display_manager PUBLIC include)
@@ -265,15 +265,15 @@ target_link_libraries(display_manager teensy_core display_io effect_manager)
 
 add_library(choke_controller STATIC src/choke_controller.cpp)
 target_include_directories(choke_controller PUBLIC include)
-target_link_libraries(choke_controller teensy_core audio effect_quantization display_manager input_io microloop_utils)
+target_link_libraries(choke_controller teensy_core audio effect_quantization display_manager neokey_io microloop_utils)
 
 add_library(freeze_controller STATIC src/freeze_controller.cpp)
 target_include_directories(freeze_controller PUBLIC include)
-target_link_libraries(freeze_controller teensy_core audio effect_quantization display_manager input_io microloop_utils)
+target_link_libraries(freeze_controller teensy_core audio effect_quantization display_manager neokey_io microloop_utils)
 
 add_library(stutter_controller STATIC src/stutter_controller.cpp)
 target_include_directories(stutter_controller PUBLIC include)
-target_link_libraries(stutter_controller teensy_core audio effect_quantization display_manager input_io microloop_utils)
+target_link_libraries(stutter_controller teensy_core audio effect_quantization display_manager neokey_io microloop_utils)
 
 # App logic (now uses modular subsystems and effect controllers)
 add_library(app_logic STATIC src/app_logic.cpp)
@@ -282,7 +282,7 @@ target_link_libraries(app_logic
     teensy_core
     teensy_threads
     midi_io
-    input_io
+    neokey_io
     display_io
     effect_manager
     microloop_utils
@@ -294,9 +294,9 @@ target_link_libraries(app_logic
     stutter_controller
 )
 
-add_library(encoder_io STATIC src/encoder_io.cpp)
-target_include_directories(encoder_io PUBLIC include)
-target_link_libraries(encoder_io teensy_core wire mcp23017 busio)
+add_library(mcp_io STATIC src/mcp_io.cpp)
+target_include_directories(mcp_io PUBLIC include)
+target_link_libraries(mcp_io teensy_core teensy_threads wire mcp23017 busio)
 
 # MAIN
 add_executable(microloop.elf src/main.cpp)
@@ -315,7 +315,7 @@ target_link_libraries(microloop.elf
     midi
     teensy_threads
     midi_io
-    input_io
+    neokey_io
     display_io
     app_logic
     effect_manager
@@ -331,7 +331,7 @@ target_link_libraries(microloop.elf
     ssd1306
     gfx
     mcp23017
-    encoder_io
+    mcp_io
     microloop_utils
     m  # Math library
 )

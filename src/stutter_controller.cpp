@@ -1,5 +1,5 @@
 #include "stutter_controller.h"
-#include "input_io.h"
+#include "neokey_io.h"
 #include "display_manager.h"
 #include "timekeeper.h"
 #include <Arduino.h>
@@ -307,7 +307,7 @@ void StutterController::updateVisualFeedback() {
             // Update Neokey LED (blinking for armed states)
             // Note: Could differentiate WAIT_CAPTURE_START (red) vs WAIT_PLAYBACK_ONSET (blue)
             // once InputIO supports RGB colors
-            InputIO::setLED(EffectID::STUTTER, m_ledBlinkState);
+            NeokeyIO::setLED(EffectID::STUTTER, m_ledBlinkState);
         }
     } else {
         // ========== RGB LED FADE FOR CAPTURE STATES ==========
@@ -335,7 +335,7 @@ void StutterController::updateVisualFeedback() {
             }
 
             // Also update Neokey LED (keep existing behavior)
-            InputIO::setLED(EffectID::STUTTER, true);
+            NeokeyIO::setLED(EffectID::STUTTER, true);
         } else {
             // ========== SOLID LED FOR NON-CAPTURE STATES ==========
             // Turn off RGB LED for non-capture states
@@ -350,19 +350,19 @@ void StutterController::updateVisualFeedback() {
             switch (currentState) {
                 case StutterState::IDLE_NO_LOOP:
                     // LED OFF
-                    InputIO::setLED(EffectID::STUTTER, false);
+                    NeokeyIO::setLED(EffectID::STUTTER, false);
                     break;
 
                 case StutterState::IDLE_WITH_LOOP:
                     // LED WHITE (would need InputIO support for colors)
                     // For now, use GREEN as fallback
-                    InputIO::setLED(EffectID::STUTTER, false);  // Off for now
+                    NeokeyIO::setLED(EffectID::STUTTER, false);  // Off for now
                     break;
 
                 case StutterState::PLAYING:
                 case StutterState::WAIT_PLAYBACK_LENGTH:
                     // LED BLUE (solid)
-                    InputIO::setLED(EffectID::STUTTER, true);  // Will show as current effect color
+                    NeokeyIO::setLED(EffectID::STUTTER, true);  // Will show as current effect color
                     break;
 
                 default:
