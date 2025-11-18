@@ -9,32 +9,32 @@ void DisplayManager::updateDisplay() {
     // Priority 1: CHOKE effect (highest priority - last in audio chain)
     AudioEffectBase* chokeEffect = EffectManager::getEffect(EffectID::CHOKE);
     if (chokeEffect && chokeEffect->isEnabled()) {
-        DisplayIO::showChoke();
+        OledIO::showChoke();
         return;
     }
 
     // Priority 2: FREEZE effect (middle priority)
     AudioEffectBase* freezeEffect = EffectManager::getEffect(EffectID::FREEZE);
     if (freezeEffect && freezeEffect->isEnabled()) {
-        DisplayIO::showBitmap(BitmapID::FREEZE_ACTIVE);
+        OledIO::showBitmap(BitmapID::FREEZE_ACTIVE);
         return;
     }
 
     // Priority 3: STUTTER effect (lowest effect priority - first in audio chain)
     AudioEffectBase* stutterEffect = EffectManager::getEffect(EffectID::STUTTER);
     if (stutterEffect && stutterEffect->isEnabled()) {
-        DisplayIO::showBitmap(BitmapID::STUTTER_ACTIVE);
+        OledIO::showBitmap(BitmapID::STUTTER_ACTIVE);
         return;
     }
 
     // Priority 4: Menu (if showing and no effects active)
     if (m_menuShowing) {
-        DisplayIO::showMenu(m_currentMenu);
+        OledIO::showMenu(m_currentMenu);
         return;
     }
 
     // Priority 5: Default/idle (no effects active, no menu)
-    DisplayIO::showDefault();
+    OledIO::showDefault();
 }
 
 void DisplayManager::setLastActivatedEffect(EffectID effectID) {

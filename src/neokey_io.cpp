@@ -1,4 +1,4 @@
-#include "input_io.h"
+#include "neokey_io.h"
 #include "spsc_queue.h"
 #include "trace.h"
 #include <Adafruit_NeoKey_1x4.h>
@@ -77,7 +77,7 @@ static void neokeyISR() {
     interruptPending = true;
 }
 
-bool InputIO::begin() {
+bool NeokeyIO::begin() {
     // Configure INT pin (input with pull-up, active LOW)
     pinMode(INT_PIN, INPUT_PULLUP);
 
@@ -112,11 +112,11 @@ bool InputIO::begin() {
     neokey.pixels.setPixelColor(3, LED_COLOR_GREEN);  // Key 3: FUNC inactive (green)
     neokey.pixels.show();
 
-    Serial.println("InputIO: Neokey initialized (I2C 0x30 on Wire2, INT on pin 33, interrupt-driven)");
+    Serial.println("NeokeyIO: Neokey initialized (I2C 0x30 on Wire2, INT on pin 33, interrupt-driven)");
     return true;
 }
 
-void InputIO::threadLoop() {
+void NeokeyIO::threadLoop() {
     for (;;) {
         // Check if interrupt flag is set (deferred I2C read)
         if (interruptPending) {
@@ -168,11 +168,11 @@ void InputIO::threadLoop() {
     }
 }
 
-bool InputIO::popCommand(Command& outCmd) {
+bool NeokeyIO::popCommand(Command& outCmd) {
     return commandQueue.pop(outCmd);
 }
 
-void InputIO::setLED(EffectID effectID, bool enabled) {
+void NeokeyIO::setLED(EffectID effectID, bool enabled) {
     uint8_t keyIndex = 0;
     uint32_t enabledColor = LED_COLOR_RED;
     uint32_t disabledColor = LED_COLOR_GREEN;
@@ -213,7 +213,7 @@ void InputIO::setLED(EffectID effectID, bool enabled) {
     neokey.pixels.show();  // Commit changes to hardware
 }
 
-bool InputIO::isKeyPressed(uint8_t keyIndex) {
+bool NeokeyIO::isKeyPressed(uint8_t keyIndex) {
     if (keyIndex >= NUM_KEYS) {
         return false;  // Invalid key index
     }

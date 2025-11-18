@@ -29,7 +29,7 @@
 #include "effect_controller.h"
 #include "audio_stutter.h"
 #include "effect_quantization.h"
-#include "display_io.h"
+#include "oled_io.h"
 
 /**
  * Stutter effect controller

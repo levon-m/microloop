@@ -1,7 +1,7 @@
 #include "app_logic.h"
 #include "midi_io.h"
-#include "input_io.h"
-#include "encoder_io.h"
+#include "neokey_io.h"
+#include "mcp_io.h"
 #include "audio_choke.h"
 #include "audio_freeze.h"
 #include "audio_stutter.h"
@@ -435,7 +435,7 @@ static void setupEncoder4() {
  */
 static void processInputCommands() {
     Command cmd;
-    while (InputIO::popCommand(cmd)) {
+    while (NeokeyIO::popCommand(cmd)) {
         // Check if CHOKE/FREEZE controllers want to intercept
         bool handled = false;
 
@@ -472,7 +472,7 @@ static void processInputCommands() {
             AudioEffectBase* effect = EffectManager::getEffect(cmd.targetEffect);
             if (effect) {
                 bool enabled = effect->isEnabled();
-                InputIO::setLED(cmd.targetEffect, enabled);
+                NeokeyIO::setLED(cmd.targetEffect, enabled);
 
                 DisplayManager::instance().updateDisplay();
                 Serial.print(effect->getName());
@@ -484,10 +484,11 @@ static void processInputCommands() {
 
 /**
  * Update encoder handlers
- * Polls encoder hardware and triggers callbacks
+ * Hardware event processing now handled by dedicated MCP thread (McpIO::threadLoop)
+ * This function just updates the encoder handler logic (callbacks, display, etc.)
  */
 static void updateEncoders() {
-    EncoderIO::update();  // Process hardware events
+    // Note: McpIO::update() is no longer needed here - dedicated thread handles it
     s_encoder1->update();   // STUTTER parameters
     s_encoder2->update();   // FREEZE parameters
     s_encoder3->update();   // CHOKE parameters

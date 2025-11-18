@@ -26,7 +26,7 @@
 #include "effect_controller.h"
 #include "audio_choke.h"
 #include "effect_quantization.h"
-#include "display_io.h"
+#include "oled_io.h"
 
 /**
  * Choke effect controller

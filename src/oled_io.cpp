@@ -1,4 +1,4 @@
-#include "display_io.h"
+#include "oled_io.h"
 #include "bitmaps.h"
 #include "spsc_queue.h"
 #include "trace.h"
@@ -123,7 +123,7 @@ static void drawBitmap(BitmapID id) {
     lastRequestedWasMenu = false;  // Reset debouncing state
 }
 
-bool DisplayIO::begin() {
+bool OledIO::begin() {
     // Initialize Wire1 (I2C bus 1: SDA1=pin 17, SCL1=pin 16)
     Wire1.begin();
     Wire1.setClock(400000);  // 400kHz I2C speed (fast mode)
@@ -145,7 +145,7 @@ bool DisplayIO::begin() {
     return true;
 }
 
-void DisplayIO::threadLoop() {
+void OledIO::threadLoop() {
     for (;;) {
         DisplayEvent event;
         bool hadWork = false;
@@ -180,7 +180,7 @@ void DisplayIO::threadLoop() {
     }
 }
 
-void DisplayIO::showDefault() {
+void OledIO::showDefault() {
     // Debounce: Skip if we just requested default bitmap and not transitioning from menu
     if (lastRequestedBitmap == BitmapID::DEFAULT && !lastRequestedWasMenu) {
         return;
@@ -193,7 +193,7 @@ void DisplayIO::showDefault() {
     }
 }
 
-void DisplayIO::showChoke() {
+void OledIO::showChoke() {
     // Debounce: Skip if we just requested choke bitmap and not transitioning from menu
     if (lastRequestedBitmap == BitmapID::CHOKE_ACTIVE && !lastRequestedWasMenu) {
         return;
@@ -206,7 +206,7 @@ void DisplayIO::showChoke() {
     }
 }
 
-void DisplayIO::showBitmap(BitmapID id) {
+void OledIO::showBitmap(BitmapID id) {
     // Debounce: Skip if we just requested this same bitmap and not transitioning from menu
     if (lastRequestedBitmap == id && !lastRequestedWasMenu) {
         return;
@@ -219,7 +219,7 @@ void DisplayIO::showBitmap(BitmapID id) {
     }
 }
 
-void DisplayIO::showMenu(const MenuDisplayData& menuData) {
+void OledIO::showMenu(const MenuDisplayData& menuData) {
     // Always push menu commands (menu content may change)
     DisplayEvent event(DisplayCommand::SHOW_MENU, menuData);
     if (commandQueue.push(event)) {
@@ -227,6 +227,6 @@ void DisplayIO::showMenu(const MenuDisplayData& menuData) {
     }
 }
 
-BitmapID DisplayIO::getCurrentBitmap() {
+BitmapID OledIO::getCurrentBitmap() {
     return currentBitmap;
 }

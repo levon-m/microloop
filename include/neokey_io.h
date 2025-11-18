@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include "command.h"
 
-namespace InputIO {
+namespace NeokeyIO {
     bool begin();
 
     void threadLoop();
