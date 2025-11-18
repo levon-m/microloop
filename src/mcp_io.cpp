@@ -1,9 +1,6 @@
 #include "mcp_io.h"
 #include <TeensyThreads.h>
 
-// Debug mode: Set to 1 to enable detailed button press logging
-#define MCP_DEBUG 0
-
 namespace McpIO {
 
 // MCP23017 instance
@@ -116,19 +113,7 @@ static bool popEvent(McpEvent &out) {
 // Updates lastState, lastEventTime, and sets pressedFlag on stable press edge
 static void processButton(bool &lastState, uint32_t &lastEventTime, bool &pressedFlag,
                           bool rawPressed, uint32_t now, uint8_t debugIndex, const char* debugName) {
-#if !MCP_DEBUG
-    // Suppress unused parameter warnings in non-debug builds
-    (void)debugIndex;
-    (void)debugName;
-#endif
-
     if (rawPressed != lastState) {
-#if MCP_DEBUG
-        Serial.printf("%s[%d] RAW CHANGE: %s at %lu ms\n",
-                      debugName, debugIndex,
-                      rawPressed ? "PRESSED" : "RELEASED", now);
-#endif
-
         if (now - lastEventTime >= DEBOUNCE_MS) {
             lastEventTime = now;
             lastState = rawPressed;
@@ -136,11 +121,6 @@ static void processButton(bool &lastState, uint32_t &lastEventTime, bool &presse
             if (rawPressed) {
                 // Stable press edge detected
                 pressedFlag = true;
-
-#if MCP_DEBUG
-                Serial.printf("%s[%d] DEBOUNCED PRESS at %lu ms\n",
-                              debugName, debugIndex, now);
-#endif
             }
             // On release edge, do nothing event-wise (just update state)
         }
@@ -305,13 +285,6 @@ bool getEncoderButton(uint8_t encoderNum) {
         encoders[encoderNum].buttonPressed = false;  // Consume the button press
         interrupts();
 
-#if MCP_DEBUG
-        if (pressed) {
-            Serial.printf("getEncoderButton(%d) consumed press at %lu ms\n",
-                          encoderNum, millis());
-        }
-#endif
-
         return pressed;
     }
     return false;
@@ -324,13 +297,6 @@ bool getPresetButton(uint8_t buttonNum) {
         pressed = presetButtons[buttonNum].pressedFlag;
         presetButtons[buttonNum].pressedFlag = false;  // Consume the button press
         interrupts();
-
-#if MCP_DEBUG
-        if (pressed) {
-            Serial.printf("getPresetButton(%d) consumed press at %lu ms\n",
-                          buttonNum, millis());
-        }
-#endif
 
         return pressed;
     }
