@@ -1,0 +1,22 @@
+Item,Quantity,RefDes,MFR / Source,MFR PN / Link,DigiKey PN,~Price
+Teensy 4.1 (with header pins),1,U1,SparkFun Electronics,28370,1568-28370-ND,$29.50
+Teensy Audio Adapter board Rev D,1,U2,SparkFun Electronics,15845,1568-15845-ND,$9.80
+8 MB PSRAM chip,1,,SparkFun Electronics,COM-28391,1568-COM-28391-ND,$2.25
+MIDI FeatherWing kit,1,U3,Adafruit Industries LLC,4740,1528-4740-ND,$6.95
+NeoKey 1X4 mechanical key switch board w/ LEDs,1,U7,Adafruit Industries LLC,4980,1528-4980-ND,$9.95
+"Cherry MX Blue switches (5-pin, transparent)",4,,Cherry Americas LLC,MX2A-E1NB,1644-MX2A-E1NB-ND,$7.00
+Translucent keycaps,1,,Adafruit Industries LLC,4956,1528-4956-ND,$4.95
+MCP23017 I2C I/O expander,1,U5,Microchip Technology,MCP23017-E/SP,MCP23017-E/SP-ND,$1.69
+Rotary encoders with push buttons (20 detents) + knob caps,1,"SW1, SW2, SW3, SW4",Amazon,https://www.amazon.com/dp/B07DM2YMT4,,$8.89
+"OLED I2C module (monochrome white, 128x64)",1,U6,Amazon,https://www.amazon.com/dp/B09JWN8K99,,$12.99
+Stackable (long-tail) headers,1,,Amazon,https://www.amazon.com/dp/B0778M5P1W,,$6.99
+3.5mm stereo jacks to screw terminals,1,"J1, J2",Amazon,https://www.amazon.com/dp/B017CBTLJK,,$5.79
+Tactile Switches,4,"SW5, SW6, SW7, SW8",TE Connectivity ALCOSWITCH Switches,1825910-6,450-1650-ND,$0.52
+Green LED,1,D2,Lite-On Inc.,LTL-307GE,160-1702-ND,$0.19
+Red LEDs,4,"D3, D4, D5, D6",Lite-On Inc.,LTL-307EE,160-1701-ND,$0.76
+RGB LED,1,D1,Inolux,HV-5RGB60,1830-1014-ND,$1.06
+330 Ohm Resistors,6,"R1, R2, R3, R4, R5, R6",Stackpole Electronics Inc,CF14JT330R,CF14JT330RCT-ND,$0.60
+100 Ohm Resistors,2,"R7, R8",Stackpole Electronics Inc,CF14JT100R,CF14JT100RCT-ND,$0.20
+100 nF Capacitor,1,C1,Vishay Beyschlag/Draloric/BC Components,K104K15X7RF5TL2,BC1084CT-ND,$0.25
+,,,,,,
+,,,,,,$110.33
