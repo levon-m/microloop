@@ -30,43 +30,6 @@ StutterController::StutterController(AudioEffectStutter& effect)
       m_wasEnabled(false) {
 }
 
-// ========== UTILITY FUNCTIONS FOR BITMAP/NAME MAPPING ==========
-
-// TODO: Re-enable when stutter parameter bitmaps are added
-/*
-BitmapID StutterController::onsetToBitmap(StutterOnset onset) {
-    switch (onset) {
-        case StutterOnset::FREE:      return BitmapID::STUTTER_ONSET_FREE;
-        case StutterOnset::QUANTIZED: return BitmapID::STUTTER_ONSET_QUANT;
-        default: return BitmapID::STUTTER_ONSET_FREE;
-    }
-}
-
-BitmapID StutterController::lengthToBitmap(StutterLength length) {
-    switch (length) {
-        case StutterLength::FREE:      return BitmapID::STUTTER_LENGTH_FREE;
-        case StutterLength::QUANTIZED: return BitmapID::STUTTER_LENGTH_QUANT;
-        default: return BitmapID::STUTTER_LENGTH_FREE;
-    }
-}
-
-BitmapID StutterController::captureStartToBitmap(StutterCaptureStart captureStart) {
-    switch (captureStart) {
-        case StutterCaptureStart::FREE:      return BitmapID::STUTTER_CAPTURE_START_FREE;
-        case StutterCaptureStart::QUANTIZED: return BitmapID::STUTTER_CAPTURE_START_QUANT;
-        default: return BitmapID::STUTTER_CAPTURE_START_FREE;
-    }
-}
-
-BitmapID StutterController::captureEndToBitmap(StutterCaptureEnd captureEnd) {
-    switch (captureEnd) {
-        case StutterCaptureEnd::FREE:      return BitmapID::STUTTER_CAPTURE_END_FREE;
-        case StutterCaptureEnd::QUANTIZED: return BitmapID::STUTTER_CAPTURE_END_QUANT;
-        default: return BitmapID::STUTTER_CAPTURE_END_FREE;
-    }
-}
-*/
-
 BitmapID StutterController::stateToBitmap(StutterState state) {
     // Simplified: Use STUTTER_ACTIVE for all non-idle states
     switch (state) {
