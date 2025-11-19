@@ -13,12 +13,10 @@ static constexpr uint8_t RGB_LED_R_PIN = 28;  // Red (PWM capable)
 static constexpr uint8_t RGB_LED_G_PIN = 36;  // Green (PWM capable)
 static constexpr uint8_t RGB_LED_B_PIN = 37;  // Blue (PWM capable)
 
-// ========== RGB LED FADE STATE ==========
-static uint8_t s_fadeValue = 0;          // Current PWM value (0-255)
-static int8_t s_fadeDirection = 1;       // +1 = fading in, -1 = fading out
-static uint32_t s_lastFadeUpdate = 0;    // Timestamp of last fade update
-static constexpr uint8_t FADE_STEP_FAST = 25;    // PWM change per update for fast breathing (higher = faster fade)
-static constexpr uint8_t FADE_INTERVAL_MS = 20;  // Update every 20ms (50Hz)
+// ========== RGB LED BLINK STATE ==========
+static bool s_rgbBlinkState = false;       // Current RGB LED blink state (on/off)
+static uint32_t s_lastRgbBlinkTime = 0;    // Timestamp of last RGB LED blink toggle
+static constexpr uint32_t RGB_BLINK_INTERVAL_MS = 100;  // 100ms on/off (10Hz rapid blink)
 
 StutterController::StutterController(AudioEffectStutter& effect)
     : m_effect(effect),
@@ -253,11 +251,10 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
 
     if (currentState == StutterState::WAIT_PLAYBACK_ONSET) {
         // STUTTER released before playback started (waiting for quantized boundary)
-        // Just return to IDLE_WITH_LOOP (don't cancel - let it time out naturally)
-        // Actually, better to cancel so we don't have orphaned scheduled events
-        m_effect.stopPlayback();  // Transition to IDLE_WITH_LOOP
-        Serial.println("Stutter: PLAYBACK CANCELLED (released before onset)");
-        // Update visual feedback (let edge detection handle it)
+        // DON'T cancel - let the scheduled onset proceed
+        // The playback will start at the quantized boundary regardless of button state
+        Serial.println("Stutter: PLAYBACK ONSET still scheduled (button released, will play at grid)");
+        // Don't change state - let ISR transition to PLAYING when scheduled sample arrives
         return true;  // Command handled
     }
 
@@ -302,9 +299,6 @@ void StutterController::updateVisualFeedback() {
             analogWrite(RGB_LED_G_PIN, 0);
             analogWrite(RGB_LED_B_PIN, 0);
             NeokeyIO::setLED(EffectID::STUTTER, false);
-            // Reset fade state
-            s_fadeValue = 0;
-            s_fadeDirection = 1;
             break;
 
         case StutterState::IDLE_WITH_LOOP:
@@ -313,32 +307,24 @@ void StutterController::updateVisualFeedback() {
             analogWrite(RGB_LED_G_PIN, 255);
             analogWrite(RGB_LED_B_PIN, 255);
             NeokeyIO::setLED(EffectID::STUTTER, false);  // Off for now (RGB LED shows white)
-            // Reset fade state
-            s_fadeValue = 0;
-            s_fadeDirection = 1;
             break;
 
         case StutterState::WAIT_CAPTURE_START:
-            // LED BREATHE RED VERY FAST
-            if (now - s_lastFadeUpdate >= FADE_INTERVAL_MS) {
-                // Update fade value (fast)
-                s_fadeValue += s_fadeDirection * FADE_STEP_FAST;
+            // LED BLINK RED VERY FAST
+            if (now - s_lastRgbBlinkTime >= RGB_BLINK_INTERVAL_MS) {
+                s_rgbBlinkState = !s_rgbBlinkState;
+                s_lastRgbBlinkTime = now;
 
-                // Reverse direction at boundaries
-                if (s_fadeValue >= 255 || (s_fadeDirection > 0 && s_fadeValue > 255 - FADE_STEP_FAST)) {
-                    s_fadeValue = 255;
-                    s_fadeDirection = -1;  // Start fading out
-                } else if (s_fadeValue <= 0 || (s_fadeDirection < 0 && s_fadeValue < FADE_STEP_FAST)) {
-                    s_fadeValue = 0;
-                    s_fadeDirection = 1;   // Start fading in
+                // Write PWM values (red blinking)
+                if (s_rgbBlinkState) {
+                    analogWrite(RGB_LED_R_PIN, 255);
+                    analogWrite(RGB_LED_G_PIN, 0);
+                    analogWrite(RGB_LED_B_PIN, 0);
+                } else {
+                    analogWrite(RGB_LED_R_PIN, 0);
+                    analogWrite(RGB_LED_G_PIN, 0);
+                    analogWrite(RGB_LED_B_PIN, 0);
                 }
-
-                // Write PWM values (red breathing)
-                analogWrite(RGB_LED_R_PIN, s_fadeValue);
-                analogWrite(RGB_LED_G_PIN, 0);
-                analogWrite(RGB_LED_B_PIN, 0);
-
-                s_lastFadeUpdate = now;
             }
             // Neokey LED blinking
             if (now - m_lastBlinkTime >= BLINK_INTERVAL_MS) {
@@ -355,32 +341,24 @@ void StutterController::updateVisualFeedback() {
             analogWrite(RGB_LED_G_PIN, 0);
             analogWrite(RGB_LED_B_PIN, 0);
             NeokeyIO::setLED(EffectID::STUTTER, true);
-            // Reset fade state
-            s_fadeValue = 0;
-            s_fadeDirection = 1;
             break;
 
         case StutterState::WAIT_PLAYBACK_ONSET:
-            // LED BREATHE BLUE VERY FAST
-            if (now - s_lastFadeUpdate >= FADE_INTERVAL_MS) {
-                // Update fade value (fast)
-                s_fadeValue += s_fadeDirection * FADE_STEP_FAST;
+            // LED BLINK BLUE VERY FAST
+            if (now - s_lastRgbBlinkTime >= RGB_BLINK_INTERVAL_MS) {
+                s_rgbBlinkState = !s_rgbBlinkState;
+                s_lastRgbBlinkTime = now;
 
-                // Reverse direction at boundaries
-                if (s_fadeValue >= 255 || (s_fadeDirection > 0 && s_fadeValue > 255 - FADE_STEP_FAST)) {
-                    s_fadeValue = 255;
-                    s_fadeDirection = -1;  // Start fading out
-                } else if (s_fadeValue <= 0 || (s_fadeDirection < 0 && s_fadeValue < FADE_STEP_FAST)) {
-                    s_fadeValue = 0;
-                    s_fadeDirection = 1;   // Start fading in
+                // Write PWM values (blue blinking)
+                if (s_rgbBlinkState) {
+                    analogWrite(RGB_LED_R_PIN, 0);
+                    analogWrite(RGB_LED_G_PIN, 0);
+                    analogWrite(RGB_LED_B_PIN, 255);
+                } else {
+                    analogWrite(RGB_LED_R_PIN, 0);
+                    analogWrite(RGB_LED_G_PIN, 0);
+                    analogWrite(RGB_LED_B_PIN, 0);
                 }
-
-                // Write PWM values (blue breathing)
-                analogWrite(RGB_LED_R_PIN, 0);
-                analogWrite(RGB_LED_G_PIN, 0);
-                analogWrite(RGB_LED_B_PIN, s_fadeValue);
-
-                s_lastFadeUpdate = now;
             }
             // Neokey LED blinking
             if (now - m_lastBlinkTime >= BLINK_INTERVAL_MS) {
@@ -397,9 +375,6 @@ void StutterController::updateVisualFeedback() {
             analogWrite(RGB_LED_G_PIN, 0);
             analogWrite(RGB_LED_B_PIN, 255);
             NeokeyIO::setLED(EffectID::STUTTER, true);
-            // Reset fade state
-            s_fadeValue = 0;
-            s_fadeDirection = 1;
             break;
 
         default:
@@ -408,8 +383,6 @@ void StutterController::updateVisualFeedback() {
             analogWrite(RGB_LED_G_PIN, 0);
             analogWrite(RGB_LED_B_PIN, 0);
             NeokeyIO::setLED(EffectID::STUTTER, false);
-            s_fadeValue = 0;
-            s_fadeDirection = 1;
             break;
     }
 
