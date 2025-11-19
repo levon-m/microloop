@@ -17,7 +17,7 @@ static constexpr uint8_t RGB_LED_B_PIN = 37;  // Blue (PWM capable)
 static uint8_t s_fadeValue = 0;          // Current PWM value (0-255)
 static int8_t s_fadeDirection = 1;       // +1 = fading in, -1 = fading out
 static uint32_t s_lastFadeUpdate = 0;    // Timestamp of last fade update
-static constexpr uint8_t FADE_STEP = 15; // PWM change per update (higher = faster fade)
+static constexpr uint8_t FADE_STEP_FAST = 25;    // PWM change per update for fast breathing (higher = faster fade)
 static constexpr uint8_t FADE_INTERVAL_MS = 20;  // Update every 20ms (50Hz)
 
 StutterController::StutterController(AudioEffectStutter& effect)
@@ -294,81 +294,123 @@ void StutterController::updateVisualFeedback() {
     StutterState currentState = m_effect.getState();
     uint32_t now = millis();
 
-    // ========== LED BLINKING FOR ARMED STATES ==========
-    bool shouldBlink = (currentState == StutterState::WAIT_CAPTURE_START ||
-                        currentState == StutterState::WAIT_PLAYBACK_ONSET);
+    // ========== RGB LED STATE-SPECIFIC CONTROL ==========
+    switch (currentState) {
+        case StutterState::IDLE_NO_LOOP:
+            // LED OFF
+            analogWrite(RGB_LED_R_PIN, 0);
+            analogWrite(RGB_LED_G_PIN, 0);
+            analogWrite(RGB_LED_B_PIN, 0);
+            NeokeyIO::setLED(EffectID::STUTTER, false);
+            // Reset fade state
+            s_fadeValue = 0;
+            s_fadeDirection = 1;
+            break;
 
-    if (shouldBlink) {
-        // Blink LED at 4Hz (250ms on/off)
-        if (now - m_lastBlinkTime >= BLINK_INTERVAL_MS) {
-            m_ledBlinkState = !m_ledBlinkState;
-            m_lastBlinkTime = now;
+        case StutterState::IDLE_WITH_LOOP:
+            // LED SOLID WHITE
+            analogWrite(RGB_LED_R_PIN, 255);
+            analogWrite(RGB_LED_G_PIN, 255);
+            analogWrite(RGB_LED_B_PIN, 255);
+            NeokeyIO::setLED(EffectID::STUTTER, false);  // Off for now (RGB LED shows white)
+            // Reset fade state
+            s_fadeValue = 0;
+            s_fadeDirection = 1;
+            break;
 
-            // Update Neokey LED (blinking for armed states)
-            // Note: Could differentiate WAIT_CAPTURE_START (red) vs WAIT_PLAYBACK_ONSET (blue)
-            // once InputIO supports RGB colors
-            NeokeyIO::setLED(EffectID::STUTTER, m_ledBlinkState);
-        }
-    } else {
-        // ========== RGB LED FADE FOR CAPTURE STATES ==========
-        if (currentState == StutterState::CAPTURING || currentState == StutterState::WAIT_CAPTURE_END) {
-            // Fast red fade in/out (breathing effect)
+        case StutterState::WAIT_CAPTURE_START:
+            // LED BREATHE RED VERY FAST
             if (now - s_lastFadeUpdate >= FADE_INTERVAL_MS) {
-                // Update fade value
-                s_fadeValue += s_fadeDirection * FADE_STEP;
+                // Update fade value (fast)
+                s_fadeValue += s_fadeDirection * FADE_STEP_FAST;
 
                 // Reverse direction at boundaries
-                if (s_fadeValue >= 255) {
+                if (s_fadeValue >= 255 || (s_fadeDirection > 0 && s_fadeValue > 255 - FADE_STEP_FAST)) {
                     s_fadeValue = 255;
                     s_fadeDirection = -1;  // Start fading out
-                } else if (s_fadeValue <= 0) {
+                } else if (s_fadeValue <= 0 || (s_fadeDirection < 0 && s_fadeValue < FADE_STEP_FAST)) {
                     s_fadeValue = 0;
                     s_fadeDirection = 1;   // Start fading in
                 }
 
-                // Write PWM values (red only)
+                // Write PWM values (red breathing)
                 analogWrite(RGB_LED_R_PIN, s_fadeValue);
-                analogWrite(RGB_LED_G_PIN, 0);  // Green off
-                analogWrite(RGB_LED_B_PIN, 0);  // Blue off
+                analogWrite(RGB_LED_G_PIN, 0);
+                analogWrite(RGB_LED_B_PIN, 0);
 
                 s_lastFadeUpdate = now;
             }
+            // Neokey LED blinking
+            if (now - m_lastBlinkTime >= BLINK_INTERVAL_MS) {
+                m_ledBlinkState = !m_ledBlinkState;
+                m_lastBlinkTime = now;
+                NeokeyIO::setLED(EffectID::STUTTER, m_ledBlinkState);
+            }
+            break;
 
-            // Also update Neokey LED (keep existing behavior)
+        case StutterState::CAPTURING:
+        case StutterState::WAIT_CAPTURE_END:
+            // LED SOLID RED
+            analogWrite(RGB_LED_R_PIN, 255);
+            analogWrite(RGB_LED_G_PIN, 0);
+            analogWrite(RGB_LED_B_PIN, 0);
             NeokeyIO::setLED(EffectID::STUTTER, true);
-        } else {
-            // ========== SOLID LED FOR NON-CAPTURE STATES ==========
-            // Turn off RGB LED for non-capture states
+            // Reset fade state
+            s_fadeValue = 0;
+            s_fadeDirection = 1;
+            break;
+
+        case StutterState::WAIT_PLAYBACK_ONSET:
+            // LED BREATHE BLUE VERY FAST
+            if (now - s_lastFadeUpdate >= FADE_INTERVAL_MS) {
+                // Update fade value (fast)
+                s_fadeValue += s_fadeDirection * FADE_STEP_FAST;
+
+                // Reverse direction at boundaries
+                if (s_fadeValue >= 255 || (s_fadeDirection > 0 && s_fadeValue > 255 - FADE_STEP_FAST)) {
+                    s_fadeValue = 255;
+                    s_fadeDirection = -1;  // Start fading out
+                } else if (s_fadeValue <= 0 || (s_fadeDirection < 0 && s_fadeValue < FADE_STEP_FAST)) {
+                    s_fadeValue = 0;
+                    s_fadeDirection = 1;   // Start fading in
+                }
+
+                // Write PWM values (blue breathing)
+                analogWrite(RGB_LED_R_PIN, 0);
+                analogWrite(RGB_LED_G_PIN, 0);
+                analogWrite(RGB_LED_B_PIN, s_fadeValue);
+
+                s_lastFadeUpdate = now;
+            }
+            // Neokey LED blinking
+            if (now - m_lastBlinkTime >= BLINK_INTERVAL_MS) {
+                m_ledBlinkState = !m_ledBlinkState;
+                m_lastBlinkTime = now;
+                NeokeyIO::setLED(EffectID::STUTTER, m_ledBlinkState);
+            }
+            break;
+
+        case StutterState::PLAYING:
+        case StutterState::WAIT_PLAYBACK_LENGTH:
+            // LED SOLID BLUE
+            analogWrite(RGB_LED_R_PIN, 0);
+            analogWrite(RGB_LED_G_PIN, 0);
+            analogWrite(RGB_LED_B_PIN, 255);
+            NeokeyIO::setLED(EffectID::STUTTER, true);
+            // Reset fade state
+            s_fadeValue = 0;
+            s_fadeDirection = 1;
+            break;
+
+        default:
+            // Fallback: LED OFF
             analogWrite(RGB_LED_R_PIN, 0);
             analogWrite(RGB_LED_G_PIN, 0);
             analogWrite(RGB_LED_B_PIN, 0);
-
-            // Reset fade state when leaving capture mode
+            NeokeyIO::setLED(EffectID::STUTTER, false);
             s_fadeValue = 0;
             s_fadeDirection = 1;
-
-            switch (currentState) {
-                case StutterState::IDLE_NO_LOOP:
-                    // LED OFF
-                    NeokeyIO::setLED(EffectID::STUTTER, false);
-                    break;
-
-                case StutterState::IDLE_WITH_LOOP:
-                    // LED WHITE (would need InputIO support for colors)
-                    // For now, use GREEN as fallback
-                    NeokeyIO::setLED(EffectID::STUTTER, false);  // Off for now
-                    break;
-
-                case StutterState::PLAYING:
-                case StutterState::WAIT_PLAYBACK_LENGTH:
-                    // LED BLUE (solid)
-                    NeokeyIO::setLED(EffectID::STUTTER, true);  // Will show as current effect color
-                    break;
-
-                default:
-                    break;
-            }
-        }
+            break;
     }
 
     // ========== ISR STATE TRANSITION DETECTION ==========
