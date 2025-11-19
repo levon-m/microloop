@@ -191,10 +191,15 @@ public:
 
     /**
      * Schedule playback stop (Length=Quantized, STUTTER released)
+     * Only changes state if currently PLAYING (not if waiting for onset)
      */
     void schedulePlaybackLength(uint64_t sample) {
         m_playbackLengthAtSample = sample;
-        m_state = StutterState::WAIT_PLAYBACK_LENGTH;
+        // Only transition to WAIT_PLAYBACK_LENGTH if we're currently PLAYING
+        // If we're in WAIT_PLAYBACK_ONSET, don't change state (length will fire after onset)
+        if (m_state == StutterState::PLAYING) {
+            m_state = StutterState::WAIT_PLAYBACK_LENGTH;
+        }
     }
 
     // ========== PARAMETER CONTROL ==========

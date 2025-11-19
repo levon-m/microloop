@@ -135,20 +135,43 @@ bool StutterController::handleButtonPress(const Command& cmd) {
     // Valid states for playback: IDLE_WITH_LOOP
     if (currentState == StutterState::IDLE_WITH_LOOP) {
         StutterOnset onsetMode = m_effect.getOnsetMode();
+        StutterLength lengthMode = m_effect.getLengthMode();
+        Quantization quant = EffectQuantization::getGlobalQuantization();
 
         if (onsetMode == StutterOnset::FREE) {
             // FREE ONSET: Start playback immediately
             m_effect.startPlayback();
             Serial.println("Stutter: PLAYBACK started (Free onset)");
+
+            // If length is QUANTIZED, schedule auto-stop
+            if (lengthMode == StutterLength::QUANTIZED) {
+                uint32_t samplesToNext = EffectQuantization::samplesToNextQuantizedBoundary(quant);
+                uint64_t playbackLengthSample = TimeKeeper::getSamplePosition() + samplesToNext;
+                m_effect.schedulePlaybackLength(playbackLengthSample);
+                Serial.print("Stutter: PLAYBACK LENGTH scheduled (");
+                Serial.print(EffectQuantization::quantizationName(quant));
+                Serial.println(")");
+            }
         } else {
             // QUANTIZED ONSET: Schedule playback start
-            Quantization quant = EffectQuantization::getGlobalQuantization();
-            uint32_t samplesToNext = EffectQuantization::samplesToNextQuantizedBoundary(quant);
-            uint64_t playbackOnsetSample = TimeKeeper::getSamplePosition() + samplesToNext;
+            uint32_t samplesToOnset = EffectQuantization::samplesToNextQuantizedBoundary(quant);
+            uint64_t playbackOnsetSample = TimeKeeper::getSamplePosition() + samplesToOnset;
             m_effect.schedulePlaybackOnset(playbackOnsetSample);
             Serial.print("Stutter: PLAYBACK ONSET scheduled (");
             Serial.print(EffectQuantization::quantizationName(quant));
             Serial.println(")");
+
+            // If length is also QUANTIZED, schedule auto-stop at next boundary after onset
+            if (lengthMode == StutterLength::QUANTIZED) {
+                // Calculate one full quantization period to add after onset
+                uint32_t quantPeriod = EffectQuantization::calculateQuantizedDuration(quant);
+                uint32_t samplesToLength = samplesToOnset + quantPeriod;
+                uint64_t playbackLengthSample = TimeKeeper::getSamplePosition() + samplesToLength;
+                m_effect.schedulePlaybackLength(playbackLengthSample);
+                Serial.print("Stutter: PLAYBACK LENGTH also scheduled (");
+                Serial.print(EffectQuantization::quantizationName(quant));
+                Serial.println(")");
+            }
         }
 
         // Update visual feedback
