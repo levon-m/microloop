@@ -239,10 +239,10 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
 
     if (currentState == StutterState::WAIT_CAPTURE_START) {
         // STUTTER released before capture started (waiting for quantized boundary)
-        // Cancel capture and return to idle
-        m_effect.cancelCaptureStart();
-        Serial.println("Stutter: CAPTURE CANCELLED (released before start)");
-        DisplayManager::instance().updateDisplay();
+        // DON'T cancel - let the scheduled capture start proceed
+        // The capture will start at the quantized boundary regardless of button state
+        Serial.println("Stutter: CAPTURE START still scheduled (button released, will capture at grid)");
+        // Don't change state - let ISR transition to CAPTURING when scheduled sample arrives
         return true;  // Command handled
     }
 
