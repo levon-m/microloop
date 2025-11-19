@@ -163,7 +163,11 @@ public:
     void scheduleCaptureEnd(uint64_t sample, bool stutterHeld) {
         m_captureEndAtSample = sample;
         m_stutterHeld = stutterHeld;  // Remember button state for later transition
-        m_state = StutterState::WAIT_CAPTURE_END;
+        // Only transition to WAIT_CAPTURE_END if we're currently CAPTURING
+        // If we're in WAIT_CAPTURE_START, don't change state (end will fire after start)
+        if (m_state == StutterState::CAPTURING) {
+            m_state = StutterState::WAIT_CAPTURE_END;
+        }
     }
 
     /**
@@ -203,6 +207,10 @@ public:
     }
 
     // ========== PARAMETER CONTROL ==========
+
+    void setStutterHeld(bool held) {
+        m_stutterHeld = held;
+    }
 
     void setLengthMode(StutterLength mode) {
         m_lengthMode = mode;

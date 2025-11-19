@@ -89,6 +89,7 @@ bool StutterController::handleButtonPress(const Command& cmd) {
     }
 
     m_stutterHeld = true;  // Track that STUTTER is now held
+    m_effect.setStutterHeld(true);  // Update audio effect's button state
 
     StutterState currentState = m_effect.getState();
 
@@ -103,20 +104,35 @@ bool StutterController::handleButtonPress(const Command& cmd) {
         }
 
         StutterCaptureStart captureStartMode = m_effect.getCaptureStartMode();
+        StutterCaptureEnd captureEndMode = m_effect.getCaptureEndMode();
+        Quantization quant = EffectQuantization::getGlobalQuantization();
 
         if (captureStartMode == StutterCaptureStart::FREE) {
             // FREE CAPTURE START: Start capturing immediately
             m_effect.startCapture();
             Serial.println("Stutter: CAPTURE started (Free)");
+            // Capture end will be scheduled when button is released (if quantized)
         } else {
             // QUANTIZED CAPTURE START: Schedule capture start
-            Quantization quant = EffectQuantization::getGlobalQuantization();
-            uint32_t samplesToNext = EffectQuantization::samplesToNextQuantizedBoundary(quant);
-            uint64_t captureStartSample = TimeKeeper::getSamplePosition() + samplesToNext;
+            uint32_t samplesToStart = EffectQuantization::samplesToNextQuantizedBoundary(quant);
+            uint64_t captureStartSample = TimeKeeper::getSamplePosition() + samplesToStart;
             m_effect.scheduleCaptureStart(captureStartSample);
             Serial.print("Stutter: CAPTURE START scheduled (");
             Serial.print(EffectQuantization::quantizationName(quant));
             Serial.println(")");
+
+            // If capture end is also QUANTIZED, schedule auto-end at next boundary after start
+            if (captureEndMode == StutterCaptureEnd::QUANTIZED) {
+                // Calculate one full quantization period to add after capture start
+                uint32_t quantPeriod = EffectQuantization::calculateQuantizedDuration(quant);
+                uint32_t samplesToEnd = samplesToStart + quantPeriod;
+                uint64_t captureEndSample = TimeKeeper::getSamplePosition() + samplesToEnd;
+                m_effect.scheduleCaptureEnd(captureEndSample, m_stutterHeld);  // Pass current button state
+                Serial.print("Stutter: CAPTURE END also scheduled (");
+                Serial.print(EffectQuantization::quantizationName(quant));
+                Serial.println(")");
+            }
+            // If capture end is FREE, it will be scheduled when button is released
         }
 
         // Update visual feedback
@@ -211,6 +227,7 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
     }
 
     m_stutterHeld = false;  // Track that STUTTER is no longer held
+    m_effect.setStutterHeld(false);  // Update audio effect's button state
 
     StutterState currentState = m_effect.getState();
 
