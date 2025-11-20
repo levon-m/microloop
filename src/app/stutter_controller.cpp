@@ -2,6 +2,7 @@
 #include "neokey_io.h"
 #include "display_manager.h"
 #include "timekeeper.h"
+#include "encoder_handler.h"
 #include <Arduino.h>
 
 // Define static EXTMEM buffers for AudioEffectStutter
@@ -438,4 +439,140 @@ void StutterController::updateVisualFeedback() {
 
     // Update state for next call
     m_wasEnabled = isEnabled;
+}
+
+// ========== HELPER FUNCTIONS ==========
+
+/**
+ * Clamp index to valid range
+ */
+static int8_t clampIndex(int8_t value, int8_t minValue, int8_t maxValue) {
+    if (value < minValue) {
+        return minValue;
+    }
+    if (value > maxValue) {
+        return maxValue;
+    }
+    return value;
+}
+
+/**
+ * Show menu with given parameters
+ */
+static void showMenu(const char* title,
+                     const char* middleText,
+                     uint8_t numOptions,
+                     uint8_t selectedIndex) {
+    MenuDisplayData menuData;
+    menuData.topText = title;
+    menuData.middleText = middleText;
+    menuData.numOptions = numOptions;
+    menuData.selectedIndex = selectedIndex;
+
+    DisplayManager::instance().showMenu(menuData);
+    DisplayManager::instance().updateDisplay();
+}
+
+// ========== ENCODER BINDING ==========
+
+void StutterController::bindToEncoder(EncoderHandler::Handler& encoder,
+                                      AnyEncoderTouchedFn anyTouchedExcept) {
+    // Button press: Cycle between ONSET → LENGTH → CAPTURE_START → CAPTURE_END
+    encoder.onButtonPress([this]() {
+        Parameter current = m_currentParameter;
+
+        // Cycle to next parameter
+        if (current == Parameter::ONSET) {
+            m_currentParameter = Parameter::LENGTH;
+            Serial.println("Stutter Parameter: LENGTH");
+        } else if (current == Parameter::LENGTH) {
+            m_currentParameter = Parameter::CAPTURE_START;
+            Serial.println("Stutter Parameter: CAPTURE_START");
+        } else if (current == Parameter::CAPTURE_START) {
+            m_currentParameter = Parameter::CAPTURE_END;
+            Serial.println("Stutter Parameter: CAPTURE_END");
+        } else {  // CAPTURE_END
+            m_currentParameter = Parameter::ONSET;
+            Serial.println("Stutter Parameter: ONSET");
+        }
+        // Display update handled by onDisplayUpdate callback
+    });
+
+    // Value change: Adjust current parameter
+    encoder.onValueChange([this](int8_t delta) {
+        Parameter param = m_currentParameter;
+
+        if (param == Parameter::ONSET) {
+            int8_t currentIndex = static_cast<int8_t>(m_effect.getOnsetMode());
+            int8_t newIndex = clampIndex(currentIndex + delta, 0, 1);
+            if (newIndex != currentIndex) {
+                StutterOnset newOnset = static_cast<StutterOnset>(newIndex);
+                m_effect.setOnsetMode(newOnset);
+                Serial.print("Stutter Onset: ");
+                Serial.println(onsetName(newOnset));
+
+                showMenu("STUTTER->Onset", onsetName(newOnset), 2, newIndex);
+            }
+        } else if (param == Parameter::LENGTH) {
+            int8_t currentIndex = static_cast<int8_t>(m_effect.getLengthMode());
+            int8_t newIndex = clampIndex(currentIndex + delta, 0, 1);
+            if (newIndex != currentIndex) {
+                StutterLength newLength = static_cast<StutterLength>(newIndex);
+                m_effect.setLengthMode(newLength);
+                Serial.print("Stutter Length: ");
+                Serial.println(lengthName(newLength));
+
+                showMenu("STUTTER->Length", lengthName(newLength), 2, newIndex);
+            }
+        } else if (param == Parameter::CAPTURE_START) {
+            int8_t currentIndex = static_cast<int8_t>(m_effect.getCaptureStartMode());
+            int8_t newIndex = clampIndex(currentIndex + delta, 0, 1);
+            if (newIndex != currentIndex) {
+                StutterCaptureStart newCaptureStart = static_cast<StutterCaptureStart>(newIndex);
+                m_effect.setCaptureStartMode(newCaptureStart);
+                Serial.print("Stutter Capture Start: ");
+                Serial.println(captureStartName(newCaptureStart));
+
+                showMenu("STUTTER->Cap. Start", captureStartName(newCaptureStart), 2, newIndex);
+            }
+        } else {  // CAPTURE_END
+            int8_t currentIndex = static_cast<int8_t>(m_effect.getCaptureEndMode());
+            int8_t newIndex = clampIndex(currentIndex + delta, 0, 1);
+            if (newIndex != currentIndex) {
+                StutterCaptureEnd newCaptureEnd = static_cast<StutterCaptureEnd>(newIndex);
+                m_effect.setCaptureEndMode(newCaptureEnd);
+                Serial.print("Stutter Capture End: ");
+                Serial.println(captureEndName(newCaptureEnd));
+
+                showMenu("STUTTER->Cap. End", captureEndName(newCaptureEnd), 2, newIndex);
+            }
+        }
+    });
+
+    // Display update: Show current parameter or return to effect display
+    encoder.onDisplayUpdate([this, &encoder, anyTouchedExcept](bool isTouched) {
+        if (isTouched) {
+            Parameter param = m_currentParameter;
+
+            if (param == Parameter::ONSET) {
+                showMenu("STUTTER->Onset", onsetName(m_effect.getOnsetMode()),
+                         2, static_cast<uint8_t>(m_effect.getOnsetMode()));
+            } else if (param == Parameter::LENGTH) {
+                showMenu("STUTTER->Length", lengthName(m_effect.getLengthMode()),
+                         2, static_cast<uint8_t>(m_effect.getLengthMode()));
+            } else if (param == Parameter::CAPTURE_START) {
+                showMenu("STUTTER->Cap. Start", captureStartName(m_effect.getCaptureStartMode()),
+                         2, static_cast<uint8_t>(m_effect.getCaptureStartMode()));
+            } else {  // CAPTURE_END
+                showMenu("STUTTER->Cap. End", captureEndName(m_effect.getCaptureEndMode()),
+                         2, static_cast<uint8_t>(m_effect.getCaptureEndMode()));
+            }
+        } else {
+            // Cooldown expired - only hide menu if NO other encoders are touched
+            if (!anyTouchedExcept(&encoder)) {
+                DisplayManager::instance().hideMenu();
+                DisplayManager::instance().updateDisplay();
+            }
+        }
+    });
 }

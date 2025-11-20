@@ -31,6 +31,14 @@
 #include "effect_quantization.h"
 #include "oled_io.h"
 
+// Forward declaration
+namespace EncoderHandler {
+    class Handler;
+}
+
+// Callback type for checking if any other encoder is touched
+typedef bool (*AnyEncoderTouchedFn)(const EncoderHandler::Handler* ignore);
+
 /**
  * Stutter effect controller
  *
@@ -72,6 +80,15 @@ public:
      * Set current parameter to edit
      */
     void setCurrentParameter(Parameter param) { m_currentParameter = param; }
+
+    /**
+     * Bind controller to an encoder handler
+     *
+     * @param encoder Encoder handler to bind to
+     * @param anyTouchedExcept Callback to check if any other encoder is touched
+     */
+    void bindToEncoder(EncoderHandler::Handler& encoder,
+                       AnyEncoderTouchedFn anyTouchedExcept);
 
     // Utility functions for bitmap/name mapping
     // TODO: Re-enable when stutter parameter bitmaps are added

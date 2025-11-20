@@ -52,328 +52,74 @@ static EncoderHandler::Handler* s_encoder2 = nullptr;  // FREEZE parameters
 static EncoderHandler::Handler* s_encoder3 = nullptr;  // CHOKE parameters
 static EncoderHandler::Handler* s_encoder4 = nullptr;  // Global quantization
 
+// ========== ENCODER HELPER FUNCTIONS ==========
+
+/**
+ * Check if any encoder (except one) is currently touched
+ *
+ * @param ignore Encoder to exclude from check (typically the caller's encoder)
+ * @return true if any other encoder is touched, false otherwise
+ */
+static bool anyEncoderTouchedExcept(const EncoderHandler::Handler* ignore) {
+    EncoderHandler::Handler* encoders[] = { s_encoder1, s_encoder2, s_encoder3, s_encoder4 };
+    const size_t numEncoders = sizeof(encoders) / sizeof(encoders[0]);
+
+    for (size_t i = 0; i < numEncoders; ++i) {
+        EncoderHandler::Handler* e = encoders[i];
+        if (e == NULL) {
+            continue;
+        }
+        if (e == ignore) {
+            continue;
+        }
+        if (e->isTouched()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Show menu with given parameters
+ *
+ * @param title Menu title (top text)
+ * @param middleText Current value text
+ * @param numOptions Total number of options
+ * @param selectedIndex Currently selected option index
+ */
+static void showMenu(const char* title,
+                     const char* middleText,
+                     uint8_t numOptions,
+                     uint8_t selectedIndex) {
+    MenuDisplayData menuData;
+    menuData.topText = title;
+    menuData.middleText = middleText;
+    menuData.numOptions = numOptions;
+    menuData.selectedIndex = selectedIndex;
+
+    DisplayManager::instance().showMenu(menuData);
+    DisplayManager::instance().updateDisplay();
+}
+
+/**
+ * Clamp index to valid range
+ *
+ * @param value Value to clamp
+ * @param minValue Minimum allowed value
+ * @param maxValue Maximum allowed value
+ * @return Clamped value
+ */
+static int8_t clampIndex(int8_t value, int8_t minValue, int8_t maxValue) {
+    if (value < minValue) {
+        return minValue;
+    }
+    if (value > maxValue) {
+        return maxValue;
+    }
+    return value;
+}
+
 // ========== ENCODER SETUP FUNCTIONS ==========
-// These functions configure the behavior of each encoder handler
-
-static void setupEncoder1() {
-    s_encoder1 = new EncoderHandler::Handler(0);  // Encoder 1 is index 0 (STUTTER parameters)
-
-    // Button press: Cycle between ONSET → LENGTH → CAPTURE_START → CAPTURE_END
-    s_encoder1->onButtonPress([]() {
-        StutterController::Parameter current = s_stutterController->getCurrentParameter();
-
-        // Cycle to next parameter
-        if (current == StutterController::Parameter::ONSET) {
-            s_stutterController->setCurrentParameter(StutterController::Parameter::LENGTH);
-            Serial.println("Stutter Parameter: LENGTH");
-        } else if (current == StutterController::Parameter::LENGTH) {
-            s_stutterController->setCurrentParameter(StutterController::Parameter::CAPTURE_START);
-            Serial.println("Stutter Parameter: CAPTURE_START");
-        } else if (current == StutterController::Parameter::CAPTURE_START) {
-            s_stutterController->setCurrentParameter(StutterController::Parameter::CAPTURE_END);
-            Serial.println("Stutter Parameter: CAPTURE_END");
-        } else {  // CAPTURE_END
-            s_stutterController->setCurrentParameter(StutterController::Parameter::ONSET);
-            Serial.println("Stutter Parameter: ONSET");
-        }
-        // Display update handled by onDisplayUpdate callback
-    });
-
-    // Value change: Adjust current parameter
-    s_encoder1->onValueChange([](int8_t delta) {
-        StutterController::Parameter param = s_stutterController->getCurrentParameter();
-
-        if (param == StutterController::Parameter::ONSET) {
-            int8_t currentIndex = static_cast<int8_t>(stutter.getOnsetMode());
-            int8_t newIndex = currentIndex + delta;
-            if (newIndex < 0) newIndex = 0;
-            if (newIndex > 1) newIndex = 1;
-            if (newIndex != currentIndex) {
-                StutterOnset newOnset = static_cast<StutterOnset>(newIndex);
-                stutter.setOnsetMode(newOnset);
-                Serial.print("Stutter Onset: ");
-                Serial.println(StutterController::onsetName(newOnset));
-
-                // Update menu display immediately
-                MenuDisplayData menuData("STUTTER->Onset", StutterController::onsetName(newOnset), 2, newIndex);
-                DisplayManager::instance().showMenu(menuData);
-                DisplayManager::instance().updateDisplay();
-            }
-        } else if (param == StutterController::Parameter::LENGTH) {
-            int8_t currentIndex = static_cast<int8_t>(stutter.getLengthMode());
-            int8_t newIndex = currentIndex + delta;
-            if (newIndex < 0) newIndex = 0;
-            if (newIndex > 1) newIndex = 1;
-            if (newIndex != currentIndex) {
-                StutterLength newLength = static_cast<StutterLength>(newIndex);
-                stutter.setLengthMode(newLength);
-                Serial.print("Stutter Length: ");
-                Serial.println(StutterController::lengthName(newLength));
-
-                // Update menu display immediately
-                MenuDisplayData menuData("STUTTER->Length", StutterController::lengthName(newLength), 2, newIndex);
-                DisplayManager::instance().showMenu(menuData);
-                DisplayManager::instance().updateDisplay();
-            }
-        } else if (param == StutterController::Parameter::CAPTURE_START) {
-            int8_t currentIndex = static_cast<int8_t>(stutter.getCaptureStartMode());
-            int8_t newIndex = currentIndex + delta;
-            if (newIndex < 0) newIndex = 0;
-            if (newIndex > 1) newIndex = 1;
-            if (newIndex != currentIndex) {
-                StutterCaptureStart newCaptureStart = static_cast<StutterCaptureStart>(newIndex);
-                stutter.setCaptureStartMode(newCaptureStart);
-                Serial.print("Stutter Capture Start: ");
-                Serial.println(StutterController::captureStartName(newCaptureStart));
-
-                // Update menu display immediately
-                MenuDisplayData menuData("STUTTER->Cap. Start", StutterController::captureStartName(newCaptureStart), 2, newIndex);
-                DisplayManager::instance().showMenu(menuData);
-                DisplayManager::instance().updateDisplay();
-            }
-        } else {  // CAPTURE_END
-            int8_t currentIndex = static_cast<int8_t>(stutter.getCaptureEndMode());
-            int8_t newIndex = currentIndex + delta;
-            if (newIndex < 0) newIndex = 0;
-            if (newIndex > 1) newIndex = 1;
-            if (newIndex != currentIndex) {
-                StutterCaptureEnd newCaptureEnd = static_cast<StutterCaptureEnd>(newIndex);
-                stutter.setCaptureEndMode(newCaptureEnd);
-                Serial.print("Stutter Capture End: ");
-                Serial.println(StutterController::captureEndName(newCaptureEnd));
-
-                // Update menu display immediately
-                MenuDisplayData menuData("STUTTER->Cap. End", StutterController::captureEndName(newCaptureEnd), 2, newIndex);
-                DisplayManager::instance().showMenu(menuData);
-                DisplayManager::instance().updateDisplay();
-            }
-        }
-    });
-
-    // Display update: Show current parameter or return to effect display
-    s_encoder1->onDisplayUpdate([](bool isTouched) {
-        if (isTouched) {
-            StutterController::Parameter param = s_stutterController->getCurrentParameter();
-
-            // Build menu data
-            MenuDisplayData menuData;
-            if (param == StutterController::Parameter::ONSET) {
-                menuData.topText = "STUTTER->Onset";
-                menuData.middleText = StutterController::onsetName(stutter.getOnsetMode());
-                menuData.numOptions = 2;
-                menuData.selectedIndex = static_cast<uint8_t>(stutter.getOnsetMode());
-            } else if (param == StutterController::Parameter::LENGTH) {
-                menuData.topText = "STUTTER->Length";
-                menuData.middleText = StutterController::lengthName(stutter.getLengthMode());
-                menuData.numOptions = 2;
-                menuData.selectedIndex = static_cast<uint8_t>(stutter.getLengthMode());
-            } else if (param == StutterController::Parameter::CAPTURE_START) {
-                menuData.topText = "STUTTER->Cap. Start";
-                menuData.middleText = StutterController::captureStartName(stutter.getCaptureStartMode());
-                menuData.numOptions = 2;
-                menuData.selectedIndex = static_cast<uint8_t>(stutter.getCaptureStartMode());
-            } else {  // CAPTURE_END
-                menuData.topText = "STUTTER->Cap. End";
-                menuData.middleText = StutterController::captureEndName(stutter.getCaptureEndMode());
-                menuData.numOptions = 2;
-                menuData.selectedIndex = static_cast<uint8_t>(stutter.getCaptureEndMode());
-            }
-
-            // Show menu via DisplayManager (takes priority over effects)
-            DisplayManager::instance().showMenu(menuData);
-            DisplayManager::instance().updateDisplay();
-        } else {
-            // Cooldown expired - only hide menu if NO other encoders are touched
-            if (!s_encoder2->isTouched() && !s_encoder3->isTouched() && !s_encoder4->isTouched()) {
-                DisplayManager::instance().hideMenu();
-                DisplayManager::instance().updateDisplay();
-            }
-        }
-    });
-}
-
-static void setupEncoder2() {
-    s_encoder2 = new EncoderHandler::Handler(1);  // Encoder 2 is index 1 (FREEZE parameters)
-
-    // Button press: Cycle between LENGTH and ONSET parameters
-    s_encoder2->onButtonPress([]() {
-        FreezeController::Parameter current = s_freezeController->getCurrentParameter();
-        if (current == FreezeController::Parameter::LENGTH) {
-            s_freezeController->setCurrentParameter(FreezeController::Parameter::ONSET);
-            Serial.println("Freeze Parameter: ONSET");
-        } else {
-            s_freezeController->setCurrentParameter(FreezeController::Parameter::LENGTH);
-            Serial.println("Freeze Parameter: LENGTH");
-        }
-        // Display update handled by onDisplayUpdate callback
-    });
-
-    // Value change: Adjust current parameter
-    s_encoder2->onValueChange([](int8_t delta) {
-        FreezeController::Parameter param = s_freezeController->getCurrentParameter();
-
-        if (param == FreezeController::Parameter::LENGTH) {
-            int8_t currentIndex = static_cast<int8_t>(freeze.getLengthMode());
-            int8_t newIndex = currentIndex + delta;
-            if (newIndex < 0) newIndex = 0;
-            if (newIndex > 1) newIndex = 1;
-            if (newIndex != currentIndex) {
-                FreezeLength newLength = static_cast<FreezeLength>(newIndex);
-                freeze.setLengthMode(newLength);
-                Serial.print("Freeze Length: ");
-                Serial.println(FreezeController::lengthName(newLength));
-
-                // Update menu display immediately
-                MenuDisplayData menuData("FREEZE->Length", FreezeController::lengthName(newLength), 2, newIndex);
-                DisplayManager::instance().showMenu(menuData);
-                DisplayManager::instance().updateDisplay();
-            }
-        } else {  // ONSET parameter
-            int8_t currentIndex = static_cast<int8_t>(freeze.getOnsetMode());
-            int8_t newIndex = currentIndex + delta;
-            if (newIndex < 0) newIndex = 0;
-            if (newIndex > 1) newIndex = 1;
-            if (newIndex != currentIndex) {
-                FreezeOnset newOnset = static_cast<FreezeOnset>(newIndex);
-                freeze.setOnsetMode(newOnset);
-                Serial.print("Freeze Onset: ");
-                Serial.println(FreezeController::onsetName(newOnset));
-
-                // Update menu display immediately
-                MenuDisplayData menuData("FREEZE->Onset", FreezeController::onsetName(newOnset), 2, newIndex);
-                DisplayManager::instance().showMenu(menuData);
-                DisplayManager::instance().updateDisplay();
-            }
-        }
-    });
-
-    // Display update: Show current parameter or return to effect display
-    s_encoder2->onDisplayUpdate([](bool isTouched) {
-        if (isTouched) {
-            FreezeController::Parameter param = s_freezeController->getCurrentParameter();
-
-            // Build menu data
-            MenuDisplayData menuData;
-            if (param == FreezeController::Parameter::LENGTH) {
-                menuData.topText = "FREEZE->Length";
-                menuData.middleText = FreezeController::lengthName(freeze.getLengthMode());
-                menuData.numOptions = 2;
-                menuData.selectedIndex = static_cast<uint8_t>(freeze.getLengthMode());
-            } else {  // ONSET
-                menuData.topText = "FREEZE->Onset";
-                menuData.middleText = FreezeController::onsetName(freeze.getOnsetMode());
-                menuData.numOptions = 2;
-                menuData.selectedIndex = static_cast<uint8_t>(freeze.getOnsetMode());
-            }
-
-            // Show menu via DisplayManager (takes priority over effects)
-            DisplayManager::instance().showMenu(menuData);
-            DisplayManager::instance().updateDisplay();
-        } else {
-            // Cooldown expired - only hide menu if NO other encoders are touched
-            if (!s_encoder1->isTouched() && !s_encoder3->isTouched() && !s_encoder4->isTouched()) {
-                DisplayManager::instance().hideMenu();
-                DisplayManager::instance().updateDisplay();
-            }
-        }
-    });
-}
-
-static void setupEncoder3() {
-    s_encoder3 = new EncoderHandler::Handler(2);  // Encoder 3 is index 2 (CHOKE parameters)
-
-    // Button press: Cycle between LENGTH and ONSET parameters
-    s_encoder3->onButtonPress([]() {
-        ChokeController::Parameter current = s_chokeController->getCurrentParameter();
-        if (current == ChokeController::Parameter::LENGTH) {
-            s_chokeController->setCurrentParameter(ChokeController::Parameter::ONSET);
-            Serial.println("Choke Parameter: ONSET");
-        } else {
-            s_chokeController->setCurrentParameter(ChokeController::Parameter::LENGTH);
-            Serial.println("Choke Parameter: LENGTH");
-        }
-        // Display update handled by onDisplayUpdate callback
-    });
-
-    // Value change: Adjust current parameter
-    s_encoder3->onValueChange([](int8_t delta) {
-        ChokeController::Parameter param = s_chokeController->getCurrentParameter();
-
-        if (param == ChokeController::Parameter::LENGTH) {
-            // Update LENGTH parameter
-            int8_t currentIndex = static_cast<int8_t>(choke.getLengthMode());
-            int8_t newIndex = currentIndex + delta;
-
-            // Clamp to valid range (0-1)
-            if (newIndex < 0) newIndex = 0;
-            if (newIndex > 1) newIndex = 1;
-
-            if (newIndex != currentIndex) {
-                ChokeLength newLength = static_cast<ChokeLength>(newIndex);
-                choke.setLengthMode(newLength);
-                Serial.print("Choke Length: ");
-                Serial.println(ChokeController::lengthName(newLength));
-
-                // Update menu display immediately
-                MenuDisplayData menuData("CHOKE->Length", ChokeController::lengthName(newLength), 2, newIndex);
-                DisplayManager::instance().showMenu(menuData);
-                DisplayManager::instance().updateDisplay();
-            }
-        } else {  // ONSET parameter
-            // Update ONSET parameter
-            int8_t currentIndex = static_cast<int8_t>(choke.getOnsetMode());
-            int8_t newIndex = currentIndex + delta;
-
-            // Clamp to valid range (0-1)
-            if (newIndex < 0) newIndex = 0;
-            if (newIndex > 1) newIndex = 1;
-
-            if (newIndex != currentIndex) {
-                ChokeOnset newOnset = static_cast<ChokeOnset>(newIndex);
-                choke.setOnsetMode(newOnset);
-                Serial.print("Choke Onset: ");
-                Serial.println(ChokeController::onsetName(newOnset));
-
-                // Update menu display immediately
-                MenuDisplayData menuData("CHOKE->Onset", ChokeController::onsetName(newOnset), 2, newIndex);
-                DisplayManager::instance().showMenu(menuData);
-                DisplayManager::instance().updateDisplay();
-            }
-        }
-    });
-
-    // Display update: Show current parameter or return to effect display
-    s_encoder3->onDisplayUpdate([](bool isTouched) {
-        if (isTouched) {
-            // Show current parameter
-            ChokeController::Parameter param = s_chokeController->getCurrentParameter();
-
-            // Build menu data
-            MenuDisplayData menuData;
-            if (param == ChokeController::Parameter::LENGTH) {
-                menuData.topText = "CHOKE->Length";
-                menuData.middleText = ChokeController::lengthName(choke.getLengthMode());
-                menuData.numOptions = 2;
-                menuData.selectedIndex = static_cast<uint8_t>(choke.getLengthMode());
-            } else {  // ONSET
-                menuData.topText = "CHOKE->Onset";
-                menuData.middleText = ChokeController::onsetName(choke.getOnsetMode());
-                menuData.numOptions = 2;
-                menuData.selectedIndex = static_cast<uint8_t>(choke.getOnsetMode());
-            }
-
-            // Show menu via DisplayManager (takes priority over effects)
-            DisplayManager::instance().showMenu(menuData);
-            DisplayManager::instance().updateDisplay();
-        } else {
-            // Cooldown expired - only hide menu if NO other encoders are touched
-            if (!s_encoder1->isTouched() && !s_encoder2->isTouched() && !s_encoder4->isTouched()) {
-                DisplayManager::instance().hideMenu();
-                DisplayManager::instance().updateDisplay();
-            }
-        }
-    });
-}
 
 static void setupEncoder4() {
     s_encoder4 = new EncoderHandler::Handler(3);  // Encoder 4 is index 3
@@ -381,11 +127,7 @@ static void setupEncoder4() {
     // Value change: Adjust global quantization
     s_encoder4->onValueChange([](int8_t delta) {
         int8_t currentIndex = static_cast<int8_t>(EffectQuantization::getGlobalQuantization());
-        int8_t newIndex = currentIndex + delta;
-
-        // Clamp to valid range (0-3)
-        if (newIndex < 0) newIndex = 0;
-        if (newIndex > 3) newIndex = 3;
+        int8_t newIndex = clampIndex(currentIndex + delta, 0, 3);
 
         if (newIndex != currentIndex) {
             Quantization newQuant = static_cast<Quantization>(newIndex);
@@ -393,32 +135,19 @@ static void setupEncoder4() {
             Serial.print("Global Quantization: ");
             Serial.println(EffectQuantization::quantizationName(newQuant));
 
-            // Update menu display immediately
-            MenuDisplayData menuData("Global Quantization", EffectQuantization::quantizationName(newQuant), 4, newIndex);
-            DisplayManager::instance().showMenu(menuData);
-            DisplayManager::instance().updateDisplay();
+            showMenu("Global Quantization", EffectQuantization::quantizationName(newQuant), 4, newIndex);
         }
     });
 
     // Display update: Show quantization or return to effect display
     s_encoder4->onDisplayUpdate([](bool isTouched) {
         if (isTouched) {
-            // Show current quantization
             Quantization quant = EffectQuantization::getGlobalQuantization();
-
-            // Build menu data
-            MenuDisplayData menuData;
-            menuData.topText = "Global Quantization";
-            menuData.middleText = EffectQuantization::quantizationName(quant);
-            menuData.numOptions = 4;  // QUANT_32, QUANT_16, QUANT_8, QUANT_4
-            menuData.selectedIndex = static_cast<uint8_t>(quant);
-
-            // Show menu via DisplayManager (takes priority over effects)
-            DisplayManager::instance().showMenu(menuData);
-            DisplayManager::instance().updateDisplay();
+            showMenu("Global Quantization", EffectQuantization::quantizationName(quant),
+                     4, static_cast<uint8_t>(quant));
         } else {
             // Cooldown expired - only hide menu if NO other encoders are touched
-            if (!s_encoder1->isTouched() && !s_encoder2->isTouched() && !s_encoder3->isTouched()) {
+            if (!anyEncoderTouchedExcept(s_encoder4)) {
                 DisplayManager::instance().hideMenu();
                 DisplayManager::instance().updateDisplay();
             }
@@ -624,10 +353,17 @@ void AppLogic::begin() {
     s_freezeController = new FreezeController(freeze);
     s_stutterController = new StutterController(stutter);
 
-    // Setup encoders
-    setupEncoder1();  // STUTTER parameters
-    setupEncoder2();  // FREEZE parameters
-    setupEncoder3();  // CHOKE parameters
+    // Create encoder handlers
+    s_encoder1 = new EncoderHandler::Handler(0);  // STUTTER parameters
+    s_encoder2 = new EncoderHandler::Handler(1);  // FREEZE parameters
+    s_encoder3 = new EncoderHandler::Handler(2);  // CHOKE parameters
+
+    // Bind controllers to encoders
+    s_stutterController->bindToEncoder(*s_encoder1, anyEncoderTouchedExcept);
+    s_freezeController->bindToEncoder(*s_encoder2, anyEncoderTouchedExcept);
+    s_chokeController->bindToEncoder(*s_encoder3, anyEncoderTouchedExcept);
+
+    // Setup global quantization encoder
     setupEncoder4();  // Global quantization
 
     // Initialize state
