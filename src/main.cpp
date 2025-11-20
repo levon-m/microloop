@@ -1,18 +1,18 @@
 #include <Arduino.h>
 #include <Audio.h>
 #include <TeensyThreads.h>
-#include "midi_io.h"
-#include "app_logic.h"
-#include "neokey_io.h"
-#include "oled_io.h"
-#include "mcp_io.h"
-#include "audio_freeze.h"
-#include "audio_choke.h"
-#include "audio_stutter.h"
-#include "effect_manager.h"
-#include "trace.h"
-#include "timekeeper.h"
-#include "audio_timekeeper.h"
+#include "MidiIO.h"
+#include "AppLogic.h"
+#include "NeokeyIO.h"
+#include "OledIO.h"
+#include "McpIO.h"
+#include "AudioFreeze.h"
+#include "AudioChoke.h"
+#include "AudioStutter.h"
+#include "EffectManager.h"
+#include "Trace.h"
+#include "TimeKeeper.h"
+#include "AudioTimeKeeper.h"
 
 AudioInputI2S i2s_in;
 AudioTimeKeeper timekeeper;  // Tracks sample position
