@@ -1,4 +1,4 @@
-#include "audio_freeze.h"
+#include "AudioFreeze.h"
 
 AudioEffectFreeze::AudioEffectFreeze() : AudioEffectBase(2) {  // Call base with 2 inputs (stereo)
     m_writePos = 0;

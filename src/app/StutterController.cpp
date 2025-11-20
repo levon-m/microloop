@@ -1,8 +1,8 @@
-#include "stutter_controller.h"
-#include "neokey_io.h"
-#include "display_manager.h"
-#include "timekeeper.h"
-#include "encoder_handler.h"
+#include "StutterController.h"
+#include "NeokeyIO.h"
+#include "DisplayManager.h"
+#include "TimeKeeper.h"
+#include "EncoderHandler.h"
 #include <Arduino.h>
 
 // ========== RGB LED PIN DEFINITIONS ==========

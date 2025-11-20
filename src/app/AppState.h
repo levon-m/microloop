@@ -19,7 +19,7 @@
 
 #pragma once
 
-#include "effect_manager.h"  // For EffectID
+#include "EffectManager.h"  // For EffectID
 #include <stdint.h>
 
 /**

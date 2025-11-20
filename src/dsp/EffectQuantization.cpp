@@ -1,4 +1,4 @@
-#include "effect_quantization.h"
+#include "EffectQuantization.h"
 #include <AudioStream.h> 
 
 namespace EffectQuantization {

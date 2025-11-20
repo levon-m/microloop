@@ -1,5 +1,5 @@
-#include "encoder_handler.h"
-#include "mcp_io.h"
+#include "EncoderHandler.h"
+#include "McpIO.h"
 #include <Arduino.h>
 
 namespace EncoderHandler {

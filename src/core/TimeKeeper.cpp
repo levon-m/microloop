@@ -2,8 +2,8 @@
  * timekeeper.cpp - Implementation of centralized timing authority
  */
 
-#include "timekeeper.h"
-#include "trace.h"
+#include "TimeKeeper.h"
+#include "Trace.h"
 
 // AUDIO_BLOCK_SAMPLES is defined by Teensy Audio Library as 128
 // We can't include <Audio.h> here due to SD card dependencies

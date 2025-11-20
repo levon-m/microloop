@@ -17,8 +17,8 @@
 
 #pragma once
 
-#include "effect_manager.h"
-#include "oled_io.h"
+#include "EffectManager.h"
+#include "OledIO.h"
 
 /**
  * Display state manager

@@ -1,34 +1,34 @@
-#include "freeze_controller.h"
-#include "neokey_io.h"
-#include "display_manager.h"
-#include "timekeeper.h"
-#include "encoder_handler.h"
+#include "ChokeController.h"
+#include "NeokeyIO.h"
+#include "DisplayManager.h"
+#include "TimeKeeper.h"
+#include "EncoderHandler.h"
 #include <Arduino.h>
 
-FreezeController::FreezeController(AudioEffectFreeze& effect)
+ChokeController::ChokeController(AudioEffectChoke& effect)
     : m_effect(effect),
       m_currentParameter(Parameter::LENGTH),
       m_wasEnabled(false) {
 }
 
-const char* FreezeController::lengthName(FreezeLength length) {
+const char* ChokeController::lengthName(ChokeLength length) {
     switch (length) {
-        case FreezeLength::FREE:      return "Free";
-        case FreezeLength::QUANTIZED: return "Quantized";
+        case ChokeLength::FREE:      return "Free";
+        case ChokeLength::QUANTIZED: return "Quantized";
         default: return "Free";
     }
 }
 
-const char* FreezeController::onsetName(FreezeOnset onset) {
+const char* ChokeController::onsetName(ChokeOnset onset) {
     switch (onset) {
-        case FreezeOnset::FREE:      return "Free";
-        case FreezeOnset::QUANTIZED: return "Quantized";
+        case ChokeOnset::FREE:      return "Free";
+        case ChokeOnset::QUANTIZED: return "Quantized";
         default: return "Free";
     }
 }
 
-bool FreezeController::handleButtonPress(const Command& cmd) {
-    if (cmd.targetEffect != EffectID::FREEZE) {
+bool ChokeController::handleButtonPress(const Command& cmd) {
+    if (cmd.targetEffect != EffectID::CHOKE) {
         return false;  // Not our effect
     }
 
@@ -36,35 +36,42 @@ bool FreezeController::handleButtonPress(const Command& cmd) {
         return false;  // Not a press command
     }
 
-    FreezeLength lengthMode = m_effect.getLengthMode();
-    FreezeOnset onsetMode = m_effect.getOnsetMode();
+    ChokeLength lengthMode = m_effect.getLengthMode();
+    ChokeOnset onsetMode = m_effect.getOnsetMode();
 
-    if (onsetMode == FreezeOnset::FREE) {
+    if (onsetMode == ChokeOnset::FREE) {
         // FREE ONSET: Engage immediately
         m_effect.enable();
 
-        if (lengthMode == FreezeLength::QUANTIZED) {
+        if (lengthMode == ChokeLength::QUANTIZED) {
             // FREE ONSET + QUANTIZED LENGTH
             Quantization quant = EffectQuantization::getGlobalQuantization();
             uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
             uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
             m_effect.scheduleRelease(releaseSample);
 
-            Serial.print("Freeze ENGAGED (Free onset, Quantized length=");
+            Serial.print("Choke ENGAGED (Free onset, Quantized length=");
             Serial.print(EffectQuantization::quantizationName(quant));
             Serial.println(")");
         } else {
             // FREE ONSET + FREE LENGTH
-            Serial.println("Freeze ENGAGED (Free onset, Free length)");
+            Serial.println("Choke ENGAGED (Free onset, Free length)");
         }
 
         // Update visual feedback
-        NeokeyIO::setLED(EffectID::FREEZE, true);
+        NeokeyIO::setLED(EffectID::CHOKE, true);
         DisplayManager::instance().updateDisplay();
         return true;  // Command handled
     } else {
         // QUANTIZED ONSET: Schedule for next boundary with lookahead offset
         Quantization quant = EffectQuantization::getGlobalQuantization();
+
+        // DEBUG: Get all timing info
+        uint64_t currentSample = TimeKeeper::getSamplePosition();
+        uint32_t samplesPerBeat = TimeKeeper::getSamplesPerBeat();
+        uint32_t beatNumber = TimeKeeper::getBeatNumber();
+        uint32_t tickInBeat = TimeKeeper::getTickInBeat();
+
         uint32_t samplesToNext = EffectQuantization::samplesToNextQuantizedBoundary(quant);
 
         // Apply lookahead offset (fire early to catch external audio transients)
@@ -72,32 +79,41 @@ bool FreezeController::handleButtonPress(const Command& cmd) {
         uint32_t adjustedSamples = (samplesToNext > lookahead) ? (samplesToNext - lookahead) : 0;
 
         // Calculate absolute sample position for onset
-        uint64_t onsetSample = TimeKeeper::getSamplePosition() + adjustedSamples;
+        uint64_t onsetSample = currentSample + adjustedSamples;
 
         // Schedule onset in ISR (same as how length scheduling works)
         m_effect.scheduleOnset(onsetSample);
 
         // If length is also quantized, schedule release from onset position
-        if (lengthMode == FreezeLength::QUANTIZED) {
+        if (lengthMode == ChokeLength::QUANTIZED) {
             uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
             uint64_t releaseSample = onsetSample + durationSamples;
             m_effect.scheduleRelease(releaseSample);
         }
 
-        Serial.print("Freeze ONSET scheduled (");
-        Serial.print(EffectQuantization::quantizationName(quant));
-        Serial.print(" grid, ");
-        Serial.print(adjustedSamples);
-        Serial.print(" samples, lookahead=");
+        Serial.print("ONSET DEBUG: currentSample=");
+        Serial.print((uint32_t)currentSample);
+        Serial.print(" beat=");
+        Serial.print(beatNumber);
+        Serial.print(" tick=");
+        Serial.print(tickInBeat);
+        Serial.print(" spb=");
+        Serial.print(samplesPerBeat);
+        Serial.print(" samplesToNext=");
+        Serial.print(samplesToNext);
+        Serial.print(" lookahead=");
         Serial.print(lookahead);
-        Serial.println(")");
+        Serial.print(" adjusted=");
+        Serial.print(adjustedSamples);
+        Serial.print(" onsetSample=");
+        Serial.println((uint32_t)onsetSample);
 
         return true;  // Command handled
     }
 }
 
-bool FreezeController::handleButtonRelease(const Command& cmd) {
-    if (cmd.targetEffect != EffectID::FREEZE) {
+bool ChokeController::handleButtonRelease(const Command& cmd) {
+    if (cmd.targetEffect != EffectID::CHOKE) {
         return false;  // Not our effect
     }
 
@@ -105,42 +121,42 @@ bool FreezeController::handleButtonRelease(const Command& cmd) {
         return false;  // Not a release command
     }
 
-    FreezeLength lengthMode = m_effect.getLengthMode();
+    ChokeLength lengthMode = m_effect.getLengthMode();
 
-    if (lengthMode == FreezeLength::QUANTIZED) {
+    if (lengthMode == ChokeLength::QUANTIZED) {
         // QUANTIZED LENGTH: Ignore release (auto-releases)
-        Serial.println("Freeze button released (ignored - quantized length)");
+        Serial.println("Choke button released (ignored - quantized length)");
         return true;  // Command handled (skip default disable)
     }
 
     // FREE LENGTH: Check if we have scheduled onset via ISR API
     // QUANTIZED ONSET + FREE LENGTH: Cancel scheduled onset
     m_effect.cancelScheduledOnset();
-    Serial.println("Freeze scheduled onset CANCELLED (button released before beat)");
+    Serial.println("Choke scheduled onset CANCELLED (button released before beat)");
 
     // FREE ONSET + FREE LENGTH: Fall through to default disable
     return false;  // Let EffectManager handle disable
 }
 
-void FreezeController::updateVisualFeedback() {
+void ChokeController::updateVisualFeedback() {
     bool isEnabled = m_effect.isEnabled();
 
     // Detect rising edge: effect just became enabled
     if (isEnabled && !m_wasEnabled) {
         // ISR fired onset or immediate enable - update visual feedback
-        NeokeyIO::setLED(EffectID::FREEZE, true);
+        NeokeyIO::setLED(EffectID::CHOKE, true);
         DisplayManager::instance().updateDisplay();
 
         // Determine what happened based on onset/length modes
-        FreezeOnset onsetMode = m_effect.getOnsetMode();
-        FreezeLength lengthMode = m_effect.getLengthMode();
+        ChokeOnset onsetMode = m_effect.getOnsetMode();
+        ChokeLength lengthMode = m_effect.getLengthMode();
 
-        if (onsetMode == FreezeOnset::QUANTIZED) {
+        if (onsetMode == ChokeOnset::QUANTIZED) {
             Quantization quant = EffectQuantization::getGlobalQuantization();
-            Serial.print("Freeze ENGAGED at scheduled onset (");
+            Serial.print("Choke ENGAGED at scheduled onset (");
             Serial.print(EffectQuantization::quantizationName(quant));
             Serial.print(" boundary, ");
-            Serial.print(lengthMode == FreezeLength::QUANTIZED ? "Quantized length)" : "Free length)");
+            Serial.print(lengthMode == ChokeLength::QUANTIZED ? "Quantized length)" : "Free length)");
             Serial.println();
         }
     }
@@ -148,12 +164,12 @@ void FreezeController::updateVisualFeedback() {
     // Detect falling edge: effect just became disabled
     if (!isEnabled && m_wasEnabled) {
         // Update LED to reflect disabled state
-        NeokeyIO::setLED(EffectID::FREEZE, false);
+        NeokeyIO::setLED(EffectID::CHOKE, false);
         DisplayManager::instance().updateDisplay();
 
         // Check if this was auto-release (quantized length mode)
-        if (m_effect.getLengthMode() == FreezeLength::QUANTIZED) {
-            Serial.println("Freeze auto-released (Quantized mode)");
+        if (m_effect.getLengthMode() == ChokeLength::QUANTIZED) {
+            Serial.println("Choke auto-released (Quantized mode)");
         }
     }
 
@@ -178,17 +194,17 @@ static int8_t clampIndex(int8_t value, int8_t minValue, int8_t maxValue) {
 
 // ========== ENCODER BINDING ==========
 
-void FreezeController::bindToEncoder(EncoderHandler::Handler& encoder,
-                                     AnyEncoderTouchedFn anyTouchedExcept) {
+void ChokeController::bindToEncoder(EncoderHandler::Handler& encoder,
+                                    AnyEncoderTouchedFn anyTouchedExcept) {
     // Button press: Cycle between LENGTH and ONSET parameters
     encoder.onButtonPress([this]() {
         Parameter current = m_currentParameter;
         if (current == Parameter::LENGTH) {
             m_currentParameter = Parameter::ONSET;
-            Serial.println("Freeze Parameter: ONSET");
+            Serial.println("Choke Parameter: ONSET");
         } else {
             m_currentParameter = Parameter::LENGTH;
-            Serial.println("Freeze Parameter: LENGTH");
+            Serial.println("Choke Parameter: LENGTH");
         }
         // Display update handled by onDisplayUpdate callback
     });
@@ -201,13 +217,13 @@ void FreezeController::bindToEncoder(EncoderHandler::Handler& encoder,
             int8_t currentIndex = static_cast<int8_t>(m_effect.getLengthMode());
             int8_t newIndex = clampIndex(currentIndex + delta, 0, 1);
             if (newIndex != currentIndex) {
-                FreezeLength newLength = static_cast<FreezeLength>(newIndex);
+                ChokeLength newLength = static_cast<ChokeLength>(newIndex);
                 m_effect.setLengthMode(newLength);
-                Serial.print("Freeze Length: ");
+                Serial.print("Choke Length: ");
                 Serial.println(lengthName(newLength));
 
                 MenuDisplayData menuData;
-                menuData.topText = "FREEZE->Length";
+                menuData.topText = "CHOKE->Length";
                 menuData.middleText = lengthName(newLength);
                 menuData.numOptions = 2;
                 menuData.selectedIndex = newIndex;
@@ -217,13 +233,13 @@ void FreezeController::bindToEncoder(EncoderHandler::Handler& encoder,
             int8_t currentIndex = static_cast<int8_t>(m_effect.getOnsetMode());
             int8_t newIndex = clampIndex(currentIndex + delta, 0, 1);
             if (newIndex != currentIndex) {
-                FreezeOnset newOnset = static_cast<FreezeOnset>(newIndex);
+                ChokeOnset newOnset = static_cast<ChokeOnset>(newIndex);
                 m_effect.setOnsetMode(newOnset);
-                Serial.print("Freeze Onset: ");
+                Serial.print("Choke Onset: ");
                 Serial.println(onsetName(newOnset));
 
                 MenuDisplayData menuData;
-                menuData.topText = "FREEZE->Onset";
+                menuData.topText = "CHOKE->Onset";
                 menuData.middleText = onsetName(newOnset);
                 menuData.numOptions = 2;
                 menuData.selectedIndex = newIndex;
@@ -240,11 +256,11 @@ void FreezeController::bindToEncoder(EncoderHandler::Handler& encoder,
             MenuDisplayData menuData;
             menuData.numOptions = 2;
             if (param == Parameter::LENGTH) {
-                menuData.topText = "FREEZE->Length";
+                menuData.topText = "CHOKE->Length";
                 menuData.middleText = lengthName(m_effect.getLengthMode());
                 menuData.selectedIndex = static_cast<uint8_t>(m_effect.getLengthMode());
             } else {  // ONSET
-                menuData.topText = "FREEZE->Onset";
+                menuData.topText = "CHOKE->Onset";
                 menuData.middleText = onsetName(m_effect.getOnsetMode());
                 menuData.selectedIndex = static_cast<uint8_t>(m_effect.getOnsetMode());
             }

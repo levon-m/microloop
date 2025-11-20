@@ -1,7 +1,7 @@
 #pragma once
 
-#include "audio_effect_base.h"
-#include "timekeeper.h"
+#include "AudioEffectBase.h"
+#include "TimeKeeper.h"
 #include <atomic>
 
 enum class ChokeLength : uint8_t {

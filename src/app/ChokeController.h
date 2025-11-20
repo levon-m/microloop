@@ -23,10 +23,10 @@
 
 #pragma once
 
-#include "effect_controller.h"
-#include "audio_choke.h"
-#include "effect_quantization.h"
-#include "oled_io.h"
+#include "EffectController.h"
+#include "AudioChoke.h"
+#include "EffectQuantization.h"
+#include "OledIO.h"
 
 // Forward declaration
 namespace EncoderHandler {

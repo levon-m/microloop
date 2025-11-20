@@ -1,8 +1,8 @@
-#include "midi_io.h"
+#include "MidiIO.h"
 #include <MIDI.h>
 #include <TeensyThreads.h>
-#include "spsc_queue.h"
-#include "trace.h"
+#include "SPSCQueue.h"
+#include "Trace.h"
 
 // Create MIDI instance on Serial8 (RX8=pin34, TX8=pin35)
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial8, DIN);

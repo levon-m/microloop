@@ -1,4 +1,4 @@
-#include "display_manager.h"
+#include "DisplayManager.h"
 
 void DisplayManager::initialize() {
     m_lastActivatedEffect = EffectID::NONE;

@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Audio.h>
-#include "timekeeper.h"
-#include "trace.h"
+#include "TimeKeeper.h"
+#include "Trace.h"
 
 class AudioTimeKeeper : public AudioStream {
 public:

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "audio_effect_base.h"
-#include "command.h"
+#include "AudioEffectBase.h"
+#include "Command.h"
 #include <stdint.h>
 
 class EffectManager {

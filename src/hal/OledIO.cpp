@@ -1,7 +1,7 @@
-#include "oled_io.h"
-#include "bitmaps.h"
-#include "spsc_queue.h"
-#include "trace.h"
+#include "OledIO.h"
+#include "Bitmaps.h"
+#include "SPSCQueue.h"
+#include "Trace.h"
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_GFX.h>
 #include <TeensyThreads.h>

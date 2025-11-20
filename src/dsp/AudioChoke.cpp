@@ -1,4 +1,4 @@
-#include "audio_choke.h"
+#include "AudioChoke.h"
 
 AudioEffectChoke::AudioEffectChoke() : AudioEffectBase(2) {  // Call base with 2 inputs (stereo)
     m_targetGain = 1.0f;      // Start unmuted

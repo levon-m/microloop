@@ -1,4 +1,4 @@
-#include "effect_manager.h"
+#include "EffectManager.h"
 #include <Arduino.h>  // For Serial debug output
 
 EffectManager::EffectEntry EffectManager::s_effects[MAX_EFFECTS] = {};

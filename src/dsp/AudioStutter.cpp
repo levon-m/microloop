@@ -1,4 +1,4 @@
-#include "audio_stutter.h"
+#include "AudioStutter.h"
 
 // Define static EXTMEM buffers
 EXTMEM int16_t AudioEffectStutter::m_stutterBufferL[AudioEffectStutter::STUTTER_BUFFER_SAMPLES];

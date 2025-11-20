@@ -31,7 +31,7 @@
 
 #pragma once
 
-#include "command.h"  // For Command struct
+#include "Command.h"  // For Command struct
 
 /**
  * Abstract interface for effect controllers

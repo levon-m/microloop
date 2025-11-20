@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include "command.h"
+#include "Command.h"
 
 namespace NeokeyIO {
     bool begin();

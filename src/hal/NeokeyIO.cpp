@@ -1,6 +1,6 @@
-#include "neokey_io.h"
-#include "spsc_queue.h"
-#include "trace.h"
+#include "NeokeyIO.h"
+#include "SPSCQueue.h"
+#include "Trace.h"
 #include <Adafruit_NeoKey_1x4.h>
 #include <seesaw_neopixel.h>
 #include <TeensyThreads.h>

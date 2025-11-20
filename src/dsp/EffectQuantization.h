@@ -1,12 +1,12 @@
 #pragma once
 
 #include <stdint.h>
-#include "effect_manager.h"
-#include "audio_choke.h"
-#include "audio_freeze.h"
-#include "oled_io.h"
-#include "neokey_io.h"
-#include "timekeeper.h"
+#include "EffectManager.h"
+#include "AudioChoke.h"
+#include "AudioFreeze.h"
+#include "OledIO.h"
+#include "NeokeyIO.h"
+#include "TimeKeeper.h"
 
 // Global quantization grid (shared across all effects)
 enum class Quantization : uint8_t {

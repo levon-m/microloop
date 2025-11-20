@@ -2,7 +2,7 @@
  * trace.cpp - Implementation of trace buffer storage
  */
 
-#include "trace.h"
+#include "Trace.h"
 
 #if TRACE_ENABLED
 
