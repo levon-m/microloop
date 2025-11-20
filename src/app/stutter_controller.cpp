@@ -5,10 +5,6 @@
 #include "encoder_handler.h"
 #include <Arduino.h>
 
-// Define static EXTMEM buffers for AudioEffectStutter
-EXTMEM int16_t AudioEffectStutter::m_stutterBufferL[AudioEffectStutter::STUTTER_BUFFER_SAMPLES];
-EXTMEM int16_t AudioEffectStutter::m_stutterBufferR[AudioEffectStutter::STUTTER_BUFFER_SAMPLES];
-
 // ========== RGB LED PIN DEFINITIONS ==========
 static constexpr uint8_t RGB_LED_R_PIN = 28;  // Red (PWM capable)
 static constexpr uint8_t RGB_LED_G_PIN = 36;  // Green (PWM capable)

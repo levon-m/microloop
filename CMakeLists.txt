@@ -262,6 +262,18 @@ add_library(effect_quantization STATIC src/dsp/effect_quantization.cpp)
 target_include_directories(effect_quantization PUBLIC src/dsp src/core)
 target_link_libraries(effect_quantization teensy_core microloop_utils)
 
+add_library(audio_choke STATIC src/dsp/audio_choke.cpp)
+target_include_directories(audio_choke PUBLIC src/dsp src/core)
+target_link_libraries(audio_choke teensy_core audio microloop_utils)
+
+add_library(audio_freeze STATIC src/dsp/audio_freeze.cpp)
+target_include_directories(audio_freeze PUBLIC src/dsp src/core)
+target_link_libraries(audio_freeze teensy_core audio microloop_utils)
+
+add_library(audio_stutter STATIC src/dsp/audio_stutter.cpp)
+target_include_directories(audio_stutter PUBLIC src/dsp src/core)
+target_link_libraries(audio_stutter teensy_core audio microloop_utils)
+
 # App libraries (Application Logic)
 add_library(encoder_handler STATIC src/app/encoder_handler.cpp)
 target_include_directories(encoder_handler PUBLIC src/app src/hal)
@@ -273,15 +285,15 @@ target_link_libraries(display_manager teensy_core oled_io effect_manager)
 
 add_library(choke_controller STATIC src/app/choke_controller.cpp)
 target_include_directories(choke_controller PUBLIC src/app src/dsp src/hal src/core)
-target_link_libraries(choke_controller teensy_core audio effect_quantization display_manager neokey_io microloop_utils)
+target_link_libraries(choke_controller teensy_core audio_choke effect_quantization display_manager neokey_io microloop_utils)
 
 add_library(freeze_controller STATIC src/app/freeze_controller.cpp)
 target_include_directories(freeze_controller PUBLIC src/app src/dsp src/hal src/core)
-target_link_libraries(freeze_controller teensy_core audio effect_quantization display_manager neokey_io microloop_utils)
+target_link_libraries(freeze_controller teensy_core audio_freeze effect_quantization display_manager neokey_io microloop_utils)
 
 add_library(stutter_controller STATIC src/app/stutter_controller.cpp)
 target_include_directories(stutter_controller PUBLIC src/app src/dsp src/hal src/core)
-target_link_libraries(stutter_controller teensy_core audio effect_quantization display_manager neokey_io microloop_utils)
+target_link_libraries(stutter_controller teensy_core audio_stutter effect_quantization display_manager neokey_io microloop_utils)
 
 add_library(app_logic STATIC src/app/app_logic.cpp)
 target_include_directories(app_logic PUBLIC src/app src/dsp src/hal src/core)
@@ -323,6 +335,9 @@ target_link_libraries(microloop.elf
     app_logic
     effect_manager
     effect_quantization
+    audio_choke
+    audio_freeze
+    audio_stutter
     encoder_handler
     display_manager
     choke_controller
