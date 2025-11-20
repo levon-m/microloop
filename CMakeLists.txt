@@ -73,8 +73,10 @@ set(MCP23017_LIB "${TEENSY_LIBS}/Adafruit-MCP23017-Arduino-Library-2.3.2/src")
 
 # Include directories
 include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/utils
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/dsp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/hal
     ${TEENSY_CORES}
     ${WIRE_LIB}
     ${MIDI_LIB}
@@ -222,11 +224,11 @@ message(STATUS "Adafruit MCP23017 Library found")
 
 # Utils library (now has trace.cpp and timekeeper.cpp)
 add_library(microloop_utils STATIC
-    utils/trace.cpp
-    utils/timekeeper.cpp
+    src/core/trace.cpp
+    src/core/timekeeper.cpp
 )
 target_include_directories(microloop_utils PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/utils
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
 )
 target_link_libraries(microloop_utils teensy_core)
 
@@ -234,50 +236,55 @@ target_link_libraries(microloop_utils teensy_core)
 # Note: Custom SGTL5000 driver backed up as SGTL5000_CUSTOM_BACKUP.cpp/.h
 # Using Teensy Audio Library's AudioControlSGTL5000 instead
 
-add_library(midi_io STATIC src/midi_io.cpp)
-target_include_directories(midi_io PUBLIC include)
+# HAL libraries (Hardware Abstraction Layer)
+add_library(midi_io STATIC src/hal/midi_io.cpp)
+target_include_directories(midi_io PUBLIC src/hal src/core)
 target_link_libraries(midi_io teensy_core midi teensy_threads microloop_utils)
 
-add_library(neokey_io STATIC src/neokey_io.cpp)
-target_include_directories(neokey_io PUBLIC include)
+add_library(neokey_io STATIC src/hal/neokey_io.cpp)
+target_include_directories(neokey_io PUBLIC src/hal src/core)
 target_link_libraries(neokey_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
 
-add_library(oled_io STATIC src/oled_io.cpp)
-target_include_directories(oled_io PUBLIC include)
+add_library(oled_io STATIC src/hal/oled_io.cpp)
+target_include_directories(oled_io PUBLIC src/hal src/core src/app)
 target_link_libraries(oled_io teensy_core teensy_threads ssd1306 gfx wire microloop_utils)
 
-add_library(effect_manager STATIC src/effect_manager.cpp)
-target_include_directories(effect_manager PUBLIC include)
+add_library(mcp_io STATIC src/hal/mcp_io.cpp)
+target_include_directories(mcp_io PUBLIC src/hal src/core)
+target_link_libraries(mcp_io teensy_core teensy_threads wire mcp23017 busio)
+
+# DSP libraries (Audio Effects)
+add_library(effect_manager STATIC src/dsp/effect_manager.cpp)
+target_include_directories(effect_manager PUBLIC src/dsp)
 target_link_libraries(effect_manager teensy_core audio)
 
-# New modular subsystems
-add_library(effect_quantization STATIC src/effect_quantization.cpp)
-target_include_directories(effect_quantization PUBLIC include)
+add_library(effect_quantization STATIC src/dsp/effect_quantization.cpp)
+target_include_directories(effect_quantization PUBLIC src/dsp src/core)
 target_link_libraries(effect_quantization teensy_core microloop_utils)
 
-add_library(encoder_handler STATIC src/encoder_handler.cpp)
-target_include_directories(encoder_handler PUBLIC include)
+# App libraries (Application Logic)
+add_library(encoder_handler STATIC src/app/encoder_handler.cpp)
+target_include_directories(encoder_handler PUBLIC src/app src/hal)
 target_link_libraries(encoder_handler teensy_core mcp_io)
 
-add_library(display_manager STATIC src/display_manager.cpp)
-target_include_directories(display_manager PUBLIC include)
+add_library(display_manager STATIC src/app/display_manager.cpp)
+target_include_directories(display_manager PUBLIC src/app src/hal src/dsp)
 target_link_libraries(display_manager teensy_core oled_io effect_manager)
 
-add_library(choke_controller STATIC src/choke_controller.cpp)
-target_include_directories(choke_controller PUBLIC include)
+add_library(choke_controller STATIC src/app/choke_controller.cpp)
+target_include_directories(choke_controller PUBLIC src/app src/dsp src/hal src/core)
 target_link_libraries(choke_controller teensy_core audio effect_quantization display_manager neokey_io microloop_utils)
 
-add_library(freeze_controller STATIC src/freeze_controller.cpp)
-target_include_directories(freeze_controller PUBLIC include)
+add_library(freeze_controller STATIC src/app/freeze_controller.cpp)
+target_include_directories(freeze_controller PUBLIC src/app src/dsp src/hal src/core)
 target_link_libraries(freeze_controller teensy_core audio effect_quantization display_manager neokey_io microloop_utils)
 
-add_library(stutter_controller STATIC src/stutter_controller.cpp)
-target_include_directories(stutter_controller PUBLIC include)
+add_library(stutter_controller STATIC src/app/stutter_controller.cpp)
+target_include_directories(stutter_controller PUBLIC src/app src/dsp src/hal src/core)
 target_link_libraries(stutter_controller teensy_core audio effect_quantization display_manager neokey_io microloop_utils)
 
-# App logic (now uses modular subsystems and effect controllers)
-add_library(app_logic STATIC src/app_logic.cpp)
-target_include_directories(app_logic PUBLIC include)
+add_library(app_logic STATIC src/app/app_logic.cpp)
+target_include_directories(app_logic PUBLIC src/app src/dsp src/hal src/core)
 target_link_libraries(app_logic
     teensy_core
     teensy_threads
@@ -293,10 +300,6 @@ target_link_libraries(app_logic
     freeze_controller
     stutter_controller
 )
-
-add_library(mcp_io STATIC src/mcp_io.cpp)
-target_include_directories(mcp_io PUBLIC include)
-target_link_libraries(mcp_io teensy_core teensy_threads wire mcp23017 busio)
 
 # MAIN
 add_executable(microloop.elf src/main.cpp)
