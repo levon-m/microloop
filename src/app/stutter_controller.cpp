@@ -456,23 +456,6 @@ static int8_t clampIndex(int8_t value, int8_t minValue, int8_t maxValue) {
     return value;
 }
 
-/**
- * Show menu with given parameters
- */
-static void showMenu(const char* title,
-                     const char* middleText,
-                     uint8_t numOptions,
-                     uint8_t selectedIndex) {
-    MenuDisplayData menuData;
-    menuData.topText = title;
-    menuData.middleText = middleText;
-    menuData.numOptions = numOptions;
-    menuData.selectedIndex = selectedIndex;
-
-    DisplayManager::instance().showMenu(menuData);
-    DisplayManager::instance().updateDisplay();
-}
-
 // ========== ENCODER BINDING ==========
 
 void StutterController::bindToEncoder(EncoderHandler::Handler& encoder,
@@ -511,7 +494,12 @@ void StutterController::bindToEncoder(EncoderHandler::Handler& encoder,
                 Serial.print("Stutter Onset: ");
                 Serial.println(onsetName(newOnset));
 
-                showMenu("STUTTER->Onset", onsetName(newOnset), 2, newIndex);
+                MenuDisplayData menuData;
+                menuData.topText = "STUTTER->Onset";
+                menuData.middleText = onsetName(newOnset);
+                menuData.numOptions = 2;
+                menuData.selectedIndex = newIndex;
+                DisplayManager::instance().showMenu(menuData);
             }
         } else if (param == Parameter::LENGTH) {
             int8_t currentIndex = static_cast<int8_t>(m_effect.getLengthMode());
@@ -522,7 +510,12 @@ void StutterController::bindToEncoder(EncoderHandler::Handler& encoder,
                 Serial.print("Stutter Length: ");
                 Serial.println(lengthName(newLength));
 
-                showMenu("STUTTER->Length", lengthName(newLength), 2, newIndex);
+                MenuDisplayData menuData;
+                menuData.topText = "STUTTER->Length";
+                menuData.middleText = lengthName(newLength);
+                menuData.numOptions = 2;
+                menuData.selectedIndex = newIndex;
+                DisplayManager::instance().showMenu(menuData);
             }
         } else if (param == Parameter::CAPTURE_START) {
             int8_t currentIndex = static_cast<int8_t>(m_effect.getCaptureStartMode());
@@ -533,7 +526,12 @@ void StutterController::bindToEncoder(EncoderHandler::Handler& encoder,
                 Serial.print("Stutter Capture Start: ");
                 Serial.println(captureStartName(newCaptureStart));
 
-                showMenu("STUTTER->Cap. Start", captureStartName(newCaptureStart), 2, newIndex);
+                MenuDisplayData menuData;
+                menuData.topText = "STUTTER->Cap. Start";
+                menuData.middleText = captureStartName(newCaptureStart);
+                menuData.numOptions = 2;
+                menuData.selectedIndex = newIndex;
+                DisplayManager::instance().showMenu(menuData);
             }
         } else {  // CAPTURE_END
             int8_t currentIndex = static_cast<int8_t>(m_effect.getCaptureEndMode());
@@ -544,7 +542,12 @@ void StutterController::bindToEncoder(EncoderHandler::Handler& encoder,
                 Serial.print("Stutter Capture End: ");
                 Serial.println(captureEndName(newCaptureEnd));
 
-                showMenu("STUTTER->Cap. End", captureEndName(newCaptureEnd), 2, newIndex);
+                MenuDisplayData menuData;
+                menuData.topText = "STUTTER->Cap. End";
+                menuData.middleText = captureEndName(newCaptureEnd);
+                menuData.numOptions = 2;
+                menuData.selectedIndex = newIndex;
+                DisplayManager::instance().showMenu(menuData);
             }
         }
     });
@@ -554,24 +557,30 @@ void StutterController::bindToEncoder(EncoderHandler::Handler& encoder,
         if (isTouched) {
             Parameter param = m_currentParameter;
 
+            MenuDisplayData menuData;
+            menuData.numOptions = 2;
             if (param == Parameter::ONSET) {
-                showMenu("STUTTER->Onset", onsetName(m_effect.getOnsetMode()),
-                         2, static_cast<uint8_t>(m_effect.getOnsetMode()));
+                menuData.topText = "STUTTER->Onset";
+                menuData.middleText = onsetName(m_effect.getOnsetMode());
+                menuData.selectedIndex = static_cast<uint8_t>(m_effect.getOnsetMode());
             } else if (param == Parameter::LENGTH) {
-                showMenu("STUTTER->Length", lengthName(m_effect.getLengthMode()),
-                         2, static_cast<uint8_t>(m_effect.getLengthMode()));
+                menuData.topText = "STUTTER->Length";
+                menuData.middleText = lengthName(m_effect.getLengthMode());
+                menuData.selectedIndex = static_cast<uint8_t>(m_effect.getLengthMode());
             } else if (param == Parameter::CAPTURE_START) {
-                showMenu("STUTTER->Cap. Start", captureStartName(m_effect.getCaptureStartMode()),
-                         2, static_cast<uint8_t>(m_effect.getCaptureStartMode()));
+                menuData.topText = "STUTTER->Cap. Start";
+                menuData.middleText = captureStartName(m_effect.getCaptureStartMode());
+                menuData.selectedIndex = static_cast<uint8_t>(m_effect.getCaptureStartMode());
             } else {  // CAPTURE_END
-                showMenu("STUTTER->Cap. End", captureEndName(m_effect.getCaptureEndMode()),
-                         2, static_cast<uint8_t>(m_effect.getCaptureEndMode()));
+                menuData.topText = "STUTTER->Cap. End";
+                menuData.middleText = captureEndName(m_effect.getCaptureEndMode());
+                menuData.selectedIndex = static_cast<uint8_t>(m_effect.getCaptureEndMode());
             }
+            DisplayManager::instance().showMenu(menuData);
         } else {
             // Cooldown expired - only hide menu if NO other encoders are touched
             if (!anyTouchedExcept(&encoder)) {
                 DisplayManager::instance().hideMenu();
-                DisplayManager::instance().updateDisplay();
             }
         }
     });

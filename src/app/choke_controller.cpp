@@ -192,23 +192,6 @@ static int8_t clampIndex(int8_t value, int8_t minValue, int8_t maxValue) {
     return value;
 }
 
-/**
- * Show menu with given parameters
- */
-static void showMenu(const char* title,
-                     const char* middleText,
-                     uint8_t numOptions,
-                     uint8_t selectedIndex) {
-    MenuDisplayData menuData;
-    menuData.topText = title;
-    menuData.middleText = middleText;
-    menuData.numOptions = numOptions;
-    menuData.selectedIndex = selectedIndex;
-
-    DisplayManager::instance().showMenu(menuData);
-    DisplayManager::instance().updateDisplay();
-}
-
 // ========== ENCODER BINDING ==========
 
 void ChokeController::bindToEncoder(EncoderHandler::Handler& encoder,
@@ -239,7 +222,12 @@ void ChokeController::bindToEncoder(EncoderHandler::Handler& encoder,
                 Serial.print("Choke Length: ");
                 Serial.println(lengthName(newLength));
 
-                showMenu("CHOKE->Length", lengthName(newLength), 2, newIndex);
+                MenuDisplayData menuData;
+                menuData.topText = "CHOKE->Length";
+                menuData.middleText = lengthName(newLength);
+                menuData.numOptions = 2;
+                menuData.selectedIndex = newIndex;
+                DisplayManager::instance().showMenu(menuData);
             }
         } else {  // ONSET parameter
             int8_t currentIndex = static_cast<int8_t>(m_effect.getOnsetMode());
@@ -250,7 +238,12 @@ void ChokeController::bindToEncoder(EncoderHandler::Handler& encoder,
                 Serial.print("Choke Onset: ");
                 Serial.println(onsetName(newOnset));
 
-                showMenu("CHOKE->Onset", onsetName(newOnset), 2, newIndex);
+                MenuDisplayData menuData;
+                menuData.topText = "CHOKE->Onset";
+                menuData.middleText = onsetName(newOnset);
+                menuData.numOptions = 2;
+                menuData.selectedIndex = newIndex;
+                DisplayManager::instance().showMenu(menuData);
             }
         }
     });
@@ -260,18 +253,22 @@ void ChokeController::bindToEncoder(EncoderHandler::Handler& encoder,
         if (isTouched) {
             Parameter param = m_currentParameter;
 
+            MenuDisplayData menuData;
+            menuData.numOptions = 2;
             if (param == Parameter::LENGTH) {
-                showMenu("CHOKE->Length", lengthName(m_effect.getLengthMode()),
-                         2, static_cast<uint8_t>(m_effect.getLengthMode()));
+                menuData.topText = "CHOKE->Length";
+                menuData.middleText = lengthName(m_effect.getLengthMode());
+                menuData.selectedIndex = static_cast<uint8_t>(m_effect.getLengthMode());
             } else {  // ONSET
-                showMenu("CHOKE->Onset", onsetName(m_effect.getOnsetMode()),
-                         2, static_cast<uint8_t>(m_effect.getOnsetMode()));
+                menuData.topText = "CHOKE->Onset";
+                menuData.middleText = onsetName(m_effect.getOnsetMode());
+                menuData.selectedIndex = static_cast<uint8_t>(m_effect.getOnsetMode());
             }
+            DisplayManager::instance().showMenu(menuData);
         } else {
             // Cooldown expired - only hide menu if NO other encoders are touched
             if (!anyTouchedExcept(&encoder)) {
                 DisplayManager::instance().hideMenu();
-                DisplayManager::instance().updateDisplay();
             }
         }
     });

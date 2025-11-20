@@ -80,28 +80,6 @@ static bool anyEncoderTouchedExcept(const EncoderHandler::Handler* ignore) {
 }
 
 /**
- * Show menu with given parameters
- *
- * @param title Menu title (top text)
- * @param middleText Current value text
- * @param numOptions Total number of options
- * @param selectedIndex Currently selected option index
- */
-static void showMenu(const char* title,
-                     const char* middleText,
-                     uint8_t numOptions,
-                     uint8_t selectedIndex) {
-    MenuDisplayData menuData;
-    menuData.topText = title;
-    menuData.middleText = middleText;
-    menuData.numOptions = numOptions;
-    menuData.selectedIndex = selectedIndex;
-
-    DisplayManager::instance().showMenu(menuData);
-    DisplayManager::instance().updateDisplay();
-}
-
-/**
  * Clamp index to valid range
  *
  * @param value Value to clamp
@@ -135,7 +113,12 @@ static void setupEncoder4() {
             Serial.print("Global Quantization: ");
             Serial.println(EffectQuantization::quantizationName(newQuant));
 
-            showMenu("Global Quantization", EffectQuantization::quantizationName(newQuant), 4, newIndex);
+            MenuDisplayData menuData;
+            menuData.topText = "Global Quantization";
+            menuData.middleText = EffectQuantization::quantizationName(newQuant);
+            menuData.numOptions = 4;
+            menuData.selectedIndex = newIndex;
+            DisplayManager::instance().showMenu(menuData);
         }
     });
 
@@ -143,13 +126,16 @@ static void setupEncoder4() {
     s_encoder4->onDisplayUpdate([](bool isTouched) {
         if (isTouched) {
             Quantization quant = EffectQuantization::getGlobalQuantization();
-            showMenu("Global Quantization", EffectQuantization::quantizationName(quant),
-                     4, static_cast<uint8_t>(quant));
+            MenuDisplayData menuData;
+            menuData.topText = "Global Quantization";
+            menuData.middleText = EffectQuantization::quantizationName(quant);
+            menuData.numOptions = 4;
+            menuData.selectedIndex = static_cast<uint8_t>(quant);
+            DisplayManager::instance().showMenu(menuData);
         } else {
             // Cooldown expired - only hide menu if NO other encoders are touched
             if (!anyEncoderTouchedExcept(s_encoder4)) {
                 DisplayManager::instance().hideMenu();
-                DisplayManager::instance().updateDisplay();
             }
         }
     });

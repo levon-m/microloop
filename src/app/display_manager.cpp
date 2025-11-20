@@ -48,10 +48,12 @@ EffectID DisplayManager::getLastActivatedEffect() const {
 void DisplayManager::showMenu(const MenuDisplayData& menuData) {
     m_menuShowing = true;
     m_currentMenu = menuData;
+    updateDisplay();
 }
 
 void DisplayManager::hideMenu() {
     m_menuShowing = false;
+    updateDisplay();
 }
 
 bool DisplayManager::isMenuShowing() const {
