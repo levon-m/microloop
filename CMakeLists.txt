@@ -295,6 +295,10 @@ add_library(stutter_controller STATIC src/app/StutterController.cpp)
 target_include_directories(stutter_controller PUBLIC src/app src/dsp src/hal src/core)
 target_link_libraries(stutter_controller teensy_core audio_stutter effect_quantization display_manager neokey_io microloop_utils)
 
+add_library(global_controller STATIC src/app/GlobalController.cpp)
+target_include_directories(global_controller PUBLIC src/app src/dsp src/hal)
+target_link_libraries(global_controller teensy_core effect_quantization display_manager)
+
 add_library(app_logic STATIC src/app/AppLogic.cpp)
 target_include_directories(app_logic PUBLIC src/app src/dsp src/hal src/core)
 target_link_libraries(app_logic
@@ -311,6 +315,7 @@ target_link_libraries(app_logic
     choke_controller
     freeze_controller
     stutter_controller
+    global_controller
 )
 
 # MAIN
@@ -343,6 +348,7 @@ target_link_libraries(microloop.elf
     choke_controller
     freeze_controller
     stutter_controller
+    global_controller
     seesaw
     neopixel
     busio

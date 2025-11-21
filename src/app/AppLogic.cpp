@@ -14,6 +14,7 @@
 #include "ChokeController.h"
 #include "FreezeController.h"
 #include "StutterController.h"
+#include "GlobalController.h"
 #include "AppState.h"
 
 #include <TeensyThreads.h>
@@ -30,6 +31,7 @@ static AppState s_appState;  // Application mode and context
 static ChokeController* s_chokeController = nullptr;    // Choke effect controller
 static FreezeController* s_freezeController = nullptr;  // Freeze effect controller
 static StutterController* s_stutterController = nullptr;
+static GlobalController* s_globalController = nullptr;  // Global parameters controller
 
 // ========== LED BEAT INDICATOR STATE ==========
 static constexpr uint8_t LED_PIN = 38;
@@ -50,7 +52,7 @@ static constexpr uint32_t PRINT_INTERVAL_MS = 1000;
 static EncoderHandler::Handler* s_encoder1 = nullptr;  // STUTTER parameters
 static EncoderHandler::Handler* s_encoder2 = nullptr;  // FREEZE parameters
 static EncoderHandler::Handler* s_encoder3 = nullptr;  // CHOKE parameters
-static EncoderHandler::Handler* s_encoder4 = nullptr;  // Global quantization
+static EncoderHandler::Handler* s_encoder4 = nullptr;  // GLOBAL parameters
 
 // ========== ENCODER HELPER FUNCTIONS ==========
 
@@ -95,50 +97,6 @@ static int8_t clampIndex(int8_t value, int8_t minValue, int8_t maxValue) {
         return maxValue;
     }
     return value;
-}
-
-// ========== ENCODER SETUP FUNCTIONS ==========
-
-static void setupEncoder4() {
-    s_encoder4 = new EncoderHandler::Handler(3);  // Encoder 4 is index 3
-
-    // Value change: Adjust global quantization
-    s_encoder4->onValueChange([](int8_t delta) {
-        int8_t currentIndex = static_cast<int8_t>(EffectQuantization::getGlobalQuantization());
-        int8_t newIndex = clampIndex(currentIndex + delta, 0, 3);
-
-        if (newIndex != currentIndex) {
-            Quantization newQuant = static_cast<Quantization>(newIndex);
-            EffectQuantization::setGlobalQuantization(newQuant);
-            Serial.print("Global Quantization: ");
-            Serial.println(EffectQuantization::quantizationName(newQuant));
-
-            MenuDisplayData menuData;
-            menuData.topText = "Global Quantization";
-            menuData.middleText = EffectQuantization::quantizationName(newQuant);
-            menuData.numOptions = 4;
-            menuData.selectedIndex = newIndex;
-            DisplayManager::instance().showMenu(menuData);
-        }
-    });
-
-    // Display update: Show quantization or return to effect display
-    s_encoder4->onDisplayUpdate([](bool isTouched) {
-        if (isTouched) {
-            Quantization quant = EffectQuantization::getGlobalQuantization();
-            MenuDisplayData menuData;
-            menuData.topText = "Global Quantization";
-            menuData.middleText = EffectQuantization::quantizationName(quant);
-            menuData.numOptions = 4;
-            menuData.selectedIndex = static_cast<uint8_t>(quant);
-            DisplayManager::instance().showMenu(menuData);
-        } else {
-            // Cooldown expired - only hide menu if NO other encoders are touched
-            if (!anyEncoderTouchedExcept(s_encoder4)) {
-                DisplayManager::instance().hideMenu();
-            }
-        }
-    });
 }
 
 // ========== HELPER FUNCTIONS (INTERNAL) ==========
@@ -207,7 +165,7 @@ static void updateEncoders() {
     s_encoder1->update();   // STUTTER parameters
     s_encoder2->update();   // FREEZE parameters
     s_encoder3->update();   // CHOKE parameters
-    s_encoder4->update();   // Global quantization
+    s_encoder4->update();   // GLOBAL parameters
 }
 
 /**
@@ -338,19 +296,19 @@ void AppLogic::begin() {
     s_chokeController = new ChokeController(choke);
     s_freezeController = new FreezeController(freeze);
     s_stutterController = new StutterController(stutter);
+    s_globalController = new GlobalController();
 
     // Create encoder handlers
     s_encoder1 = new EncoderHandler::Handler(0);  // STUTTER parameters
     s_encoder2 = new EncoderHandler::Handler(1);  // FREEZE parameters
     s_encoder3 = new EncoderHandler::Handler(2);  // CHOKE parameters
+    s_encoder4 = new EncoderHandler::Handler(3);  // GLOBAL parameters
 
     // Bind controllers to encoders
     s_stutterController->bindToEncoder(*s_encoder1, anyEncoderTouchedExcept);
     s_freezeController->bindToEncoder(*s_encoder2, anyEncoderTouchedExcept);
     s_chokeController->bindToEncoder(*s_encoder3, anyEncoderTouchedExcept);
-
-    // Setup global quantization encoder
-    setupEncoder4();  // Global quantization
+    s_globalController->bindToEncoder(*s_encoder4, anyEncoderTouchedExcept);
 
     // Initialize state
     s_transportActive = false;
