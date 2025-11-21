@@ -3,7 +3,7 @@
 FreezeAudio::FreezeAudio() : IEffectAudio(2) {  // Call base with 2 inputs (stereo)
     m_writePos = 0;
     m_readPos = 0;
-    m_isEnabled.store(false, std::memory_order_relaxed);  // Start disabled (passthrough)
+    m_state.store(FreezeState::IDLE, std::memory_order_relaxed);  // Start in IDLE state
     m_lengthMode = FreezeLength::FREE;  // Default: free mode
     m_onsetMode = FreezeOnset::FREE;    // Default: free mode
     m_releaseAtSample = 0;  // No scheduled release
@@ -18,11 +18,11 @@ void FreezeAudio::enable() {
     // Set read position to current write position
     // This captures the most recent audio in the buffer
     m_readPos = m_writePos;
-    m_isEnabled.store(true, std::memory_order_release);
+    m_state.store(FreezeState::ACTIVE, std::memory_order_release);
 }
 
 void FreezeAudio::disable() {
-    m_isEnabled.store(false, std::memory_order_release);
+    m_state.store(FreezeState::IDLE, std::memory_order_release);
 }
 
 void FreezeAudio::toggle() {
@@ -34,7 +34,8 @@ void FreezeAudio::toggle() {
 }
 
 bool FreezeAudio::isEnabled() const {
-    return m_isEnabled.load(std::memory_order_acquire);
+    FreezeState state = m_state.load(std::memory_order_acquire);
+    return state == FreezeState::ACTIVE || state == FreezeState::ARMED;
 }
 
 const char* FreezeAudio::getName() const {
@@ -49,8 +50,9 @@ void FreezeAudio::update() {
     // Fire if the scheduled sample falls within this audio block [currentSample, blockEndSample)
     if (m_onsetAtSample > 0 && m_onsetAtSample >= currentSample && m_onsetAtSample < blockEndSample) {
         // Time to engage freeze (block-accurate - best we can do in ISR)
+        // Transition: ARMED -> ACTIVE
         m_readPos = m_writePos;  // Capture current buffer position
-        m_isEnabled.store(true, std::memory_order_release);
+        m_state.store(FreezeState::ACTIVE, std::memory_order_release);
         m_onsetAtSample = 0;  // Clear scheduled onset
     }
 
@@ -58,12 +60,14 @@ void FreezeAudio::update() {
     // Fire if the scheduled sample falls within this audio block [currentSample, blockEndSample)
     if (m_releaseAtSample > 0 && m_releaseAtSample >= currentSample && m_releaseAtSample < blockEndSample) {
         // Time to auto-release (block-accurate)
-        m_isEnabled.store(false, std::memory_order_release);
+        // Transition: ACTIVE -> IDLE
+        m_state.store(FreezeState::IDLE, std::memory_order_release);
         m_releaseAtSample = 0;  // Clear scheduled release
     }
 
     // Check freeze state
-    bool frozen = m_isEnabled.load(std::memory_order_acquire);
+    FreezeState currentState = m_state.load(std::memory_order_acquire);
+    bool frozen = (currentState == FreezeState::ACTIVE);
 
     if (!frozen) {
         // PASSTHROUGH MODE: Record to buffer and pass through

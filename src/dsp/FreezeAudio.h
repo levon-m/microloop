@@ -15,6 +15,20 @@ enum class FreezeOnset : uint8_t {
     QUANTIZED = 1   // Quantize onset to next beat/subdivision
 };
 
+/**
+ * Freeze State Machine
+ *
+ * State transitions:
+ * - IDLE: Not active, audio passes through unfrozen
+ * - ARMED: Button pressed with quantized onset, waiting for grid boundary (LED: YELLOW)
+ * - ACTIVE: Freeze engaged, looping circular buffer (LED: WHITE)
+ */
+enum class FreezeState : uint8_t {
+    IDLE = 0,    // Not active (LED: OFF)
+    ARMED = 1,   // Waiting for quantized onset (LED: YELLOW blinking)
+    ACTIVE = 2   // Freeze engaged, looping buffer (LED: WHITE solid)
+};
+
 class FreezeAudio : public IEffectAudio {
 public:
     FreezeAudio();
@@ -25,13 +39,27 @@ public:
     bool isEnabled() const override;
     const char* getName() const override;
 
+    // ========== STATE MACHINE ==========
+
+    /**
+     * Get current state
+     */
+    FreezeState getState() const { return m_state; }
+
     void setLengthMode(FreezeLength mode) { m_lengthMode = mode; }
     FreezeLength getLengthMode() const { return m_lengthMode; }
 
     void scheduleRelease(uint64_t releaseSample) { m_releaseAtSample = releaseSample; }
 
-    void scheduleOnset(uint64_t onsetSample) { m_onsetAtSample = onsetSample; }
-    void cancelScheduledOnset() { m_onsetAtSample = 0; }
+    void scheduleOnset(uint64_t onsetSample) {
+        m_onsetAtSample = onsetSample;
+        m_state.store(FreezeState::ARMED, std::memory_order_release);  // Transition to ARMED
+    }
+
+    void cancelScheduledOnset() {
+        m_onsetAtSample = 0;
+        m_state.store(FreezeState::IDLE, std::memory_order_release);  // Transition back to IDLE
+    }
 
     void setOnsetMode(FreezeOnset mode) { m_onsetMode = mode; }
     FreezeOnset getOnsetMode() const { return m_onsetMode; }
@@ -63,7 +91,9 @@ private:
     size_t m_writePos;
     size_t m_readPos;
 
-    std::atomic<bool> m_isEnabled;
+    // ========== STATE MACHINE ==========
+    // State is atomic for lock-free cross-thread access
+    std::atomic<FreezeState> m_state;
 
     // Freeze length mode state
     FreezeLength m_lengthMode;        // FREE or QUANTIZED

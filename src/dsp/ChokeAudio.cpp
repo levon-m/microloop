@@ -3,7 +3,7 @@
 ChokeAudio::ChokeAudio() : IEffectAudio(2) {  // Call base with 2 inputs (stereo)
     m_targetGain = 1.0f;      // Start unmuted
     m_currentGain = 1.0f;
-    m_isEnabled.store(false, std::memory_order_relaxed);  // Start disabled (unmuted)
+    m_state.store(ChokeState::IDLE, std::memory_order_relaxed);  // Start in IDLE state
     m_lengthMode = ChokeLength::FREE;  // Default: free mode
     m_onsetMode = ChokeOnset::FREE;    // Default: free mode
     m_releaseAtSample = 0;  // No scheduled release
@@ -12,12 +12,12 @@ ChokeAudio::ChokeAudio() : IEffectAudio(2) {  // Call base with 2 inputs (stereo
 
 void ChokeAudio::enable() {
     m_targetGain = 0.0f;  // Mute
-    m_isEnabled.store(true, std::memory_order_release);
+    m_state.store(ChokeState::ACTIVE, std::memory_order_release);
 }
 
 void ChokeAudio::disable() {
     m_targetGain = 1.0f;  // Unmute
-    m_isEnabled.store(false, std::memory_order_release);
+    m_state.store(ChokeState::IDLE, std::memory_order_release);
 }
 
 void ChokeAudio::toggle() {
@@ -29,7 +29,8 @@ void ChokeAudio::toggle() {
 }
 
 bool ChokeAudio::isEnabled() const {
-    return m_isEnabled.load(std::memory_order_acquire);
+    ChokeState state = m_state.load(std::memory_order_acquire);
+    return state == ChokeState::ACTIVE || state == ChokeState::ARMED;
 }
 
 const char* ChokeAudio::getName() const {
@@ -44,8 +45,9 @@ void ChokeAudio::update() {
     // Fire if the scheduled sample falls within this audio block [currentSample, blockEndSample)
     if (m_onsetAtSample > 0 && m_onsetAtSample >= currentSample && m_onsetAtSample < blockEndSample) {
         // Time to engage choke (block-accurate - best we can do in ISR)
+        // Transition: ARMED -> ACTIVE
         m_targetGain = 0.0f;  // Mute
-        m_isEnabled.store(true, std::memory_order_release);
+        m_state.store(ChokeState::ACTIVE, std::memory_order_release);
         m_onsetAtSample = 0;  // Clear scheduled onset
     }
 
@@ -53,8 +55,9 @@ void ChokeAudio::update() {
     // Fire if the scheduled sample falls within this audio block [currentSample, blockEndSample)
     if (m_releaseAtSample > 0 && m_releaseAtSample >= currentSample && m_releaseAtSample < blockEndSample) {
         // Time to auto-release (block-accurate)
+        // Transition: ACTIVE -> IDLE
         m_targetGain = 1.0f;  // Unmute
-        m_isEnabled.store(false, std::memory_order_release);
+        m_state.store(ChokeState::IDLE, std::memory_order_release);
         m_releaseAtSample = 0;  // Clear scheduled release
     }
 

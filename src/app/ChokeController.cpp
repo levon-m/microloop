@@ -139,41 +139,54 @@ bool ChokeController::handleButtonRelease(const Command& cmd) {
 }
 
 void ChokeController::updateVisualFeedback() {
+    ChokeState currentState = m_effect.getState();
     bool isEnabled = m_effect.isEnabled();
 
-    // Detect rising edge: effect just became enabled
-    if (isEnabled && !m_wasEnabled) {
-        // ISR fired onset or immediate enable - update visual feedback
-        NeokeyInput::setLED(EffectID::CHOKE, true);
-        DisplayManager::instance().updateDisplay();
+    // Map state to LED: OFF for IDLE, ON for ARMED/ACTIVE
+    // TODO: Add RGB LED support to differentiate ARMED (yellow) from ACTIVE (white)
+    NeokeyInput::setLED(EffectID::CHOKE, currentState != ChokeState::IDLE);
 
-        // Determine what happened based on onset/length modes
+    // Detect state transition to ARMED (quantized onset scheduled)
+    static ChokeState s_prevState = ChokeState::IDLE;
+    if (currentState == ChokeState::ARMED && s_prevState == ChokeState::IDLE) {
+        Serial.println("Choke ARMED (waiting for quantized onset)");
+        DisplayManager::instance().updateDisplay();
+    }
+
+    // Detect state transition to ACTIVE
+    if (currentState == ChokeState::ACTIVE && s_prevState != ChokeState::ACTIVE) {
         ChokeOnset onsetMode = m_effect.getOnsetMode();
         ChokeLength lengthMode = m_effect.getLengthMode();
 
         if (onsetMode == ChokeOnset::QUANTIZED) {
             Quantization quant = EffectQuantization::getGlobalQuantization();
-            Serial.print("Choke ENGAGED at scheduled onset (");
+            Serial.print("Choke ACTIVE at scheduled onset (");
             Serial.print(EffectQuantization::quantizationName(quant));
             Serial.print(" boundary, ");
             Serial.print(lengthMode == ChokeLength::QUANTIZED ? "Quantized length)" : "Free length)");
             Serial.println();
+        } else {
+            Serial.print("Choke ACTIVE (Free onset, ");
+            Serial.print(lengthMode == ChokeLength::QUANTIZED ? "Quantized length)" : "Free length)");
+            Serial.println();
         }
+        DisplayManager::instance().updateDisplay();
     }
 
-    // Detect falling edge: effect just became disabled
-    if (!isEnabled && m_wasEnabled) {
-        // Update LED to reflect disabled state
-        NeokeyInput::setLED(EffectID::CHOKE, false);
-        DisplayManager::instance().updateDisplay();
-
-        // Check if this was auto-release (quantized length mode)
-        if (m_effect.getLengthMode() == ChokeLength::QUANTIZED) {
-            Serial.println("Choke auto-released (Quantized mode)");
+    // Detect state transition back to IDLE
+    if (currentState == ChokeState::IDLE && s_prevState != ChokeState::IDLE) {
+        if (s_prevState == ChokeState::ARMED) {
+            Serial.println("Choke DISARMED (onset cancelled)");
+        } else if (m_effect.getLengthMode() == ChokeLength::QUANTIZED) {
+            Serial.println("Choke IDLE (auto-released, Quantized mode)");
+        } else {
+            Serial.println("Choke IDLE (released)");
         }
+        DisplayManager::instance().updateDisplay();
     }
 
     // Update state for next call
+    s_prevState = currentState;
     m_wasEnabled = isEnabled;
 }
 

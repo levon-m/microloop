@@ -123,41 +123,54 @@ bool FreezeController::handleButtonRelease(const Command& cmd) {
 }
 
 void FreezeController::updateVisualFeedback() {
+    FreezeState currentState = m_effect.getState();
     bool isEnabled = m_effect.isEnabled();
 
-    // Detect rising edge: effect just became enabled
-    if (isEnabled && !m_wasEnabled) {
-        // ISR fired onset or immediate enable - update visual feedback
-        NeokeyInput::setLED(EffectID::FREEZE, true);
-        DisplayManager::instance().updateDisplay();
+    // Map state to LED: OFF for IDLE, ON for ARMED/ACTIVE
+    // TODO: Add RGB LED support to differentiate ARMED (yellow) from ACTIVE (white)
+    NeokeyInput::setLED(EffectID::FREEZE, currentState != FreezeState::IDLE);
 
-        // Determine what happened based on onset/length modes
+    // Detect state transition to ARMED (quantized onset scheduled)
+    static FreezeState s_prevState = FreezeState::IDLE;
+    if (currentState == FreezeState::ARMED && s_prevState == FreezeState::IDLE) {
+        Serial.println("Freeze ARMED (waiting for quantized onset)");
+        DisplayManager::instance().updateDisplay();
+    }
+
+    // Detect state transition to ACTIVE
+    if (currentState == FreezeState::ACTIVE && s_prevState != FreezeState::ACTIVE) {
         FreezeOnset onsetMode = m_effect.getOnsetMode();
         FreezeLength lengthMode = m_effect.getLengthMode();
 
         if (onsetMode == FreezeOnset::QUANTIZED) {
             Quantization quant = EffectQuantization::getGlobalQuantization();
-            Serial.print("Freeze ENGAGED at scheduled onset (");
+            Serial.print("Freeze ACTIVE at scheduled onset (");
             Serial.print(EffectQuantization::quantizationName(quant));
             Serial.print(" boundary, ");
             Serial.print(lengthMode == FreezeLength::QUANTIZED ? "Quantized length)" : "Free length)");
             Serial.println();
+        } else {
+            Serial.print("Freeze ACTIVE (Free onset, ");
+            Serial.print(lengthMode == FreezeLength::QUANTIZED ? "Quantized length)" : "Free length)");
+            Serial.println();
         }
+        DisplayManager::instance().updateDisplay();
     }
 
-    // Detect falling edge: effect just became disabled
-    if (!isEnabled && m_wasEnabled) {
-        // Update LED to reflect disabled state
-        NeokeyInput::setLED(EffectID::FREEZE, false);
-        DisplayManager::instance().updateDisplay();
-
-        // Check if this was auto-release (quantized length mode)
-        if (m_effect.getLengthMode() == FreezeLength::QUANTIZED) {
-            Serial.println("Freeze auto-released (Quantized mode)");
+    // Detect state transition back to IDLE
+    if (currentState == FreezeState::IDLE && s_prevState != FreezeState::IDLE) {
+        if (s_prevState == FreezeState::ARMED) {
+            Serial.println("Freeze DISARMED (onset cancelled)");
+        } else if (m_effect.getLengthMode() == FreezeLength::QUANTIZED) {
+            Serial.println("Freeze IDLE (auto-released, Quantized mode)");
+        } else {
+            Serial.println("Freeze IDLE (released)");
         }
+        DisplayManager::instance().updateDisplay();
     }
 
     // Update state for next call
+    s_prevState = currentState;
     m_wasEnabled = isEnabled;
 }
 

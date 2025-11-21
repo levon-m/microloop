@@ -14,6 +14,20 @@ enum class ChokeOnset : uint8_t {
     QUANTIZED = 1   // Quantize onset to next beat/subdivision
 };
 
+/**
+ * Choke State Machine
+ *
+ * State transitions:
+ * - IDLE: Not active, audio passes through unmuted
+ * - ARMED: Button pressed with quantized onset, waiting for grid boundary (LED: YELLOW)
+ * - ACTIVE: Choke engaged, audio muted (LED: WHITE)
+ */
+enum class ChokeState : uint8_t {
+    IDLE = 0,    // Not active (LED: OFF)
+    ARMED = 1,   // Waiting for quantized onset (LED: YELLOW blinking)
+    ACTIVE = 2   // Choke engaged, audio muted (LED: WHITE solid)
+};
+
 class ChokeAudio : public IEffectAudio {
 public:
     ChokeAudio();
@@ -24,14 +38,28 @@ public:
     bool isEnabled() const override;
     const char* getName() const override;
 
+    // ========== STATE MACHINE ==========
+
+    /**
+     * Get current state
+     */
+    ChokeState getState() const { return m_state; }
+
     void setLengthMode(ChokeLength mode) { m_lengthMode = mode; }
     ChokeLength getLengthMode() const { return m_lengthMode; }
 
     void scheduleRelease(uint64_t releaseSample) { m_releaseAtSample = releaseSample; }
     void cancelScheduledRelease() { m_releaseAtSample = 0; }
 
-    void scheduleOnset(uint64_t onsetSample) { m_onsetAtSample = onsetSample; }
-    void cancelScheduledOnset() { m_onsetAtSample = 0; }
+    void scheduleOnset(uint64_t onsetSample) {
+        m_onsetAtSample = onsetSample;
+        m_state.store(ChokeState::ARMED, std::memory_order_release);  // Transition to ARMED
+    }
+
+    void cancelScheduledOnset() {
+        m_onsetAtSample = 0;
+        m_state.store(ChokeState::IDLE, std::memory_order_release);  // Transition back to IDLE
+    }
 
     void setOnsetMode(ChokeOnset mode) { m_onsetMode = mode; }
     ChokeOnset getOnsetMode() const { return m_onsetMode; }
@@ -54,9 +82,9 @@ private:
     float m_currentGain;  // Current gain (ramped smoothly)
     float m_targetGain;   // Target gain (0.0 = mute, 1.0 = full volume)
 
-    // Effect state (atomic for lock-free cross-thread access)
-    // Note: For choke, enabled=true means muted, enabled=false means unmuted
-    std::atomic<bool> m_isEnabled;
+    // ========== STATE MACHINE ==========
+    // State is atomic for lock-free cross-thread access
+    std::atomic<ChokeState> m_state;
 
     // Choke length mode state
     ChokeLength m_lengthMode;     // FREE or QUANTIZED
