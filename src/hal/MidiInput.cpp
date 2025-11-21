@@ -1,15 +1,15 @@
-#include "MidiIO.h"
+#include "MidiInput.h"
 #include <MIDI.h>
 #include <TeensyThreads.h>
-#include "SPSCQueue.h"
+#include "SpscQueue.h"
 #include "Trace.h"
 
 // Create MIDI instance on Serial8 (RX8=pin34, TX8=pin35)
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial8, DIN);
 
 // Lock-free queues using our generic SPSC implementation
-static SPSCQueue<uint32_t, 256> clockQueue;  // Timestamps in microseconds
-static SPSCQueue<MidiEvent, 32> eventQueue;  // Transport events
+static SpscQueue<uint32_t, 256> clockQueue;  // Timestamps in microseconds
+static SpscQueue<MidiEvent, 32> eventQueue;  // Transport events
 
 // Transport state (volatile for cross-thread visibility)
 static volatile bool transportRunning = false;
@@ -47,7 +47,7 @@ static void onContinue() {
 
 // Public API Implementation
 
-void MidiIO::begin() {
+void MidiInput::begin() {
     // Initialize MIDI library
     // MIDI_CHANNEL_OMNI = respond to all channels
     // This sets Serial8 to 31250 baud (MIDI standard)
@@ -61,7 +61,7 @@ void MidiIO::begin() {
     DIN.setHandleContinue(onContinue);
 }
 
-void MidiIO::threadLoop() {
+void MidiInput::threadLoop() {
     for (;;) {
         // Read and parse all pending MIDI bytes
         // DIN.read() returns true if a message was parsed
@@ -77,17 +77,17 @@ void MidiIO::threadLoop() {
     }
 }
 
-bool MidiIO::popEvent(MidiEvent& outEvent) {
+bool MidiInput::popEvent(MidiEvent& outEvent) {
     // SPSC queue pop is lock-free and O(1)
     return eventQueue.pop(outEvent);
 }
 
-bool MidiIO::popClock(uint32_t& outMicros) {
+bool MidiInput::popClock(uint32_t& outMicros) {
     // SPSC queue pop is lock-free and O(1)
     return clockQueue.pop(outMicros);
 }
 
-bool MidiIO::running() {
+bool MidiInput::running() {
     // Volatile read ensures we see latest value
     // No need for atomic/mutex because:
     // - Single-word read is atomic on ARM Cortex-M7

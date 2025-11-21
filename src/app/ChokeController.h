@@ -7,12 +7,12 @@
  *
  * DESIGN:
  * - Implements IEffectController interface
- * - Owns reference to AudioEffectChoke
+ * - Owns reference to ChokeAudio
  * - Manages parameter editing state (LENGTH, ONSET)
  * - Handles free/quantized onset and length modes
  *
  * USAGE:
- *   AudioEffectChoke choke;
+ *   ChokeAudio choke;
  *   ChokeController controller(choke);
  *
  *   // In AppLogic:
@@ -23,10 +23,10 @@
 
 #pragma once
 
-#include "EffectController.h"
-#include "AudioChoke.h"
+#include "IEffectController.h"
+#include "ChokeAudio.h"
 #include "EffectQuantization.h"
-#include "OledIO.h"
+#include "Ssd1306Display.h"
 
 // Forward declaration
 namespace EncoderHandler {
@@ -57,7 +57,7 @@ public:
      *
      * @param effect Reference to the choke audio effect
      */
-    explicit ChokeController(AudioEffectChoke& effect);
+    explicit ChokeController(ChokeAudio& effect);
 
     // IEffectController interface implementation
     bool handleButtonPress(const Command& cmd) override;
@@ -89,7 +89,7 @@ public:
     static const char* onsetName(ChokeOnset onset);
 
 private:
-    AudioEffectChoke& m_effect;     // Reference to audio effect (DSP)
+    ChokeAudio& m_effect;     // Reference to audio effect (DSP)
     Parameter m_currentParameter;   // Currently selected parameter for editing
     bool m_wasEnabled;              // Previous enabled state (for edge detection)
 };

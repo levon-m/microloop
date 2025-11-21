@@ -1,6 +1,6 @@
-#include "AudioFreeze.h"
+#include "FreezeAudio.h"
 
-AudioEffectFreeze::AudioEffectFreeze() : AudioEffectBase(2) {  // Call base with 2 inputs (stereo)
+FreezeAudio::FreezeAudio() : IEffectAudio(2) {  // Call base with 2 inputs (stereo)
     m_writePos = 0;
     m_readPos = 0;
     m_isEnabled.store(false, std::memory_order_relaxed);  // Start disabled (passthrough)
@@ -14,18 +14,18 @@ AudioEffectFreeze::AudioEffectFreeze() : AudioEffectBase(2) {  // Call base with
     memset(m_freezeBufferR, 0, sizeof(m_freezeBufferR));
 }
 
-void AudioEffectFreeze::enable() {
+void FreezeAudio::enable() {
     // Set read position to current write position
     // This captures the most recent audio in the buffer
     m_readPos = m_writePos;
     m_isEnabled.store(true, std::memory_order_release);
 }
 
-void AudioEffectFreeze::disable() {
+void FreezeAudio::disable() {
     m_isEnabled.store(false, std::memory_order_release);
 }
 
-void AudioEffectFreeze::toggle() {
+void FreezeAudio::toggle() {
     if (isEnabled()) {
         disable();
     } else {
@@ -33,16 +33,16 @@ void AudioEffectFreeze::toggle() {
     }
 }
 
-bool AudioEffectFreeze::isEnabled() const {
+bool FreezeAudio::isEnabled() const {
     return m_isEnabled.load(std::memory_order_acquire);
 }
 
-const char* AudioEffectFreeze::getName() const {
+const char* FreezeAudio::getName() const {
     return "Freeze";
 }
 
-void AudioEffectFreeze::update() {
-    uint64_t currentSample = TimeKeeper::getSamplePosition();
+void FreezeAudio::update() {
+    uint64_t currentSample = Timebase::getSamplePosition();
     uint64_t blockEndSample = currentSample + AUDIO_BLOCK_SAMPLES;
 
     // Check for scheduled onset (ISR-accurate quantized onset)

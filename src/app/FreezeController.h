@@ -7,12 +7,12 @@
  *
  * DESIGN:
  * - Implements IEffectController interface
- * - Owns reference to AudioEffectFreeze
+ * - Owns reference to FreezeAudio
  * - Manages parameter editing state (LENGTH, ONSET)
  * - Handles free/quantized onset and length modes
  *
  * USAGE:
- *   AudioEffectFreeze freeze;
+ *   FreezeAudio freeze;
  *   FreezeController controller(freeze);
  *
  *   // In AppLogic:
@@ -23,10 +23,10 @@
 
 #pragma once
 
-#include "EffectController.h"
-#include "AudioFreeze.h"
+#include "IEffectController.h"
+#include "FreezeAudio.h"
 #include "EffectQuantization.h"
-#include "OledIO.h"
+#include "Ssd1306Display.h"
 
 // Forward declaration
 namespace EncoderHandler {
@@ -57,7 +57,7 @@ public:
      *
      * @param effect Reference to the freeze audio effect
      */
-    explicit FreezeController(AudioEffectFreeze& effect);
+    explicit FreezeController(FreezeAudio& effect);
 
     // IEffectController interface implementation
     bool handleButtonPress(const Command& cmd) override;
@@ -89,7 +89,7 @@ public:
     static const char* onsetName(FreezeOnset onset);
 
 private:
-    AudioEffectFreeze& m_effect;    // Reference to audio effect (DSP)
+    FreezeAudio& m_effect;    // Reference to audio effect (DSP)
     Parameter m_currentParameter;   // Currently selected parameter for editing
     bool m_wasEnabled;              // Previous enabled state (for edge detection)
 };

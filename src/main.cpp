@@ -1,24 +1,24 @@
 #include <Arduino.h>
 #include <Audio.h>
 #include <TeensyThreads.h>
-#include "MidiIO.h"
-#include "AppLogic.h"
-#include "NeokeyIO.h"
-#include "OledIO.h"
-#include "McpIO.h"
-#include "AudioFreeze.h"
-#include "AudioChoke.h"
-#include "AudioStutter.h"
+#include "MidiInput.h"
+#include "App.h"
+#include "NeokeyInput.h"
+#include "Ssd1306Display.h"
+#include "Mcp23017Input.h"
+#include "FreezeAudio.h"
+#include "ChokeAudio.h"
+#include "StutterAudio.h"
 #include "EffectManager.h"
 #include "Trace.h"
-#include "TimeKeeper.h"
-#include "AudioTimeKeeper.h"
+#include "Timebase.h"
+#include "TimebaseAudio.h"
 
 AudioInputI2S i2s_in;
-AudioTimeKeeper timekeeper;  // Tracks sample position
-AudioEffectFreeze freeze;    // Circular buffer freeze effect
-AudioEffectChoke choke;      // Smooth mute effect
-AudioEffectStutter stutter;
+TimebaseAudio timekeeper;  // Tracks sample position
+FreezeAudio freeze;    // Circular buffer freeze effect
+ChokeAudio choke;      // Smooth mute effect
+StutterAudio stutter;
 AudioOutputI2S i2s_out;
 
 // Audio connections (stereo L+R)
@@ -37,23 +37,23 @@ AudioConnection patchCord10(choke, 1, i2s_out, 1);       // Choke → Right out
 AudioControlSGTL5000 codec;
 
 void ioThreadEntry() {
-    MidiIO::threadLoop();  // Never returns
+    MidiInput::threadLoop();  // Never returns
 }
 
 void inputThreadEntry() {
-    NeokeyIO::threadLoop();  // Never returns
+    NeokeyInput::threadLoop();  // Never returns
 }
 
 void mcpThreadEntry() {
-    McpIO::threadLoop();  // Never returns
+    Mcp23017Input::threadLoop();  // Never returns
 }
 
 void displayThreadEntry() {
-    OledIO::threadLoop();  // Never returns
+    Ssd1306Display::threadLoop();  // Never returns
 }
 
 void appThreadEntry() {
-    AppLogic::threadLoop();  // Never returns
+    App::threadLoop();  // Never returns
 }
 
 void setup() {
@@ -89,16 +89,16 @@ void setup() {
 
     Serial.println("Audio: OK (using Teensy Audio Library SGTL5000)");
 
-    TimeKeeper::begin();
+    Timebase::begin();
     Serial.println("TimeKeeper: OK");
 
-    MidiIO::begin();
+    MidiInput::begin();
     Serial.println("MIDI: OK (DIN on Serial8)");
 
-    AppLogic::begin();
+    App::begin();
     Serial.println("App Logic: OK");
 
-    if (!NeokeyIO::begin()) {
+    if (!NeokeyInput::begin()) {
         Serial.println("ERROR: NeoKey I/O init failed!");
         while (1) {
             // Blink LED rapidly to indicate error
@@ -108,7 +108,7 @@ void setup() {
     }
     Serial.println("NeoKey I/O: OK (Neokey on I2C 0x30 / Wire2)");
 
-    if (!McpIO::begin()) {
+    if (!Mcp23017Input::begin()) {
         Serial.println("ERROR: MCP I/O init failed!");
         while (1) {
             // Blink LED rapidly to indicate error
@@ -118,7 +118,7 @@ void setup() {
     }
     Serial.println("MCP I/O: OK (MCP23017 on I2C 0x20 / Wire, ISR capture mode)");
 
-    if (!OledIO::begin()) {
+    if (!Ssd1306Display::begin()) {
         Serial.println("WARNING: Display init failed (will continue without display)");
         // Continue anyway - display is optional for basic functionality
     } else {
@@ -196,30 +196,30 @@ void loop() {
             case 's':  // Show TimeKeeper status
                 Serial.println("\n=== TimeKeeper Status ===");
                 Serial.print("Sample Position: ");
-                Serial.println((uint32_t)TimeKeeper::getSamplePosition());  // Print low 32 bits
+                Serial.println((uint32_t)Timebase::getSamplePosition());  // Print low 32 bits
                 Serial.print("Beat: ");
-                Serial.print(TimeKeeper::getBeatNumber());
+                Serial.print(Timebase::getBeatNumber());
                 Serial.print(" (Bar ");
-                Serial.print(TimeKeeper::getBarNumber());
+                Serial.print(Timebase::getBarNumber());
                 Serial.print(", Beat ");
-                Serial.print(TimeKeeper::getBeatInBar());
+                Serial.print(Timebase::getBeatInBar());
                 Serial.print(", Tick ");
-                Serial.print(TimeKeeper::getTickInBeat());
+                Serial.print(Timebase::getTickInBeat());
                 Serial.println(")");
                 Serial.print("BPM: ");
-                Serial.println(TimeKeeper::getBPM(), 2);
+                Serial.println(Timebase::getBPM(), 2);
                 Serial.print("Samples/Beat: ");
-                Serial.println(TimeKeeper::getSamplesPerBeat());
+                Serial.println(Timebase::getSamplesPerBeat());
                 Serial.print("Transport: ");
-                switch (TimeKeeper::getTransportState()) {
-                    case TimeKeeper::TransportState::STOPPED: Serial.println("STOPPED"); break;
-                    case TimeKeeper::TransportState::PLAYING: Serial.println("PLAYING"); break;
-                    case TimeKeeper::TransportState::RECORDING: Serial.println("RECORDING"); break;
+                switch (Timebase::getTransportState()) {
+                    case Timebase::TransportState::STOPPED: Serial.println("STOPPED"); break;
+                    case Timebase::TransportState::PLAYING: Serial.println("PLAYING"); break;
+                    case Timebase::TransportState::RECORDING: Serial.println("RECORDING"); break;
                 }
                 Serial.print("Samples to next beat: ");
-                Serial.println(TimeKeeper::samplesToNextBeat());
+                Serial.println(Timebase::samplesToNextBeat());
                 Serial.print("Samples to next bar: ");
-                Serial.println(TimeKeeper::samplesToNextBar());
+                Serial.println(Timebase::samplesToNextBar());
                 Serial.println("=========================\n");
                 break;
 

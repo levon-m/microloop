@@ -1,16 +1,16 @@
 #pragma once
 
 #include <Audio.h>
-#include "TimeKeeper.h"
+#include "Timebase.h"
 #include "Trace.h"
 
-class AudioTimeKeeper : public AudioStream {
+class TimebaseAudio : public AudioStream {
 public:
-    AudioTimeKeeper() : AudioStream(2, inputQueueArray) {}
+    TimebaseAudio() : AudioStream(2, inputQueueArray) {}
 
     virtual void update() override {
         // Increment sample counter (lock-free atomic operation)
-        TimeKeeper::incrementSamples(AUDIO_BLOCK_SAMPLES);
+        Timebase::incrementSamples(AUDIO_BLOCK_SAMPLES);
 
         // Optional: Trace audio callback (disabled by default - too noisy)
         // TRACE(TRACE_AUDIO_CALLBACK);

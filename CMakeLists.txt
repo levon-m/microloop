@@ -225,7 +225,7 @@ message(STATUS "Adafruit MCP23017 Library found")
 # Utils library (now has trace.cpp and timekeeper.cpp)
 add_library(microloop_utils STATIC
     src/core/Trace.cpp
-    src/core/TimeKeeper.cpp
+    src/core/Timebase.cpp
 )
 target_include_directories(microloop_utils PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
@@ -237,19 +237,19 @@ target_link_libraries(microloop_utils teensy_core)
 # Using Teensy Audio Library's AudioControlSGTL5000 instead
 
 # HAL libraries (Hardware Abstraction Layer)
-add_library(midi_io STATIC src/hal/MidiIO.cpp)
+add_library(midi_io STATIC src/hal/MidiInput.cpp)
 target_include_directories(midi_io PUBLIC src/hal src/core)
 target_link_libraries(midi_io teensy_core midi teensy_threads microloop_utils)
 
-add_library(neokey_io STATIC src/hal/NeokeyIO.cpp)
+add_library(neokey_io STATIC src/hal/NeokeyInput.cpp)
 target_include_directories(neokey_io PUBLIC src/hal src/core)
 target_link_libraries(neokey_io teensy_core teensy_threads seesaw neopixel busio microloop_utils)
 
-add_library(oled_io STATIC src/hal/OledIO.cpp)
+add_library(oled_io STATIC src/hal/Ssd1306Display.cpp)
 target_include_directories(oled_io PUBLIC src/hal src/core src/app)
 target_link_libraries(oled_io teensy_core teensy_threads ssd1306 gfx wire microloop_utils)
 
-add_library(mcp_io STATIC src/hal/McpIO.cpp)
+add_library(mcp_io STATIC src/hal/Mcp23017Input.cpp)
 target_include_directories(mcp_io PUBLIC src/hal src/core)
 target_link_libraries(mcp_io teensy_core teensy_threads wire mcp23017 busio)
 
@@ -262,15 +262,15 @@ add_library(effect_quantization STATIC src/dsp/EffectQuantization.cpp)
 target_include_directories(effect_quantization PUBLIC src/dsp src/core)
 target_link_libraries(effect_quantization teensy_core microloop_utils)
 
-add_library(audio_choke STATIC src/dsp/AudioChoke.cpp)
+add_library(audio_choke STATIC src/dsp/ChokeAudio.cpp)
 target_include_directories(audio_choke PUBLIC src/dsp src/core)
 target_link_libraries(audio_choke teensy_core audio microloop_utils)
 
-add_library(audio_freeze STATIC src/dsp/AudioFreeze.cpp)
+add_library(audio_freeze STATIC src/dsp/FreezeAudio.cpp)
 target_include_directories(audio_freeze PUBLIC src/dsp src/core)
 target_link_libraries(audio_freeze teensy_core audio microloop_utils)
 
-add_library(audio_stutter STATIC src/dsp/AudioStutter.cpp)
+add_library(audio_stutter STATIC src/dsp/StutterAudio.cpp)
 target_include_directories(audio_stutter PUBLIC src/dsp src/core)
 target_link_libraries(audio_stutter teensy_core audio microloop_utils)
 
@@ -299,7 +299,7 @@ add_library(global_controller STATIC src/app/GlobalController.cpp)
 target_include_directories(global_controller PUBLIC src/app src/dsp src/hal)
 target_link_libraries(global_controller teensy_core effect_quantization display_manager)
 
-add_library(app_logic STATIC src/app/AppLogic.cpp)
+add_library(app_logic STATIC src/app/App.cpp)
 target_include_directories(app_logic PUBLIC src/app src/dsp src/hal src/core)
 target_link_libraries(app_logic
     teensy_core

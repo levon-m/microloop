@@ -2,11 +2,11 @@
 
 #include <stdint.h>
 #include "EffectManager.h"
-#include "AudioChoke.h"
-#include "AudioFreeze.h"
-#include "OledIO.h"
-#include "NeokeyIO.h"
-#include "TimeKeeper.h"
+#include "ChokeAudio.h"
+#include "FreezeAudio.h"
+#include "Ssd1306Display.h"
+#include "NeokeyInput.h"
+#include "Timebase.h"
 
 // Global quantization grid (shared across all effects)
 enum class Quantization : uint8_t {

@@ -18,7 +18,7 @@
 #pragma once
 
 #include "EffectManager.h"
-#include "OledIO.h"
+#include "Ssd1306Display.h"
 
 /**
  * Display state manager

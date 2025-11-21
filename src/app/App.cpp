@@ -1,13 +1,13 @@
-#include "AppLogic.h"
-#include "MidiIO.h"
-#include "NeokeyIO.h"
-#include "McpIO.h"
-#include "AudioChoke.h"
-#include "AudioFreeze.h"
-#include "AudioStutter.h"
+#include "App.h"
+#include "MidiInput.h"
+#include "NeokeyInput.h"
+#include "Mcp23017Input.h"
+#include "ChokeAudio.h"
+#include "FreezeAudio.h"
+#include "StutterAudio.h"
 #include "EffectManager.h"
 #include "Trace.h"
-#include "TimeKeeper.h"
+#include "Timebase.h"
 #include "EffectQuantization.h"
 #include "EncoderHandler.h"
 #include "DisplayManager.h"
@@ -20,9 +20,9 @@
 #include <TeensyThreads.h>
 
 // External references to audio effects (defined in main.cpp)
-extern AudioEffectChoke choke;
-extern AudioEffectFreeze freeze;
-extern AudioEffectStutter stutter;
+extern ChokeAudio choke;
+extern FreezeAudio freeze;
+extern StutterAudio stutter;
 
 // ========== APPLICATION STATE ==========
 static AppState s_appState;  // Application mode and context
@@ -108,7 +108,7 @@ static int8_t clampIndex(int8_t value, int8_t minValue, int8_t maxValue) {
  */
 static void processInputCommands() {
     Command cmd;
-    while (NeokeyIO::popCommand(cmd)) {
+    while (NeokeyInput::popCommand(cmd)) {
         // Check if CHOKE/FREEZE controllers want to intercept
         bool handled = false;
 
@@ -142,10 +142,10 @@ static void processInputCommands() {
         // If handler didn't intercept, execute via EffectManager
         if (!handled && EffectManager::executeCommand(cmd)) {
             // Update visual feedback
-            AudioEffectBase* effect = EffectManager::getEffect(cmd.targetEffect);
+            IEffectAudio* effect = EffectManager::getEffect(cmd.targetEffect);
             if (effect) {
                 bool enabled = effect->isEnabled();
-                NeokeyIO::setLED(cmd.targetEffect, enabled);
+                NeokeyInput::setLED(cmd.targetEffect, enabled);
 
                 DisplayManager::instance().updateDisplay();
                 Serial.print(effect->getName());
@@ -157,11 +157,11 @@ static void processInputCommands() {
 
 /**
  * Update encoder handlers
- * Hardware event processing now handled by dedicated MCP thread (McpIO::threadLoop)
+ * Hardware event processing now handled by dedicated MCP thread (Mcp23017Input::threadLoop)
  * This function just updates the encoder handler logic (callbacks, display, etc.)
  */
 static void updateEncoders() {
-    // Note: McpIO::update() is no longer needed here - dedicated thread handles it
+    // Note: Mcp23017Input::update() is no longer needed here - dedicated thread handles it
     s_encoder1->update();   // STUTTER parameters
     s_encoder2->update();   // FREEZE parameters
     s_encoder3->update();   // CHOKE parameters
@@ -190,19 +190,19 @@ static void updateEffectHandlers() {
  */
 static void processTransportEvents() {
     MidiEvent event;
-    while (MidiIO::popEvent(event)) {
+    while (MidiInput::popEvent(event)) {
         switch (event) {
             case MidiEvent::START: {
                 s_lastTickMicros = 0;
                 s_transportActive = true;
-                TimeKeeper::reset();
-                TimeKeeper::setTransportState(TimeKeeper::TransportState::PLAYING);
+                Timebase::reset();
+                Timebase::setTransportState(Timebase::TransportState::PLAYING);
 
                 // Turn on LED for beat 0
                 digitalWrite(LED_PIN, HIGH);
-                uint32_t spb = TimeKeeper::getSamplesPerBeat();
+                uint32_t spb = Timebase::getSamplesPerBeat();
                 uint32_t pulseSamples = (spb * 2) / 24;  // 2 ticks
-                s_ledOffSample = TimeKeeper::getSamplePosition() + pulseSamples;
+                s_ledOffSample = Timebase::getSamplePosition() + pulseSamples;
                 TRACE(TRACE_BEAT_LED_ON);
                 TRACE(TRACE_MIDI_START);
                 Serial.println("▶ START");
@@ -211,7 +211,7 @@ static void processTransportEvents() {
 
             case MidiEvent::STOP:
                 s_transportActive = false;
-                TimeKeeper::setTransportState(TimeKeeper::TransportState::STOPPED);
+                Timebase::setTransportState(Timebase::TransportState::STOPPED);
                 digitalWrite(LED_PIN, LOW);
                 s_ledOffSample = 0;
                 TRACE(TRACE_MIDI_STOP);
@@ -220,7 +220,7 @@ static void processTransportEvents() {
 
             case MidiEvent::CONTINUE:
                 s_transportActive = true;
-                TimeKeeper::setTransportState(TimeKeeper::TransportState::PLAYING);
+                Timebase::setTransportState(Timebase::TransportState::PLAYING);
                 TRACE(TRACE_MIDI_CONTINUE);
                 Serial.println("▶ CONTINUE");
                 break;
@@ -234,7 +234,7 @@ static void processTransportEvents() {
  */
 static void processClockTicks() {
     uint32_t clockMicros;
-    while (MidiIO::popClock(clockMicros)) {
+    while (MidiInput::popClock(clockMicros)) {
         if (!s_transportActive) continue;
 
         // Update tick period estimate (EMA)
@@ -242,12 +242,12 @@ static void processClockTicks() {
             uint32_t tickPeriod = clockMicros - s_lastTickMicros;
             if (tickPeriod >= 10000 && tickPeriod <= 50000) {
                 s_avgTickPeriodUs = (s_avgTickPeriodUs * 9 + tickPeriod) / 10;
-                TimeKeeper::syncToMIDIClock(s_avgTickPeriodUs);
+                Timebase::syncToMIDIClock(s_avgTickPeriodUs);
                 TRACE(TRACE_TICK_PERIOD_UPDATE, s_avgTickPeriodUs / 10);
             }
         }
         s_lastTickMicros = clockMicros;
-        TimeKeeper::incrementTick();
+        Timebase::incrementTick();
     }
 }
 
@@ -256,11 +256,11 @@ static void processClockTicks() {
  * Turns LED on at beat boundaries, off after short pulse
  */
 static void updateBeatLed() {
-    uint64_t currentSample = TimeKeeper::getSamplePosition();
+    uint64_t currentSample = Timebase::getSamplePosition();
 
-    if (TimeKeeper::pollBeatFlag()) {
+    if (Timebase::pollBeatFlag()) {
         digitalWrite(LED_PIN, HIGH);
-        uint32_t spb = TimeKeeper::getSamplesPerBeat();
+        uint32_t spb = Timebase::getSamplesPerBeat();
         uint32_t pulseSamples = (spb * 2) / 24;
         s_ledOffSample = currentSample + pulseSamples;
         TRACE(TRACE_BEAT_LED_ON);
@@ -275,7 +275,7 @@ static void updateBeatLed() {
 
 // ========== PUBLIC API ==========
 
-void AppLogic::begin() {
+void App::begin() {
     // Configure LED pin
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
@@ -314,7 +314,7 @@ void AppLogic::begin() {
     s_transportActive = false;
 }
 
-void AppLogic::threadLoop() {
+void App::threadLoop() {
     for (;;) {
         // Main application loop - organized into logical sections
         // Each section is implemented as a separate function for clarity
@@ -350,10 +350,10 @@ void AppLogic::threadLoop() {
 }
 
 // ========== GLOBAL QUANTIZATION API (delegated) ==========
-Quantization AppLogic::getGlobalQuantization() {
+Quantization App::getGlobalQuantization() {
     return EffectQuantization::getGlobalQuantization();
 }
 
-void AppLogic::setGlobalQuantization(Quantization quant) {
+void App::setGlobalQuantization(Quantization quant) {
     EffectQuantization::setGlobalQuantization(quant);
 }

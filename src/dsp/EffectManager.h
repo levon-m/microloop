@@ -1,6 +1,6 @@
 #pragma once
 
-#include "AudioEffectBase.h"
+#include "IEffectAudio.h"
 #include "Command.h"
 #include <stdint.h>
 
@@ -8,11 +8,11 @@ class EffectManager {
 public:
     static constexpr uint8_t MAX_EFFECTS = 4;
 
-    static bool registerEffect(EffectID id, AudioEffectBase* effect);
+    static bool registerEffect(EffectID id, IEffectAudio* effect);
 
     static bool executeCommand(const Command& cmd);
 
-    static AudioEffectBase* getEffect(EffectID id);
+    static IEffectAudio* getEffect(EffectID id);
 
     //static uint32_t getEnabledEffectsMask();
 
@@ -23,7 +23,7 @@ public:
 private:
     struct EffectEntry {
         EffectID id;                // Effect identifier
-        AudioEffectBase* effect;    // Non-owning pointer to effect object
+        IEffectAudio* effect;    // Non-owning pointer to effect object
 
         // Default constructor (for static array initialization)
         EffectEntry() : id(EffectID::NONE), effect(nullptr) {}

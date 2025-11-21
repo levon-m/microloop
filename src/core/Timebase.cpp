@@ -1,8 +1,8 @@
 /**
- * timekeeper.cpp - Implementation of centralized timing authority
+ * Timebase.cpp - Implementation of centralized timing authority
  */
 
-#include "TimeKeeper.h"
+#include "Timebase.h"
 #include "Trace.h"
 
 // AUDIO_BLOCK_SAMPLES is defined by Teensy Audio Library as 128
@@ -14,27 +14,27 @@
 // ========== STATIC MEMBER INITIALIZATION ==========
 
 // Audio timeline
-volatile uint64_t TimeKeeper::s_samplePosition = 0;
+volatile uint64_t Timebase::s_samplePosition = 0;
 
 // MIDI timeline
-volatile uint32_t TimeKeeper::s_beatNumber = 0;
-volatile uint32_t TimeKeeper::s_tickInBeat = 0;
+volatile uint32_t Timebase::s_beatNumber = 0;
+volatile uint32_t Timebase::s_tickInBeat = 0;
 //avoid division by 0, set sensible defaults
-volatile uint32_t TimeKeeper::s_samplesPerBeat = TimeKeeper::DEFAULT_SAMPLES_PER_BEAT;
+volatile uint32_t Timebase::s_samplesPerBeat = Timebase::DEFAULT_SAMPLES_PER_BEAT;
 
 // Transport state
-volatile TimeKeeper::TransportState TimeKeeper::s_transportState = TransportState::STOPPED;
+volatile Timebase::TransportState Timebase::s_transportState = TransportState::STOPPED;
 
 // Beat notification
-volatile bool TimeKeeper::s_beatFlag = false;
+volatile bool Timebase::s_beatFlag = false;
 
 // ========== INITIALIZATION ==========
 
-void TimeKeeper::begin() {
+void Timebase::begin() {
     reset();
 }
 
-void TimeKeeper::reset() {
+void Timebase::reset() {
     // Reset all state (with interrupt protection for 64-bit sample position)
     noInterrupts();
     s_samplePosition = 0;
@@ -47,7 +47,7 @@ void TimeKeeper::reset() {
 
 // ========== AUDIO TIMELINE ==========
 
-void TimeKeeper::incrementSamples(uint32_t numSamples) {
+void Timebase::incrementSamples(uint32_t numSamples) {
     /**
      * CRITICAL PATH: Called from audio ISR every ~2.9ms
      *
@@ -67,7 +67,7 @@ void TimeKeeper::incrementSamples(uint32_t numSamples) {
     interrupts();
 }
 
-uint64_t TimeKeeper::getSamplePosition() {
+uint64_t Timebase::getSamplePosition() {
     noInterrupts();
     uint64_t pos = s_samplePosition;
     interrupts();
@@ -76,7 +76,7 @@ uint64_t TimeKeeper::getSamplePosition() {
 
 // ========== MIDI TIMELINE ==========
 
-void TimeKeeper::syncToMIDIClock(uint32_t tickPeriodUs) {
+void Timebase::syncToMIDIClock(uint32_t tickPeriodUs) {
     /**
      * Convert MIDI tick period to samples per beat
      *
@@ -116,11 +116,11 @@ void TimeKeeper::syncToMIDIClock(uint32_t tickPeriodUs) {
 }
 
 //exists for testing, will only get calculated/called in syncToMIDIClock()
-void TimeKeeper::setSamplesPerBeat(uint32_t samplesPerBeat) {
+void Timebase::setSamplesPerBeat(uint32_t samplesPerBeat) {
     __atomic_store_n(&s_samplesPerBeat, samplesPerBeat, __ATOMIC_RELAXED);
 }
 
-void TimeKeeper::incrementTick() {
+void Timebase::incrementTick() {
     /**
      * Increment tick counter, advance beat when tick reaches 24
      *
@@ -151,52 +151,52 @@ void TimeKeeper::incrementTick() {
 }
 
 //uncomment if you need CONTINUE handling or manual beat correction
-//void TimeKeeper::advanceToBeat() {
+//void Timebase::advanceToBeat() {
 //    __atomic_fetch_add(&s_beatNumber, 1U, __ATOMIC_RELAXED);
 //    __atomic_store_n(&s_tickInBeat, 0U, __ATOMIC_RELAXED);
 //}
 
 // ========== TRANSPORT CONTROL ==========
 
-void TimeKeeper::setTransportState(TransportState state) {
+void Timebase::setTransportState(TransportState state) {
     __atomic_store_n(&s_transportState, state, __ATOMIC_RELAXED);
     TRACE(TRACE_TIMEKEEPER_TRANSPORT, (uint16_t)state);
 }
 
-TimeKeeper::TransportState TimeKeeper::getTransportState() {
+Timebase::TransportState Timebase::getTransportState() {
     return __atomic_load_n(&s_transportState, __ATOMIC_RELAXED);
 }
 
-bool TimeKeeper::isRunning() {
+bool Timebase::isRunning() {
     TransportState state = getTransportState();
     return (state == TransportState::PLAYING || state == TransportState::RECORDING);
 }
 
 // ========== QUERY API ==========
 
-uint32_t TimeKeeper::getBeatNumber() {
+uint32_t Timebase::getBeatNumber() {
     return __atomic_load_n(&s_beatNumber, __ATOMIC_RELAXED);
 }
 
-uint32_t TimeKeeper::getBarNumber() {
+uint32_t Timebase::getBarNumber() {
     uint32_t beat = getBeatNumber();
     return beat / BEATS_PER_BAR;
 }
 
-uint32_t TimeKeeper::getBeatInBar() {
+uint32_t Timebase::getBeatInBar() {
     uint32_t beat = getBeatNumber();
     return beat % BEATS_PER_BAR;
 }
 
-uint32_t TimeKeeper::getTickInBeat() {
+uint32_t Timebase::getTickInBeat() {
     return __atomic_load_n(&s_tickInBeat, __ATOMIC_RELAXED);
 }
 
-uint32_t TimeKeeper::getSamplesPerBeat() {
+uint32_t Timebase::getSamplesPerBeat() {
     return __atomic_load_n(&s_samplesPerBeat, __ATOMIC_RELAXED);
 }
 
-float TimeKeeper::getBPM() {
+float Timebase::getBPM() {
     uint32_t spb = getSamplesPerBeat();
     if (spb == 0) return 0.0f;
 
@@ -206,7 +206,7 @@ float TimeKeeper::getBPM() {
 
 // ========== QUANTIZATION API ==========
 
-uint32_t TimeKeeper::samplesToNextBeat() {
+uint32_t Timebase::samplesToNextBeat() {
     /**
      * Calculate samples until next beat boundary
      *
@@ -244,7 +244,7 @@ uint32_t TimeKeeper::samplesToNextBeat() {
     return samplesToNext;
 }
 
-uint32_t TimeKeeper::samplesToNextSubdivision(uint32_t subdivision) {
+uint32_t Timebase::samplesToNextSubdivision(uint32_t subdivision) {
     /**
      * Calculate samples until next subdivision boundary (TICK-BASED)
      *
@@ -288,7 +288,7 @@ uint32_t TimeKeeper::samplesToNextSubdivision(uint32_t subdivision) {
     return nextSubdivisionStart - samplesElapsedInBeat;
 }
 
-uint32_t TimeKeeper::samplesToNextBar() {
+uint32_t Timebase::samplesToNextBar() {
     /**
      * Calculate samples until next bar boundary
      *
@@ -322,24 +322,24 @@ uint32_t TimeKeeper::samplesToNextBar() {
     return samplesToNext;
 }
 
-uint64_t TimeKeeper::beatToSample(uint32_t beatNumber) {
+uint64_t Timebase::beatToSample(uint32_t beatNumber) {
     uint32_t spb = getSamplesPerBeat();
     return (uint64_t)beatNumber * spb;
 }
 
-uint64_t TimeKeeper::barToSample(uint32_t barNumber) {
+uint64_t Timebase::barToSample(uint32_t barNumber) {
     uint32_t spb = getSamplesPerBeat();
     return (uint64_t)barNumber * BEATS_PER_BAR * spb;
 }
 
-uint32_t TimeKeeper::sampleToBeat(uint64_t samplePos) {
+uint32_t Timebase::sampleToBeat(uint64_t samplePos) {
     uint32_t spb = getSamplesPerBeat();
     if (spb == 0) return 0;
 
     return (uint32_t)(samplePos / spb);
 }
 
-bool TimeKeeper::isOnBeatBoundary() {
+bool Timebase::isOnBeatBoundary() {
     /**
      * Check if current position is within one audio block of a beat boundary
      *
@@ -360,7 +360,7 @@ bool TimeKeeper::isOnBeatBoundary() {
     return (delta >= 0 && delta <= (int64_t)AUDIO_BLOCK_SAMPLES);
 }
 
-bool TimeKeeper::isOnBarBoundary() {
+bool Timebase::isOnBarBoundary() {
     // Only downbeat (beat 0 in bar) is a bar boundary
     if (getBeatInBar() != 0) return false;
 
@@ -369,7 +369,7 @@ bool TimeKeeper::isOnBarBoundary() {
 
 // ========== BEAT NOTIFICATION API ==========
 
-bool TimeKeeper::pollBeatFlag() {
+bool Timebase::pollBeatFlag() {
     /**
      * Test-and-clear beat flag
      *

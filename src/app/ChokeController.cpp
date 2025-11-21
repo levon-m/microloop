@@ -1,11 +1,11 @@
 #include "ChokeController.h"
-#include "NeokeyIO.h"
+#include "NeokeyInput.h"
 #include "DisplayManager.h"
-#include "TimeKeeper.h"
+#include "Timebase.h"
 #include "EncoderHandler.h"
 #include <Arduino.h>
 
-ChokeController::ChokeController(AudioEffectChoke& effect)
+ChokeController::ChokeController(ChokeAudio& effect)
     : m_effect(effect),
       m_currentParameter(Parameter::LENGTH),
       m_wasEnabled(false) {
@@ -47,7 +47,7 @@ bool ChokeController::handleButtonPress(const Command& cmd) {
             // FREE ONSET + QUANTIZED LENGTH
             Quantization quant = EffectQuantization::getGlobalQuantization();
             uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
-            uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
+            uint64_t releaseSample = Timebase::getSamplePosition() + durationSamples;
             m_effect.scheduleRelease(releaseSample);
 
             Serial.print("Choke ENGAGED (Free onset, Quantized length=");
@@ -59,7 +59,7 @@ bool ChokeController::handleButtonPress(const Command& cmd) {
         }
 
         // Update visual feedback
-        NeokeyIO::setLED(EffectID::CHOKE, true);
+        NeokeyInput::setLED(EffectID::CHOKE, true);
         DisplayManager::instance().updateDisplay();
         return true;  // Command handled
     } else {
@@ -67,10 +67,10 @@ bool ChokeController::handleButtonPress(const Command& cmd) {
         Quantization quant = EffectQuantization::getGlobalQuantization();
 
         // DEBUG: Get all timing info
-        uint64_t currentSample = TimeKeeper::getSamplePosition();
-        uint32_t samplesPerBeat = TimeKeeper::getSamplesPerBeat();
-        uint32_t beatNumber = TimeKeeper::getBeatNumber();
-        uint32_t tickInBeat = TimeKeeper::getTickInBeat();
+        uint64_t currentSample = Timebase::getSamplePosition();
+        uint32_t samplesPerBeat = Timebase::getSamplesPerBeat();
+        uint32_t beatNumber = Timebase::getBeatNumber();
+        uint32_t tickInBeat = Timebase::getTickInBeat();
 
         uint32_t samplesToNext = EffectQuantization::samplesToNextQuantizedBoundary(quant);
 
@@ -144,7 +144,7 @@ void ChokeController::updateVisualFeedback() {
     // Detect rising edge: effect just became enabled
     if (isEnabled && !m_wasEnabled) {
         // ISR fired onset or immediate enable - update visual feedback
-        NeokeyIO::setLED(EffectID::CHOKE, true);
+        NeokeyInput::setLED(EffectID::CHOKE, true);
         DisplayManager::instance().updateDisplay();
 
         // Determine what happened based on onset/length modes
@@ -164,7 +164,7 @@ void ChokeController::updateVisualFeedback() {
     // Detect falling edge: effect just became disabled
     if (!isEnabled && m_wasEnabled) {
         // Update LED to reflect disabled state
-        NeokeyIO::setLED(EffectID::CHOKE, false);
+        NeokeyInput::setLED(EffectID::CHOKE, false);
         DisplayManager::instance().updateDisplay();
 
         // Check if this was auto-release (quantized length mode)

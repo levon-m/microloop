@@ -1,7 +1,7 @@
 #pragma once
 
-#include "AudioEffectBase.h"
-#include "TimeKeeper.h"
+#include "IEffectAudio.h"
+#include "Timebase.h"
 #include <atomic>
 
 enum class ChokeLength : uint8_t {
@@ -14,9 +14,9 @@ enum class ChokeOnset : uint8_t {
     QUANTIZED = 1   // Quantize onset to next beat/subdivision
 };
 
-class AudioEffectChoke : public AudioEffectBase {
+class ChokeAudio : public IEffectAudio {
 public:
-    AudioEffectChoke();
+    ChokeAudio();
 
     void enable() override;
     void disable() override;

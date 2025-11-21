@@ -14,18 +14,18 @@
  *
  * PATTERN:
  * This follows the Controller pattern (similar to MVC, but for embedded):
- * - Model: AudioEffectBase (audio DSP)
+ * - Model: IEffectAudio (audio DSP)
  * - View: DisplayManager + InputIO (LEDs, display)
  * - Controller: IEffectController implementations (business logic)
  *
  * USAGE:
  *   class ChokeController : public IEffectController {
  *   public:
- *       ChokeController(AudioEffectChoke& effect) : m_effect(effect) {}
+ *       ChokeController(ChokeAudio& effect) : m_effect(effect) {}
  *       bool handleButtonPress(const Command& cmd) override { ... }
  *       // ... implement other methods
  *   private:
- *       AudioEffectChoke& m_effect;
+ *       ChokeAudio& m_effect;
  *   };
  */
 

@@ -5,7 +5,7 @@ EffectManager::EffectEntry EffectManager::s_effects[MAX_EFFECTS] = {};
 
 uint8_t EffectManager::s_numEffects = 0;
 
-bool EffectManager::registerEffect(EffectID id, AudioEffectBase* effect) {
+bool EffectManager::registerEffect(EffectID id, IEffectAudio* effect) {
     // Validate inputs
     if (effect == nullptr) {
         Serial.println("ERROR: EffectManager::registerEffect() - effect is null");
@@ -59,7 +59,7 @@ bool EffectManager::executeCommand(const Command& cmd) {
     }
 
     // Look up target effect
-    AudioEffectBase* effect = getEffect(cmd.targetEffect);
+    IEffectAudio* effect = getEffect(cmd.targetEffect);
     if (effect == nullptr) {
         // Effect not found - log error
         Serial.print("ERROR: EffectManager::executeCommand() - effect ID ");
@@ -95,7 +95,7 @@ bool EffectManager::executeCommand(const Command& cmd) {
     }
 }
 
-AudioEffectBase* EffectManager::getEffect(EffectID id) {
+IEffectAudio* EffectManager::getEffect(EffectID id) {
     // Linear search (fast for small N, cache-friendly)
     for (uint8_t i = 0; i < s_numEffects; i++) {
         if (s_effects[i].id == id) {
@@ -124,7 +124,7 @@ AudioEffectBase* EffectManager::getEffect(EffectID id) {
 // }
 
 // const char* EffectManager::getEffectName(EffectID id) {
-//     AudioEffectBase* effect = getEffect(id);
+//     IEffectAudio* effect = getEffect(id);
 //     if (effect != nullptr) {
 //         return effect->getName();
 //     }

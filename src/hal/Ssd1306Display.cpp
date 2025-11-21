@@ -1,6 +1,6 @@
-#include "OledIO.h"
+#include "Ssd1306Display.h"
 #include "Bitmaps.h"
-#include "SPSCQueue.h"
+#include "SpscQueue.h"
 #include "Trace.h"
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_GFX.h>
@@ -16,7 +16,7 @@ static constexpr uint32_t IDLE_DELAY_MS = 5;  // Delay when queue empty (more re
 
 static Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire1, RESET_PIN);
 
-static SPSCQueue<DisplayEvent, 32> commandQueue;  // Increased from 16 to handle spam
+static SpscQueue<DisplayEvent, 32> commandQueue;  // Increased from 16 to handle spam
 
 static volatile BitmapID currentBitmap = BitmapID::DEFAULT;
 static volatile bool isShowingMenu = false;  // Track if menu is currently displayed
@@ -123,7 +123,7 @@ static void drawBitmap(BitmapID id) {
     lastRequestedWasMenu = false;  // Reset debouncing state
 }
 
-bool OledIO::begin() {
+bool Ssd1306Display::begin() {
     // Initialize Wire1 (I2C bus 1: SDA1=pin 17, SCL1=pin 16)
     Wire1.begin();
     Wire1.setClock(400000);  // 400kHz I2C speed (fast mode)
@@ -145,7 +145,7 @@ bool OledIO::begin() {
     return true;
 }
 
-void OledIO::threadLoop() {
+void Ssd1306Display::threadLoop() {
     for (;;) {
         DisplayEvent event;
         bool hadWork = false;
@@ -180,7 +180,7 @@ void OledIO::threadLoop() {
     }
 }
 
-void OledIO::showDefault() {
+void Ssd1306Display::showDefault() {
     // Debounce: Skip if we just requested default bitmap and not transitioning from menu
     if (lastRequestedBitmap == BitmapID::DEFAULT && !lastRequestedWasMenu) {
         return;
@@ -193,7 +193,7 @@ void OledIO::showDefault() {
     }
 }
 
-void OledIO::showChoke() {
+void Ssd1306Display::showChoke() {
     // Debounce: Skip if we just requested choke bitmap and not transitioning from menu
     if (lastRequestedBitmap == BitmapID::CHOKE_ACTIVE && !lastRequestedWasMenu) {
         return;
@@ -206,7 +206,7 @@ void OledIO::showChoke() {
     }
 }
 
-void OledIO::showBitmap(BitmapID id) {
+void Ssd1306Display::showBitmap(BitmapID id) {
     // Debounce: Skip if we just requested this same bitmap and not transitioning from menu
     if (lastRequestedBitmap == id && !lastRequestedWasMenu) {
         return;
@@ -219,7 +219,7 @@ void OledIO::showBitmap(BitmapID id) {
     }
 }
 
-void OledIO::showMenu(const MenuDisplayData& menuData) {
+void Ssd1306Display::showMenu(const MenuDisplayData& menuData) {
     // Always push menu commands (menu content may change)
     DisplayEvent event(DisplayCommand::SHOW_MENU, menuData);
     if (commandQueue.push(event)) {
@@ -227,6 +227,6 @@ void OledIO::showMenu(const MenuDisplayData& menuData) {
     }
 }
 
-BitmapID OledIO::getCurrentBitmap() {
+BitmapID Ssd1306Display::getCurrentBitmap() {
     return currentBitmap;
 }

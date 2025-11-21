@@ -1,5 +1,5 @@
 /**
- * timekeeper.h - Centralized timing authority for sample-accurate MIDI sync
+ * Timebase.h - Centralized timing authority for sample-accurate MIDI sync
  *
  * PURPOSE:
  * Single source of timing truth that bridges MIDI clock (24 PPQN) and audio
@@ -14,15 +14,15 @@
  *
  * USAGE:
  *   // In audio ISR (every 128-sample block):
- *   TimeKeeper::incrementSamples(AUDIO_BLOCK_SAMPLES);
+ *   Timebase::incrementSamples(AUDIO_BLOCK_SAMPLES);
  *
  *   // In app thread (when MIDI clock ticks):
- *   TimeKeeper::syncToMIDIClock(avgTickPeriodUs);
+ *   Timebase::syncToMIDIClock(avgTickPeriodUs);
  *
  *   // In any thread (query timing):
- *   uint64_t now = TimeKeeper::getSamplePosition();
- *   uint32_t toNextBeat = TimeKeeper::samplesToNextBeat();
- *   uint64_t beatSample = TimeKeeper::beatToSample(4);  // Sample position of beat 4
+ *   uint64_t now = Timebase::getSamplePosition();
+ *   uint32_t toNextBeat = Timebase::samplesToNextBeat();
+ *   uint64_t beatSample = Timebase::beatToSample(4);  // Sample position of beat 4
  *
  * KEY CONCEPTS:
  * - Sample position: Absolute sample count since audio start (monotonic)
@@ -40,7 +40,7 @@
 
 #include <Arduino.h>
 
-class TimeKeeper {
+class Timebase {
 public:
     // Audio configuration
     static constexpr uint32_t SAMPLE_RATE = 44100;        // Hz
@@ -314,11 +314,11 @@ public:
      * @return true if beat boundary crossed since last check
      *
      * USAGE:
-     * This flag is set by TimeKeeper::incrementTick() when beat advances,
+     * This flag is set by Timebase::incrementTick() when beat advances,
      * and cleared by consumer (e.g., App thread for LED control).
      *
      * Example:
-     *   if (TimeKeeper::pollBeatFlag()) {
+     *   if (Timebase::pollBeatFlag()) {
      *       digitalWrite(LED_PIN, HIGH);  // Turn on LED at beat
      *   }
      *

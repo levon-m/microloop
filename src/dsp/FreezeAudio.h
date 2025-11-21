@@ -1,7 +1,7 @@
 #pragma once
 
-#include "AudioEffectBase.h"
-#include "TimeKeeper.h"
+#include "IEffectAudio.h"
+#include "Timebase.h"
 #include <atomic>
 #include <Arduino.h>
 
@@ -15,9 +15,9 @@ enum class FreezeOnset : uint8_t {
     QUANTIZED = 1   // Quantize onset to next beat/subdivision
 };
 
-class AudioEffectFreeze : public AudioEffectBase {
+class FreezeAudio : public IEffectAudio {
 public:
-    AudioEffectFreeze();
+    FreezeAudio();
 
     void enable() override;
     void disable() override;
@@ -55,7 +55,7 @@ private:
      * Formula: (milliseconds × 44100 samples/sec) / 1000
      * Example: 50ms = (50 × 44100) / 1000 = 2205 samples
      */
-    static constexpr size_t FREEZE_BUFFER_SAMPLES = (FREEZE_BUFFER_MS * TimeKeeper::SAMPLE_RATE) / 1000;
+    static constexpr size_t FREEZE_BUFFER_SAMPLES = (FREEZE_BUFFER_MS * Timebase::SAMPLE_RATE) / 1000;
 
     int16_t m_freezeBufferL[FREEZE_BUFFER_SAMPLES];
     int16_t m_freezeBufferR[FREEZE_BUFFER_SAMPLES];

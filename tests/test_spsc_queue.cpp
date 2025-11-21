@@ -3,16 +3,16 @@
  */
 
 #include "test_runner.h"
-#include "spsc_queue.h"
+#include "SpscQueue.h"
 
-TEST(SPSCQueue_Empty_InitiallyTrue) {
-    SPSCQueue<int, 16> queue;
+TEST(SpscQueue_Empty_InitiallyTrue) {
+    SpscQueue<int, 16> queue;
     ASSERT_TRUE(queue.isEmpty());
     ASSERT_EQ(queue.size(), 0U);
 }
 
-TEST(SPSCQueue_PushPop_BasicOperation) {
-    SPSCQueue<int, 16> queue;
+TEST(SpscQueue_PushPop_BasicOperation) {
+    SpscQueue<int, 16> queue;
 
     ASSERT_TRUE(queue.push(42));
     ASSERT_FALSE(queue.isEmpty());
@@ -24,8 +24,8 @@ TEST(SPSCQueue_PushPop_BasicOperation) {
     ASSERT_TRUE(queue.isEmpty());
 }
 
-TEST(SPSCQueue_MultiplePushPop_MaintainsOrder) {
-    SPSCQueue<int, 16> queue;
+TEST(SpscQueue_MultiplePushPop_MaintainsOrder) {
+    SpscQueue<int, 16> queue;
 
     for (int i = 0; i < 10; i++) {
         ASSERT_TRUE(queue.push(i));
@@ -42,8 +42,8 @@ TEST(SPSCQueue_MultiplePushPop_MaintainsOrder) {
     ASSERT_TRUE(queue.isEmpty());
 }
 
-TEST(SPSCQueue_Full_RejectsPush) {
-    SPSCQueue<int, 4> queue;  // Small queue (power of 2)
+TEST(SpscQueue_Full_RejectsPush) {
+    SpscQueue<int, 4> queue;  // Small queue (power of 2)
 
     // Fill queue (size 4 means 3 usable slots due to full/empty distinction)
     ASSERT_TRUE(queue.push(1));
@@ -54,15 +54,15 @@ TEST(SPSCQueue_Full_RejectsPush) {
     ASSERT_FALSE(queue.push(4));
 }
 
-TEST(SPSCQueue_PopEmpty_ReturnsFalse) {
-    SPSCQueue<int, 16> queue;
+TEST(SpscQueue_PopEmpty_ReturnsFalse) {
+    SpscQueue<int, 16> queue;
 
     int value;
     ASSERT_FALSE(queue.pop(value));  // Empty queue
 }
 
-TEST(SPSCQueue_Wraparound_HandlesCorrectly) {
-    SPSCQueue<int, 8> queue;
+TEST(SpscQueue_Wraparound_HandlesCorrectly) {
+    SpscQueue<int, 8> queue;
 
     // Fill and drain multiple times to test wraparound
     for (int cycle = 0; cycle < 5; cycle++) {
@@ -82,14 +82,14 @@ TEST(SPSCQueue_Wraparound_HandlesCorrectly) {
     }
 }
 
-TEST(SPSCQueue_Struct_WorksWithPOD) {
+TEST(SpscQueue_Struct_WorksWithPOD) {
     struct TestStruct {
         uint32_t timestamp;
         uint16_t id;
         uint16_t value;
     };
 
-    SPSCQueue<TestStruct, 16> queue;
+    SpscQueue<TestStruct, 16> queue;
 
     TestStruct data1 = {1000, 10, 42};
     ASSERT_TRUE(queue.push(data1));
@@ -102,8 +102,8 @@ TEST(SPSCQueue_Struct_WorksWithPOD) {
     ASSERT_EQ(data2.value, 42);
 }
 
-TEST(SPSCQueue_Size_AccurateAfterOperations) {
-    SPSCQueue<int, 16> queue;
+TEST(SpscQueue_Size_AccurateAfterOperations) {
+    SpscQueue<int, 16> queue;
 
     ASSERT_EQ(queue.size(), 0U);
 
@@ -123,8 +123,8 @@ TEST(SPSCQueue_Size_AccurateAfterOperations) {
     ASSERT_EQ(queue.size(), 0U);
 }
 
-TEST(SPSCQueue_Performance_BurstPushPop) {
-    SPSCQueue<uint32_t, 256> queue;
+TEST(SpscQueue_Performance_BurstPushPop) {
+    SpscQueue<uint32_t, 256> queue;
 
     uint32_t start = micros();
 

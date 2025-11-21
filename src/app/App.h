@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include "EffectQuantization.h"  // For Quantization enum
 
-namespace AppLogic {
+namespace App {
     void begin();
 
     void threadLoop();

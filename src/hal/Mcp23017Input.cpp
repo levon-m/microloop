@@ -1,7 +1,7 @@
-#include "McpIO.h"
+#include "Mcp23017Input.h"
 #include <TeensyThreads.h>
 
-namespace McpIO {
+namespace Mcp23017Input {
 
 // MCP23017 instance
 static Adafruit_MCP23X17 mcp;

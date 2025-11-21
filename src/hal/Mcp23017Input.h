@@ -4,7 +4,7 @@
 #include <Wire.h>
 #include <Adafruit_MCP23X17.h>
 
-namespace McpIO {
+namespace Mcp23017Input {
 
 // Pin definitions (MCP23017 pins)
 struct EncoderPins {

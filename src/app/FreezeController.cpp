@@ -1,11 +1,11 @@
 #include "FreezeController.h"
-#include "NeokeyIO.h"
+#include "NeokeyInput.h"
 #include "DisplayManager.h"
-#include "TimeKeeper.h"
+#include "Timebase.h"
 #include "EncoderHandler.h"
 #include <Arduino.h>
 
-FreezeController::FreezeController(AudioEffectFreeze& effect)
+FreezeController::FreezeController(FreezeAudio& effect)
     : m_effect(effect),
       m_currentParameter(Parameter::LENGTH),
       m_wasEnabled(false) {
@@ -47,7 +47,7 @@ bool FreezeController::handleButtonPress(const Command& cmd) {
             // FREE ONSET + QUANTIZED LENGTH
             Quantization quant = EffectQuantization::getGlobalQuantization();
             uint32_t durationSamples = EffectQuantization::calculateQuantizedDuration(quant);
-            uint64_t releaseSample = TimeKeeper::getSamplePosition() + durationSamples;
+            uint64_t releaseSample = Timebase::getSamplePosition() + durationSamples;
             m_effect.scheduleRelease(releaseSample);
 
             Serial.print("Freeze ENGAGED (Free onset, Quantized length=");
@@ -59,7 +59,7 @@ bool FreezeController::handleButtonPress(const Command& cmd) {
         }
 
         // Update visual feedback
-        NeokeyIO::setLED(EffectID::FREEZE, true);
+        NeokeyInput::setLED(EffectID::FREEZE, true);
         DisplayManager::instance().updateDisplay();
         return true;  // Command handled
     } else {
@@ -72,7 +72,7 @@ bool FreezeController::handleButtonPress(const Command& cmd) {
         uint32_t adjustedSamples = (samplesToNext > lookahead) ? (samplesToNext - lookahead) : 0;
 
         // Calculate absolute sample position for onset
-        uint64_t onsetSample = TimeKeeper::getSamplePosition() + adjustedSamples;
+        uint64_t onsetSample = Timebase::getSamplePosition() + adjustedSamples;
 
         // Schedule onset in ISR (same as how length scheduling works)
         m_effect.scheduleOnset(onsetSample);
@@ -128,7 +128,7 @@ void FreezeController::updateVisualFeedback() {
     // Detect rising edge: effect just became enabled
     if (isEnabled && !m_wasEnabled) {
         // ISR fired onset or immediate enable - update visual feedback
-        NeokeyIO::setLED(EffectID::FREEZE, true);
+        NeokeyInput::setLED(EffectID::FREEZE, true);
         DisplayManager::instance().updateDisplay();
 
         // Determine what happened based on onset/length modes
@@ -148,7 +148,7 @@ void FreezeController::updateVisualFeedback() {
     // Detect falling edge: effect just became disabled
     if (!isEnabled && m_wasEnabled) {
         // Update LED to reflect disabled state
-        NeokeyIO::setLED(EffectID::FREEZE, false);
+        NeokeyInput::setLED(EffectID::FREEZE, false);
         DisplayManager::instance().updateDisplay();
 
         // Check if this was auto-release (quantized length mode)

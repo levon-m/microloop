@@ -1,7 +1,7 @@
 #include "StutterController.h"
-#include "NeokeyIO.h"
+#include "NeokeyInput.h"
 #include "DisplayManager.h"
-#include "TimeKeeper.h"
+#include "Timebase.h"
 #include "EncoderHandler.h"
 #include <Arduino.h>
 
@@ -15,7 +15,7 @@ static bool s_rgbBlinkState = false;       // Current RGB LED blink state (on/of
 static uint32_t s_lastRgbBlinkTime = 0;    // Timestamp of last RGB LED blink toggle
 static constexpr uint32_t RGB_BLINK_INTERVAL_MS = 100;  // 100ms on/off (10Hz rapid blink)
 
-StutterController::StutterController(AudioEffectStutter& effect)
+StutterController::StutterController(StutterAudio& effect)
     : m_effect(effect),
       m_currentParameter(Parameter::ONSET),  // Default to ONSET (first in cycle)
       m_funcHeld(false),
@@ -112,7 +112,7 @@ bool StutterController::handleButtonPress(const Command& cmd) {
         } else {
             // QUANTIZED CAPTURE START: Schedule capture start
             uint32_t samplesToStart = EffectQuantization::samplesToNextQuantizedBoundary(quant);
-            uint64_t captureStartSample = TimeKeeper::getSamplePosition() + samplesToStart;
+            uint64_t captureStartSample = Timebase::getSamplePosition() + samplesToStart;
             m_effect.scheduleCaptureStart(captureStartSample);
             Serial.print("Stutter: CAPTURE START scheduled (");
             Serial.print(EffectQuantization::quantizationName(quant));
@@ -123,7 +123,7 @@ bool StutterController::handleButtonPress(const Command& cmd) {
                 // Calculate one full quantization period to add after capture start
                 uint32_t quantPeriod = EffectQuantization::calculateQuantizedDuration(quant);
                 uint32_t samplesToEnd = samplesToStart + quantPeriod;
-                uint64_t captureEndSample = TimeKeeper::getSamplePosition() + samplesToEnd;
+                uint64_t captureEndSample = Timebase::getSamplePosition() + samplesToEnd;
                 m_effect.scheduleCaptureEnd(captureEndSample, m_stutterHeld);  // Pass current button state
                 Serial.print("Stutter: CAPTURE END also scheduled (");
                 Serial.print(EffectQuantization::quantizationName(quant));
@@ -158,7 +158,7 @@ bool StutterController::handleButtonPress(const Command& cmd) {
         } else {
             // QUANTIZED ONSET: Schedule playback start
             uint32_t samplesToOnset = EffectQuantization::samplesToNextQuantizedBoundary(quant);
-            uint64_t playbackOnsetSample = TimeKeeper::getSamplePosition() + samplesToOnset;
+            uint64_t playbackOnsetSample = Timebase::getSamplePosition() + samplesToOnset;
             m_effect.schedulePlaybackOnset(playbackOnsetSample);
             Serial.print("Stutter: PLAYBACK ONSET scheduled (");
             Serial.print(EffectQuantization::quantizationName(quant));
@@ -200,7 +200,7 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
                 // QUANTIZED CAPTURE END: Schedule end
                 Quantization quant = EffectQuantization::getGlobalQuantization();
                 uint32_t samplesToNext = EffectQuantization::samplesToNextQuantizedBoundary(quant);
-                uint64_t captureEndSample = TimeKeeper::getSamplePosition() + samplesToNext;
+                uint64_t captureEndSample = Timebase::getSamplePosition() + samplesToNext;
                 m_effect.scheduleCaptureEnd(captureEndSample, true);  // STUTTER held = true
                 Serial.print("Stutter: CAPTURE END scheduled (");
                 Serial.print(EffectQuantization::quantizationName(quant));
@@ -252,7 +252,7 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
             // QUANTIZED CAPTURE END: Schedule end
             Quantization quant = EffectQuantization::getGlobalQuantization();
             uint32_t samplesToNext = EffectQuantization::samplesToNextQuantizedBoundary(quant);
-            uint64_t captureEndSample = TimeKeeper::getSamplePosition() + samplesToNext;
+            uint64_t captureEndSample = Timebase::getSamplePosition() + samplesToNext;
             m_effect.scheduleCaptureEnd(captureEndSample, false);  // STUTTER not held = false
             Serial.print("Stutter: CAPTURE END scheduled (");
             Serial.print(EffectQuantization::quantizationName(quant));
@@ -286,7 +286,7 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
             // QUANTIZED LENGTH: Schedule stop at next grid boundary
             Quantization quant = EffectQuantization::getGlobalQuantization();
             uint32_t samplesToNext = EffectQuantization::samplesToNextQuantizedBoundary(quant);
-            uint64_t playbackLengthSample = TimeKeeper::getSamplePosition() + samplesToNext;
+            uint64_t playbackLengthSample = Timebase::getSamplePosition() + samplesToNext;
             m_effect.schedulePlaybackLength(playbackLengthSample);
             Serial.print("Stutter: PLAYBACK STOP scheduled (");
             Serial.print(EffectQuantization::quantizationName(quant));
@@ -314,7 +314,7 @@ void StutterController::updateVisualFeedback() {
             analogWrite(RGB_LED_R_PIN, 0);
             analogWrite(RGB_LED_G_PIN, 0);
             analogWrite(RGB_LED_B_PIN, 0);
-            NeokeyIO::setLED(EffectID::STUTTER, false);
+            NeokeyInput::setLED(EffectID::STUTTER, false);
             break;
 
         case StutterState::IDLE_WITH_LOOP:
@@ -322,7 +322,7 @@ void StutterController::updateVisualFeedback() {
             analogWrite(RGB_LED_R_PIN, 255);
             analogWrite(RGB_LED_G_PIN, 255);
             analogWrite(RGB_LED_B_PIN, 255);
-            NeokeyIO::setLED(EffectID::STUTTER, false);  // Off for now (RGB LED shows white)
+            NeokeyInput::setLED(EffectID::STUTTER, false);  // Off for now (RGB LED shows white)
             break;
 
         case StutterState::WAIT_CAPTURE_START:
@@ -346,7 +346,7 @@ void StutterController::updateVisualFeedback() {
             if (now - m_lastBlinkTime >= BLINK_INTERVAL_MS) {
                 m_ledBlinkState = !m_ledBlinkState;
                 m_lastBlinkTime = now;
-                NeokeyIO::setLED(EffectID::STUTTER, m_ledBlinkState);
+                NeokeyInput::setLED(EffectID::STUTTER, m_ledBlinkState);
             }
             break;
 
@@ -356,7 +356,7 @@ void StutterController::updateVisualFeedback() {
             analogWrite(RGB_LED_R_PIN, 255);
             analogWrite(RGB_LED_G_PIN, 0);
             analogWrite(RGB_LED_B_PIN, 0);
-            NeokeyIO::setLED(EffectID::STUTTER, true);
+            NeokeyInput::setLED(EffectID::STUTTER, true);
             break;
 
         case StutterState::WAIT_PLAYBACK_ONSET:
@@ -380,7 +380,7 @@ void StutterController::updateVisualFeedback() {
             if (now - m_lastBlinkTime >= BLINK_INTERVAL_MS) {
                 m_ledBlinkState = !m_ledBlinkState;
                 m_lastBlinkTime = now;
-                NeokeyIO::setLED(EffectID::STUTTER, m_ledBlinkState);
+                NeokeyInput::setLED(EffectID::STUTTER, m_ledBlinkState);
             }
             break;
 
@@ -390,7 +390,7 @@ void StutterController::updateVisualFeedback() {
             analogWrite(RGB_LED_R_PIN, 0);
             analogWrite(RGB_LED_G_PIN, 0);
             analogWrite(RGB_LED_B_PIN, 255);
-            NeokeyIO::setLED(EffectID::STUTTER, true);
+            NeokeyInput::setLED(EffectID::STUTTER, true);
             break;
 
         default:
@@ -398,7 +398,7 @@ void StutterController::updateVisualFeedback() {
             analogWrite(RGB_LED_R_PIN, 0);
             analogWrite(RGB_LED_G_PIN, 0);
             analogWrite(RGB_LED_B_PIN, 0);
-            NeokeyIO::setLED(EffectID::STUTTER, false);
+            NeokeyInput::setLED(EffectID::STUTTER, false);
             break;
     }
 

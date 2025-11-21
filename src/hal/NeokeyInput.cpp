@@ -1,5 +1,5 @@
-#include "NeokeyIO.h"
-#include "SPSCQueue.h"
+#include "NeokeyInput.h"
+#include "SpscQueue.h"
 #include "Trace.h"
 #include <Adafruit_NeoKey_1x4.h>
 #include <seesaw_neopixel.h>
@@ -26,7 +26,7 @@ static constexpr uint32_t DEBOUNCE_MS = 20;  // Minimum time between events
 
 static Adafruit_NeoKey_1x4 neokey(NEOKEY_I2C_ADDR, &Wire2);
 
-static SPSCQueue<Command, 32> commandQueue;
+static SpscQueue<Command, 32> commandQueue;
 
 static bool lastKeyState[NUM_KEYS] = {false, false, false, false};
 static uint32_t lastEventTime[NUM_KEYS] = {0, 0, 0, 0};
@@ -77,7 +77,7 @@ static void neokeyISR() {
     interruptPending = true;
 }
 
-bool NeokeyIO::begin() {
+bool NeokeyInput::begin() {
     // Configure INT pin (input with pull-up, active LOW)
     pinMode(INT_PIN, INPUT_PULLUP);
 
@@ -116,7 +116,7 @@ bool NeokeyIO::begin() {
     return true;
 }
 
-void NeokeyIO::threadLoop() {
+void NeokeyInput::threadLoop() {
     for (;;) {
         // Check if interrupt flag is set (deferred I2C read)
         if (interruptPending) {
@@ -168,11 +168,11 @@ void NeokeyIO::threadLoop() {
     }
 }
 
-bool NeokeyIO::popCommand(Command& outCmd) {
+bool NeokeyInput::popCommand(Command& outCmd) {
     return commandQueue.pop(outCmd);
 }
 
-void NeokeyIO::setLED(EffectID effectID, bool enabled) {
+void NeokeyInput::setLED(EffectID effectID, bool enabled) {
     uint8_t keyIndex = 0;
     uint32_t enabledColor = LED_COLOR_RED;
     uint32_t disabledColor = LED_COLOR_GREEN;
@@ -213,7 +213,7 @@ void NeokeyIO::setLED(EffectID effectID, bool enabled) {
     neokey.pixels.show();  // Commit changes to hardware
 }
 
-bool NeokeyIO::isKeyPressed(uint8_t keyIndex) {
+bool NeokeyInput::isKeyPressed(uint8_t keyIndex) {
     if (keyIndex >= NUM_KEYS) {
         return false;  // Invalid key index
     }

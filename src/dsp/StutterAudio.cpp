@@ -1,10 +1,10 @@
-#include "AudioStutter.h"
+#include "StutterAudio.h"
 
 // Define static EXTMEM buffers
-EXTMEM int16_t AudioEffectStutter::m_stutterBufferL[AudioEffectStutter::STUTTER_BUFFER_SAMPLES];
-EXTMEM int16_t AudioEffectStutter::m_stutterBufferR[AudioEffectStutter::STUTTER_BUFFER_SAMPLES];
+EXTMEM int16_t StutterAudio::m_stutterBufferL[StutterAudio::STUTTER_BUFFER_SAMPLES];
+EXTMEM int16_t StutterAudio::m_stutterBufferR[StutterAudio::STUTTER_BUFFER_SAMPLES];
 
-AudioEffectStutter::AudioEffectStutter() : AudioEffectBase(2) {  // Call base with 2 inputs (stereo)
+StutterAudio::StutterAudio() : IEffectAudio(2) {  // Call base with 2 inputs (stereo)
     m_writePos = 0;
     m_readPos = 0;
     m_captureLength = 0;  // No captured loop yet
@@ -24,13 +24,13 @@ AudioEffectStutter::AudioEffectStutter() : AudioEffectBase(2) {  // Call base wi
     memset(m_stutterBufferR, 0, sizeof(m_stutterBufferR));
 }
 
-void AudioEffectStutter::enable() {
+void StutterAudio::enable() {
     // Start playback (used by controller for free onset)
     m_readPos = 0;  // Start from beginning of captured loop
     m_state = StutterState::PLAYING;
 }
 
-void AudioEffectStutter::disable() {
+void StutterAudio::disable() {
     // Stop playback and clear loop
     m_state = StutterState::IDLE_NO_LOOP;
     m_captureLength = 0;
@@ -38,7 +38,7 @@ void AudioEffectStutter::disable() {
     m_readPos = 0;
 }
 
-void AudioEffectStutter::toggle() {
+void StutterAudio::toggle() {
     if (isEnabled()) {
         disable();
     } else {
@@ -46,33 +46,33 @@ void AudioEffectStutter::toggle() {
     }
 }
 
-bool AudioEffectStutter::isEnabled() const {
+bool StutterAudio::isEnabled() const {
     // Effect is "enabled" if playing, capturing, or waiting
     return m_state != StutterState::IDLE_NO_LOOP &&
            m_state != StutterState::IDLE_WITH_LOOP;
 }
 
-const char* AudioEffectStutter::getName() const {
+const char* StutterAudio::getName() const {
     return "Stutter";
 }
 
-void AudioEffectStutter::startCapture() {
+void StutterAudio::startCapture() {
     m_writePos = 0;  // Reset write position
     m_captureLength = 0;  // Clear previous capture
     m_state = StutterState::CAPTURING;
 }
 
-void AudioEffectStutter::scheduleCaptureStart(uint64_t sample) {
+void StutterAudio::scheduleCaptureStart(uint64_t sample) {
     m_captureStartAtSample = sample;
     m_state = StutterState::WAIT_CAPTURE_START;
 }
 
-void AudioEffectStutter::cancelCaptureStart() {
+void StutterAudio::cancelCaptureStart() {
     m_captureStartAtSample = 0;
     m_state = StutterState::IDLE_NO_LOOP;
 }
 
-void AudioEffectStutter::endCapture(bool stutterHeld) {
+void StutterAudio::endCapture(bool stutterHeld) {
     if (m_writePos > 0) {  // Check we captured something
         m_captureLength = m_writePos;
         if (stutterHeld) {
@@ -87,7 +87,7 @@ void AudioEffectStutter::endCapture(bool stutterHeld) {
     }
 }
 
-void AudioEffectStutter::scheduleCaptureEnd(uint64_t sample, bool stutterHeld) {
+void StutterAudio::scheduleCaptureEnd(uint64_t sample, bool stutterHeld) {
     m_captureEndAtSample = sample;
     m_stutterHeld = stutterHeld;  // Remember button state for later transition
     // Only transition to WAIT_CAPTURE_END if we're currently CAPTURING
@@ -97,21 +97,21 @@ void AudioEffectStutter::scheduleCaptureEnd(uint64_t sample, bool stutterHeld) {
     }
 }
 
-void AudioEffectStutter::startPlayback() {
+void StutterAudio::startPlayback() {
     m_readPos = 0;
     m_state = StutterState::PLAYING;
 }
 
-void AudioEffectStutter::schedulePlaybackOnset(uint64_t sample) {
+void StutterAudio::schedulePlaybackOnset(uint64_t sample) {
     m_playbackOnsetAtSample = sample;
     m_state = StutterState::WAIT_PLAYBACK_ONSET;
 }
 
-void AudioEffectStutter::stopPlayback() {
+void StutterAudio::stopPlayback() {
     m_state = StutterState::IDLE_WITH_LOOP;
 }
 
-void AudioEffectStutter::schedulePlaybackLength(uint64_t sample) {
+void StutterAudio::schedulePlaybackLength(uint64_t sample) {
     m_playbackLengthAtSample = sample;
     // Only transition to WAIT_PLAYBACK_LENGTH if we're currently PLAYING
     // If we're in WAIT_PLAYBACK_ONSET, don't change state (length will fire after onset)
@@ -120,8 +120,8 @@ void AudioEffectStutter::schedulePlaybackLength(uint64_t sample) {
     }
 }
 
-void AudioEffectStutter::update() {
-    uint64_t currentSample = TimeKeeper::getSamplePosition();
+void StutterAudio::update() {
+    uint64_t currentSample = Timebase::getSamplePosition();
     uint64_t blockEndSample = currentSample + AUDIO_BLOCK_SAMPLES;
 
     // ========== CHECK FOR SCHEDULED STATE TRANSITIONS (ISR) ==========

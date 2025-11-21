@@ -1,7 +1,7 @@
 #pragma once
 
-#include "AudioEffectBase.h"
-#include "TimeKeeper.h"
+#include "IEffectAudio.h"
+#include "Timebase.h"
 #include <atomic>
 #include <Arduino.h>
 
@@ -49,11 +49,11 @@ enum class StutterState : uint8_t {
     WAIT_PLAYBACK_LENGTH = 7    // Waiting for playback stop grid (LED: BLUE solid)
 };
 
-class AudioEffectStutter : public AudioEffectBase {
+class StutterAudio : public IEffectAudio {
 public:
-    AudioEffectStutter();
+    StutterAudio();
 
-    // AudioEffectBase interface implementation
+    // IEffectAudio interface implementation
     void enable() override;
     void disable() override;
     void toggle() override;
@@ -136,7 +136,7 @@ private:
     // ========== BUFFER CONFIGURATION ==========
     // Buffer size: 1 bar @ 70 BPM (min tempo) = ~590KB total (295KB per channel)
     static constexpr uint8_t MIN_TEMPO = 70;
-    static constexpr size_t STUTTER_BUFFER_SAMPLES = static_cast<size_t>((1 / (MIN_TEMPO / 60.0)) * TimeKeeper::SAMPLE_RATE) * 4;
+    static constexpr size_t STUTTER_BUFFER_SAMPLES = static_cast<size_t>((1 / (MIN_TEMPO / 60.0)) * Timebase::SAMPLE_RATE) * 4;
 
     // Audio buffers (non-circular during capture)
     // EXTMEM places these in external PSRAM (16MB) instead of DTCM (512KB)

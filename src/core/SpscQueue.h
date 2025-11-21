@@ -40,14 +40,14 @@
  * @tparam SIZE Number of elements (MUST be power of 2: 16, 32, 64, 128, 256, etc.)
  */
 template<typename T, size_t SIZE>
-class SPSCQueue {
+class SpscQueue {
     // Compile-time check: SIZE must be power of 2
     static_assert((SIZE & (SIZE - 1)) == 0, "SIZE must be power of 2");
     // Compile-time check: SIZE must be > 0
     static_assert(SIZE > 0, "SIZE must be greater than 0");
 
 public:
-    SPSCQueue() : writeIdx(0), readIdx(0) {}
+    SpscQueue() : writeIdx(0), readIdx(0) {}
 
     /**
      * @brief Push an element to the queue (PRODUCER side)
@@ -172,12 +172,12 @@ private:
 
 // MIDI events: 32 slots, ~1.3ms buffer at 120 BPM (24 ticks/beat)
 template<typename T>
-using SmallSPSC = SPSCQueue<T, 32>;
+using SmallSpsc = SpscQueue<T, 32>;
 
 // MIDI clocks: 256 slots, ~5 seconds at 120 BPM
 template<typename T>
-using MediumSPSC = SPSCQueue<T, 256>;
+using MediumSpsc = SpscQueue<T, 256>;
 
 // Audio buffers: 1024 slots, chunky but good for sample streaming
 template<typename T>
-using LargeSPSC = SPSCQueue<T, 1024>;
+using LargeSpsc = SpscQueue<T, 1024>;

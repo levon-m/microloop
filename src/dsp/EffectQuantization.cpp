@@ -11,7 +11,7 @@ static Quantization globalQuantization = Quantization::QUANT_16;
 static uint32_t lookaheadOffset = 128;
 
 uint32_t calculateQuantizedDuration(Quantization quant) {
-    uint32_t samplesPerBeat = TimeKeeper::getSamplesPerBeat();
+    uint32_t samplesPerBeat = Timebase::getSamplesPerBeat();
     uint32_t duration;
 
     switch (quant) {
@@ -38,7 +38,7 @@ uint32_t calculateQuantizedDuration(Quantization quant) {
 
 uint32_t samplesToNextQuantizedBoundary(Quantization quant) {
     uint32_t subdivision = calculateQuantizedDuration(quant);
-    return TimeKeeper::samplesToNextSubdivision(subdivision);
+    return Timebase::samplesToNextSubdivision(subdivision);
 }
 
 const char* quantizationName(Quantization quant) {

@@ -1,5 +1,5 @@
 #include "EncoderHandler.h"
-#include "McpIO.h"
+#include "Mcp23017Input.h"
 #include <Arduino.h>
 
 namespace EncoderHandler {
@@ -15,12 +15,12 @@ Handler::Handler(uint8_t encoderIndex)
     , displayUpdateCallback(nullptr)
 {
     // Initialize last position from hardware
-    lastPosition = McpIO::getPosition(encoderIndex);
+    lastPosition = Mcp23017Input::getPosition(encoderIndex);
 }
 
 void Handler::update() {
     // Check for button press (McpIO already handles edge detection and debouncing)
-    if (buttonPressCallback && McpIO::getEncoderButton(encoderIndex)) {
+    if (buttonPressCallback && Mcp23017Input::getEncoderButton(encoderIndex)) {
         buttonPressCallback();
         // Mark as touched to reset cooldown
         if (!wasTouched) {
@@ -33,7 +33,7 @@ void Handler::update() {
     }
 
     // Get current encoder position
-    int32_t currentPosition = McpIO::getPosition(encoderIndex);
+    int32_t currentPosition = Mcp23017Input::getPosition(encoderIndex);
     int32_t delta = currentPosition - lastPosition;
 
     // Check if encoder was touched (position changed)
@@ -100,7 +100,7 @@ void Handler::onDisplayUpdate(DisplayUpdateCallback callback) {
 }
 
 void Handler::resetPosition() {
-    lastPosition = McpIO::getPosition(encoderIndex);
+    lastPosition = Mcp23017Input::getPosition(encoderIndex);
     accumulator = 0;
 }
 

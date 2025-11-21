@@ -9,7 +9,7 @@ enum class MidiEvent : uint8_t {
     CONTINUE = 3  // Sequencer continued from pause
 };
 
-namespace MidiIO {
+namespace MidiInput {
     void begin();
 
     void threadLoop();

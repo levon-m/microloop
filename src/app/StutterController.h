@@ -8,14 +8,14 @@
  *
  * DESIGN:
  * - Implements IEffectController interface
- * - Owns reference to AudioEffectStutter
+ * - Owns reference to StutterAudio
  * - Manages parameter editing state (ONSET, LENGTH, CAPTURE_START, CAPTURE_END)
  * - Handles FUNC+STUTTER button order detection
  * - Handles free/quantized onset, length, capture start, and capture end modes
  * - Manages LED blinking for armed states
  *
  * USAGE:
- *   AudioEffectStutter stutter;
+ *   StutterAudio stutter;
  *   StutterController controller(stutter);
  *
  *   // In AppLogic:
@@ -26,10 +26,10 @@
 
 #pragma once
 
-#include "EffectController.h"
-#include "AudioStutter.h"
+#include "IEffectController.h"
+#include "StutterAudio.h"
 #include "EffectQuantization.h"
-#include "OledIO.h"
+#include "Ssd1306Display.h"
 
 // Forward declaration
 namespace EncoderHandler {
@@ -63,7 +63,7 @@ public:
      *
      * @param effect Reference to the stutter audio effect
      */
-    explicit StutterController(AudioEffectStutter& effect);
+    explicit StutterController(StutterAudio& effect);
 
     // IEffectController interface implementation
     bool handleButtonPress(const Command& cmd) override;
@@ -104,7 +104,7 @@ public:
     static const char* captureEndName(StutterCaptureEnd captureEnd);
 
 private:
-    AudioEffectStutter& m_effect;   // Reference to audio effect (DSP)
+    StutterAudio& m_effect;   // Reference to audio effect (DSP)
     Parameter m_currentParameter;   // Currently selected parameter for editing
 
     // Button state tracking for FUNC+STUTTER combo detection

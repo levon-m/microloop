@@ -1,6 +1,6 @@
-#include "AudioChoke.h"
+#include "ChokeAudio.h"
 
-AudioEffectChoke::AudioEffectChoke() : AudioEffectBase(2) {  // Call base with 2 inputs (stereo)
+ChokeAudio::ChokeAudio() : IEffectAudio(2) {  // Call base with 2 inputs (stereo)
     m_targetGain = 1.0f;      // Start unmuted
     m_currentGain = 1.0f;
     m_isEnabled.store(false, std::memory_order_relaxed);  // Start disabled (unmuted)
@@ -10,17 +10,17 @@ AudioEffectChoke::AudioEffectChoke() : AudioEffectBase(2) {  // Call base with 2
     m_onsetAtSample = 0;    // No scheduled onset
 }
 
-void AudioEffectChoke::enable() {
+void ChokeAudio::enable() {
     m_targetGain = 0.0f;  // Mute
     m_isEnabled.store(true, std::memory_order_release);
 }
 
-void AudioEffectChoke::disable() {
+void ChokeAudio::disable() {
     m_targetGain = 1.0f;  // Unmute
     m_isEnabled.store(false, std::memory_order_release);
 }
 
-void AudioEffectChoke::toggle() {
+void ChokeAudio::toggle() {
     if (isEnabled()) {
         disable();
     } else {
@@ -28,16 +28,16 @@ void AudioEffectChoke::toggle() {
     }
 }
 
-bool AudioEffectChoke::isEnabled() const {
+bool ChokeAudio::isEnabled() const {
     return m_isEnabled.load(std::memory_order_acquire);
 }
 
-const char* AudioEffectChoke::getName() const {
+const char* ChokeAudio::getName() const {
     return "Choke";
 }
 
-void AudioEffectChoke::update() {
-    uint64_t currentSample = TimeKeeper::getSamplePosition();
+void ChokeAudio::update() {
+    uint64_t currentSample = Timebase::getSamplePosition();
     uint64_t blockEndSample = currentSample + AUDIO_BLOCK_SAMPLES;
 
     // Check for scheduled onset (ISR-accurate quantized onset)
@@ -82,7 +82,7 @@ void AudioEffectChoke::update() {
     }
 }
 
-void AudioEffectChoke::applyGainRamp(int16_t* data, size_t numSamples, float gainIncrement) {
+void ChokeAudio::applyGainRamp(int16_t* data, size_t numSamples, float gainIncrement) {
     for (size_t i = 0; i < numSamples; i++) {
         // Update current gain (linear interpolation)
         m_currentGain += gainIncrement;

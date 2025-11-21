@@ -20,7 +20,7 @@
 #pragma once
 
 #include "EffectQuantization.h"
-#include "OledIO.h"
+#include "Ssd1306Display.h"
 
 // Forward declaration
 namespace EncoderHandler {

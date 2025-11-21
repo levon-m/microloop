@@ -2,12 +2,12 @@
 
 #include <Audio.h>
 
-class AudioEffectBase : public AudioStream {
+class IEffectAudio : public AudioStream {
 public:
-    AudioEffectBase(uint8_t numInputs)
+    IEffectAudio(uint8_t numInputs)
         : AudioStream(numInputs, inputQueueArray) {}
 
-    virtual ~AudioEffectBase() = default;
+    virtual ~IEffectAudio() = default;
 
     virtual void enable() = 0;
 
