@@ -33,17 +33,17 @@
 #include <Arduino.h>
 #include "StutterAudio.h"
 #include "SdCardStorage.h"
+#include "SpscQueue.h"
 
 /**
  * Result event from SD thread - minimal POD struct
- * Written atomically by SD thread, consumed by App thread
+ * Passed via SpscQueue from SD thread to App thread
  */
 struct SdResultEvent {
     SdCardStorage::SdOperation op;
     uint8_t slot;
     SdCardStorage::SdResult result;
     uint32_t length;
-    volatile bool valid;  // Atomic flag - true when event ready for processing
 };
 
 class PresetController {
@@ -155,8 +155,10 @@ private:
     volatile bool m_operationInProgress;
     uint8_t m_pendingSlot;  // Slot being operated on
 
-    // SD thread result event (written by SD thread, consumed by App thread)
-    SdResultEvent m_pendingEvent;
+    // Lock-free queue for SD thread -> App thread event passing
+    // SD thread = single producer, App thread = single consumer
+    // Size 4 is sufficient since we only allow one operation at a time
+    static SpscQueue<SdResultEvent, 4> s_eventQueue;
 
     /**
      * Check if FUNC is effectively held (including grace period)
