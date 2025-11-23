@@ -24,7 +24,8 @@ StutterController::StutterController(StutterAudio& effect)
       m_ledBlinkState(false),
       m_wasEnabled(false),
       m_captureCompleteCallback(nullptr),
-      m_lastState(StutterState::IDLE_NO_LOOP) {
+      m_lastState(StutterState::IDLE_NO_LOOP),
+      m_captureInProgress(false) {
 }
 
 BitmapID StutterController::stateToBitmap(StutterState state) {
@@ -415,16 +416,29 @@ void StutterController::updateVisualFeedback() {
         Serial.print(static_cast<int>(currentState));
         Serial.println(")");
 
-        // Check for capture complete: transition TO IDLE_WITH_LOOP from a capture state
-        // This indicates a new loop was captured (not loaded from preset)
-        bool wasCapturing = (m_lastState == StutterState::CAPTURING ||
-                            m_lastState == StutterState::WAIT_CAPTURE_END ||
-                            m_lastState == StutterState::WAIT_CAPTURE_START);
+        // Track if we've entered a capture state (set flag)
+        // This handles the case where capture → play → idle (flag persists through play)
+        bool enteringCapture = (currentState == StutterState::CAPTURING ||
+                               currentState == StutterState::WAIT_CAPTURE_END ||
+                               currentState == StutterState::WAIT_CAPTURE_START);
+        if (enteringCapture) {
+            m_captureInProgress = true;
+        }
+
+        // Check for capture complete: transition TO IDLE_WITH_LOOP while capture was in progress
+        // This handles: CAPTURING → PLAYING → IDLE_WITH_LOOP (common stutter flow)
         bool nowIdleWithLoop = (currentState == StutterState::IDLE_WITH_LOOP);
 
-        if (wasCapturing && nowIdleWithLoop && m_captureCompleteCallback) {
+        if (m_captureInProgress && nowIdleWithLoop && m_captureCompleteCallback) {
             // New capture completed - notify PresetController
+            Serial.println("StutterController: Capture complete - notifying PresetController");
             m_captureCompleteCallback();
+            m_captureInProgress = false;  // Clear flag after callback
+        }
+
+        // Clear capture flag if we go back to no loop (capture was cancelled/failed)
+        if (currentState == StutterState::IDLE_NO_LOOP) {
+            m_captureInProgress = false;
         }
 
         m_lastState = currentState;

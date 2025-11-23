@@ -67,6 +67,15 @@ void PresetController::handleButtonPress(uint8_t slot) {
         return;
     }
 
+    Serial.print("PresetController: Button ");
+    Serial.print(slot);
+    Serial.print(" pressed, selected=");
+    Serial.print(m_selectedPreset);
+    Serial.print(", opInProgress=");
+    Serial.print(m_operationInProgress);
+    Serial.print(", sdBusy=");
+    Serial.println(SdCardStorage::isBusy());
+
     // Check if SD card is available
     if (!m_sdCardPresent) {
         showError("No SD Card");
@@ -81,7 +90,8 @@ void PresetController::handleButtonPress(uint8_t slot) {
 
     // Check if stutter is in idle state (required for all preset actions)
     if (!isStutterIdle()) {
-        Serial.println("PresetController: Action blocked - stutter not idle");
+        Serial.print("PresetController: Action blocked - stutter state=");
+        Serial.println(static_cast<int>(m_stutter.getState()));
         return;
     }
 
@@ -145,6 +155,8 @@ void PresetController::handleFuncRelease() {
 void PresetController::onCaptureComplete() {
     // User captured a new loop - deselect any current preset
     // The new loop is now "scratch work" not associated with any preset
+    Serial.print("PresetController: onCaptureComplete called, m_selectedPreset=");
+    Serial.println(m_selectedPreset);
     if (m_selectedPreset != 0) {
         Serial.print("PresetController: Capture complete - deselecting preset ");
         Serial.println(m_selectedPreset);

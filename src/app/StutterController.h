@@ -138,4 +138,8 @@ private:
 
     // Track previous state for capture complete detection
     StutterState m_lastState;
+
+    // Track if we've been through a capture phase (for deferred callback)
+    // Set true when entering CAPTURING, cleared when callback fires or on IDLE_NO_LOOP
+    bool m_captureInProgress;
 };
