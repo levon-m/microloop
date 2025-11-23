@@ -2,6 +2,7 @@
 #include "MidiInput.h"
 #include "NeokeyInput.h"
 #include "Mcp23017Input.h"
+#include "SdCardStorage.h"
 #include "ChokeAudio.h"
 #include "FreezeAudio.h"
 #include "StutterAudio.h"
@@ -15,6 +16,7 @@
 #include "FreezeController.h"
 #include "StutterController.h"
 #include "GlobalController.h"
+#include "PresetController.h"
 #include "AppState.h"
 
 #include <TeensyThreads.h>
@@ -32,6 +34,7 @@ static ChokeController* s_chokeController = nullptr;    // Choke effect controll
 static FreezeController* s_freezeController = nullptr;  // Freeze effect controller
 static StutterController* s_stutterController = nullptr;
 static GlobalController* s_globalController = nullptr;  // Global parameters controller
+static PresetController* s_presetController = nullptr;  // Preset save/load controller
 
 // ========== LED BEAT INDICATOR STATE ==========
 static constexpr uint8_t LED_PIN = 38;
@@ -130,12 +133,23 @@ static void processInputCommands() {
             } else if (cmd.type == CommandType::EFFECT_DISABLE) {
                 handled = s_stutterController->handleButtonRelease(cmd);
             }
-        } else if (cmd.targetEffect == EffectID::FUNC && s_stutterController) {
+        } else if (cmd.targetEffect == EffectID::FUNC) {
             // FUNC is handled by stutter controller (modifier button)
+            // Also notify preset controller for FUNC+preset combos
             if (cmd.type == CommandType::EFFECT_ENABLE) {
-                handled = s_stutterController->handleButtonPress(cmd);
+                if (s_stutterController) {
+                    handled = s_stutterController->handleButtonPress(cmd);
+                }
+                if (s_presetController) {
+                    s_presetController->handleFuncPress();
+                }
             } else if (cmd.type == CommandType::EFFECT_DISABLE) {
-                handled = s_stutterController->handleButtonRelease(cmd);
+                if (s_stutterController) {
+                    handled = s_stutterController->handleButtonRelease(cmd);
+                }
+                if (s_presetController) {
+                    s_presetController->handleFuncRelease();
+                }
             }
         }
 
@@ -151,6 +165,24 @@ static void processInputCommands() {
                 Serial.print(effect->getName());
                 Serial.println(enabled ? " ENABLED" : " DISABLED");
             }
+        }
+    }
+}
+
+/**
+ * Process preset button inputs from MCP23017
+ * Handles preset save/load/delete via PresetController
+ */
+static void processPresetButtons() {
+    if (!s_presetController || !s_presetController->isEnabled()) {
+        return;
+    }
+
+    // Check each preset button (1-4)
+    for (uint8_t i = 0; i < 4; i++) {
+        if (Mcp23017Input::getPresetButton(i)) {
+            // Button pressed (one-shot flag consumed)
+            s_presetController->handleButtonPress(i + 1);  // Convert to 1-indexed slot
         }
     }
 }
@@ -297,6 +329,17 @@ void App::begin() {
     s_freezeController = new FreezeController(freeze);
     s_stutterController = new StutterController(stutter);
     s_globalController = new GlobalController();
+    s_presetController = new PresetController(stutter);
+
+    // Initialize preset system (SD card)
+    s_presetController->begin();
+
+    // Set up capture complete callback to notify PresetController
+    s_stutterController->setCaptureCompleteCallback([]() {
+        if (s_presetController) {
+            s_presetController->onCaptureComplete();
+        }
+    });
 
     // Create encoder handlers
     s_encoder1 = new EncoderHandler::Handler(0);  // STUTTER parameters
@@ -322,29 +365,37 @@ void App::threadLoop() {
         // 1. Process button presses and effect commands
         processInputCommands();
 
-        // 2. Update encoder menu handlers (parameter editing)
+        // 2. Process preset button inputs
+        processPresetButtons();
+
+        // 3. Update encoder menu handlers (parameter editing)
         updateEncoders();
 
-        // 3. Update effect handler visual feedback
+        // 4. Update effect handler visual feedback
         updateEffectHandlers();
 
-        // 4. Process MIDI transport events (START/STOP/CONTINUE)
+        // 5. Process MIDI transport events (START/STOP/CONTINUE)
         processTransportEvents();
 
-        // 5. Process MIDI clock ticks (tempo tracking)
+        // 6. Process MIDI clock ticks (tempo tracking)
         processClockTicks();
 
-        // 6. Update beat indicator LED
+        // 7. Update beat indicator LED
         updateBeatLed();
 
-        // 7. Periodic debug output (optional)
+        // 8. Update preset LEDs (beat-synced for selected preset)
+        if (s_presetController) {
+            s_presetController->updateLEDs();
+        }
+
+        // 9. Periodic debug output (optional)
         uint32_t now = millis();
         if (now - s_lastPrint >= PRINT_INTERVAL_MS) {
             s_lastPrint = now;
             // Optional: Print status here
         }
 
-        // 8. Yield CPU to other threads
+        // 10. Yield CPU to other threads
         threads.delay(2);
     }
 }

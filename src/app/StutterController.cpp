@@ -22,7 +22,9 @@ StutterController::StutterController(StutterAudio& effect)
       m_stutterHeld(false),
       m_lastBlinkTime(0),
       m_ledBlinkState(false),
-      m_wasEnabled(false) {
+      m_wasEnabled(false),
+      m_captureCompleteCallback(nullptr),
+      m_lastState(StutterState::IDLE_NO_LOOP) {
 }
 
 BitmapID StutterController::stateToBitmap(StutterState state) {
@@ -404,17 +406,28 @@ void StutterController::updateVisualFeedback() {
 
     // ========== ISR STATE TRANSITION DETECTION ==========
     // Check for state changes that happened in ISR (scheduled events fired)
-    static StutterState s_lastState = StutterState::IDLE_NO_LOOP;
 
-    if (currentState != s_lastState) {
+    if (currentState != m_lastState) {
         // State changed - log it
         Serial.print("Stutter: State changed (");
-        Serial.print(static_cast<int>(s_lastState));
+        Serial.print(static_cast<int>(m_lastState));
         Serial.print(" → ");
         Serial.print(static_cast<int>(currentState));
         Serial.println(")");
 
-        s_lastState = currentState;
+        // Check for capture complete: transition TO IDLE_WITH_LOOP from a capture state
+        // This indicates a new loop was captured (not loaded from preset)
+        bool wasCapturing = (m_lastState == StutterState::CAPTURING ||
+                            m_lastState == StutterState::WAIT_CAPTURE_END ||
+                            m_lastState == StutterState::WAIT_CAPTURE_START);
+        bool nowIdleWithLoop = (currentState == StutterState::IDLE_WITH_LOOP);
+
+        if (wasCapturing && nowIdleWithLoop && m_captureCompleteCallback) {
+            // New capture completed - notify PresetController
+            m_captureCompleteCallback();
+        }
+
+        m_lastState = currentState;
     }
 
     // ========== EDGE DETECTION FOR DISPLAY UPDATES ==========
