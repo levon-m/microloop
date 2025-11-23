@@ -170,7 +170,7 @@ void setup() {
     int inputThreadId = threads.addThread(inputThreadEntry, 2048);
     int mcpThreadId = threads.addThread(mcpThreadEntry, 2048);
     int displayThreadId = threads.addThread(displayThreadEntry, 2048);
-    int sdThreadId = threads.addThread(sdThreadEntry, 4096);  // 4KB stack for SD operations
+    int sdThreadId = threads.addThread(sdThreadEntry, 8192);  // 8KB stack for SD operations (FAT + I/O needs headroom)
     int appThreadId = threads.addThread(appThreadEntry, 3072);
 
     if (ioThreadId < 0 || inputThreadId < 0 || mcpThreadId < 0 || displayThreadId < 0 || sdThreadId < 0 || appThreadId < 0) {

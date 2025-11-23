@@ -22,6 +22,13 @@ PresetController::PresetController(StutterAudio& stutter)
         m_presetExists[i] = false;
     }
 
+    // Initialize pending event as invalid (no event waiting)
+    m_pendingEvent.op = SdCardStorage::SdOperation::NONE;
+    m_pendingEvent.slot = 0;
+    m_pendingEvent.result = SdCardStorage::SdResult::SUCCESS;
+    m_pendingEvent.length = 0;
+    m_pendingEvent.valid = false;
+
     // Set singleton instance for callbacks
     s_instance = this;
 }
@@ -300,94 +307,127 @@ void PresetController::showStatus(const char* message) {
     Ssd1306Display::showMenu(statusData);
 }
 
+// ========== POLL SD EVENTS (App thread) ==========
+
+void PresetController::pollSdEvents() {
+    // Check if there's a pending event from the SD thread
+    if (!m_pendingEvent.valid) {
+        return;
+    }
+
+    // Copy event data and clear the valid flag atomically
+    SdResultEvent ev;
+    ev.op = m_pendingEvent.op;
+    ev.slot = m_pendingEvent.slot;
+    ev.result = m_pendingEvent.result;
+    ev.length = m_pendingEvent.length;
+    m_pendingEvent.valid = false;  // Consumed - clear flag
+
+    // All operations clear the in-progress flag
+    m_operationInProgress = false;
+
+    uint8_t slot = ev.slot;
+    uint8_t index = slot - 1;
+
+    switch (ev.op) {
+        case SdCardStorage::SdOperation::SAVE:
+            if (ev.result == SdCardStorage::SdResult::SUCCESS) {
+                m_presetExists[index] = true;
+                m_selectedPreset = slot;  // Auto-select after save
+
+                Serial.print("PresetController: Save complete - preset ");
+                Serial.println(slot);
+                showStatus("Saved!");
+            } else {
+                Serial.print("PresetController: Save failed with error ");
+                Serial.println(static_cast<int>(ev.result));
+                showError("Write failed");
+            }
+            break;
+
+        case SdCardStorage::SdOperation::LOAD:
+            if (ev.result == SdCardStorage::SdResult::SUCCESS && ev.length > 0) {
+                // Update StutterAudio with loaded data
+                m_stutter.setCaptureLength(ev.length);
+                m_stutter.setStateWithLoop();  // Transition to IDLE_WITH_LOOP
+
+                // Select this preset
+                m_selectedPreset = slot;
+
+                Serial.print("PresetController: Load complete - preset ");
+                Serial.print(slot);
+                Serial.print(" (");
+                Serial.print(ev.length);
+                Serial.println(" samples)");
+                showStatus("Loaded!");
+            } else {
+                Serial.print("PresetController: Load failed with error ");
+                Serial.println(static_cast<int>(ev.result));
+                showError("Read failed");
+            }
+            break;
+
+        case SdCardStorage::SdOperation::DELETE:
+            if (ev.result == SdCardStorage::SdResult::SUCCESS) {
+                m_presetExists[index] = false;
+
+                // If this was the selected preset, deselect it
+                if (m_selectedPreset == slot) {
+                    m_selectedPreset = 0;
+                }
+
+                // Turn off LED
+                digitalWrite(PRESET_LED_PINS[index], LOW);
+
+                Serial.print("PresetController: Delete complete - preset ");
+                Serial.println(slot);
+                showStatus("Deleted!");
+            } else {
+                Serial.print("PresetController: Delete failed with error ");
+                Serial.println(static_cast<int>(ev.result));
+                showError("Delete failed");
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+
 // ========== STATIC CALLBACK HANDLERS ==========
+// These run in the SD thread - ONLY set the pending event, do NOT touch
+// any other state, display, audio, or LEDs (those are App thread concerns)
 
 void PresetController::onSaveComplete(SdCardStorage::SdOperation op, uint8_t slot,
                                       SdCardStorage::SdResult result, uint32_t length) {
-    (void)op;
-    (void)length;
-
     if (!s_instance) return;
 
-    s_instance->m_operationInProgress = false;
-
-    if (result == SdCardStorage::SdResult::SUCCESS) {
-        uint8_t index = slot - 1;
-        s_instance->m_presetExists[index] = true;
-        s_instance->m_selectedPreset = slot;  // Auto-select after save
-
-        Serial.print("PresetController: Save complete - preset ");
-        Serial.println(slot);
-
-        // Show success briefly
-        s_instance->showStatus("Saved!");
-    } else {
-        Serial.print("PresetController: Save failed with error ");
-        Serial.println(static_cast<int>(result));
-        s_instance->showError("Write failed");
-    }
+    // Write event data first, then set valid flag last (memory barrier)
+    s_instance->m_pendingEvent.op = op;
+    s_instance->m_pendingEvent.slot = slot;
+    s_instance->m_pendingEvent.result = result;
+    s_instance->m_pendingEvent.length = length;
+    s_instance->m_pendingEvent.valid = true;  // Signal to App thread
 }
 
 void PresetController::onLoadComplete(SdCardStorage::SdOperation op, uint8_t slot,
                                       SdCardStorage::SdResult result, uint32_t length) {
-    (void)op;
-
     if (!s_instance) return;
 
-    s_instance->m_operationInProgress = false;
-
-    if (result == SdCardStorage::SdResult::SUCCESS && length > 0) {
-        // Update StutterAudio with loaded data
-        s_instance->m_stutter.setCaptureLength(length);
-        s_instance->m_stutter.setStateWithLoop();  // Transition to IDLE_WITH_LOOP
-
-        // Select this preset
-        s_instance->m_selectedPreset = slot;
-
-        Serial.print("PresetController: Load complete - preset ");
-        Serial.print(slot);
-        Serial.print(" (");
-        Serial.print(length);
-        Serial.println(" samples)");
-
-        // Show success briefly
-        s_instance->showStatus("Loaded!");
-    } else {
-        Serial.print("PresetController: Load failed with error ");
-        Serial.println(static_cast<int>(result));
-        s_instance->showError("Read failed");
-    }
+    s_instance->m_pendingEvent.op = op;
+    s_instance->m_pendingEvent.slot = slot;
+    s_instance->m_pendingEvent.result = result;
+    s_instance->m_pendingEvent.length = length;
+    s_instance->m_pendingEvent.valid = true;
 }
 
 void PresetController::onDeleteComplete(SdCardStorage::SdOperation op, uint8_t slot,
                                         SdCardStorage::SdResult result, uint32_t length) {
-    (void)op;
-    (void)length;
-
     if (!s_instance) return;
 
-    s_instance->m_operationInProgress = false;
-
-    if (result == SdCardStorage::SdResult::SUCCESS) {
-        uint8_t index = slot - 1;
-        s_instance->m_presetExists[index] = false;
-
-        // If this was the selected preset, deselect it
-        if (s_instance->m_selectedPreset == slot) {
-            s_instance->m_selectedPreset = 0;
-        }
-
-        // Turn off LED
-        digitalWrite(PRESET_LED_PINS[index], LOW);
-
-        Serial.print("PresetController: Delete complete - preset ");
-        Serial.println(slot);
-
-        // Show success briefly
-        s_instance->showStatus("Deleted!");
-    } else {
-        Serial.print("PresetController: Delete failed with error ");
-        Serial.println(static_cast<int>(result));
-        s_instance->showError("Delete failed");
-    }
+    s_instance->m_pendingEvent.op = op;
+    s_instance->m_pendingEvent.slot = slot;
+    s_instance->m_pendingEvent.result = result;
+    s_instance->m_pendingEvent.length = length;
+    s_instance->m_pendingEvent.valid = true;
 }

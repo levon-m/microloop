@@ -15,6 +15,9 @@ static constexpr size_t CHUNK_SIZE_BYTES = 4096;
 // Idle delay when queue is empty (ms)
 static constexpr uint32_t IDLE_DELAY_MS = 10;
 
+// Note: No mutex needed - SD is only accessed from this thread after begin()
+// The SD library is not thread-safe, but single-thread ownership is sufficient
+
 // ========== COMMAND QUEUE ==========
 
 struct SdCommand {
@@ -33,6 +36,10 @@ static SpscQueue<SdCommand, 4> s_commandQueue;
 
 static bool s_cardInitialized = false;
 static volatile bool s_busy = false;
+
+// Preset existence state - updated only by SD thread after operations
+// This allows presetExists() to be called safely from any thread without touching SD
+static volatile bool s_slotHasPreset[5] = {false, false, false, false, false};  // indices 1-4 used
 
 // File name buffer (preset1.bin, preset2.bin, etc.)
 static char s_fileNameBuffer[16];
@@ -104,21 +111,20 @@ static bool readChunked(File& file, uint8_t* data, size_t totalBytes) {
 
 /**
  * Execute save operation (called from SD thread)
+ * Only SD thread calls this, so no mutex needed
  */
 static SdResult executeSave(uint8_t slot, const int16_t* bufferL,
                             const int16_t* bufferR, uint32_t length) {
+    // Validate parameters
     if (!s_cardInitialized) {
         return SdResult::ERROR_NO_CARD;
     }
-
     if (slot < 1 || slot > 4) {
         return SdResult::ERROR_INVALID_SLOT;
     }
-
     if (!bufferL || !bufferR || length == 0) {
         return SdResult::ERROR_INVALID_BUFFER;
     }
-
     const char* fileName = getFileName(slot);
     if (!fileName) {
         return SdResult::ERROR_INVALID_SLOT;
@@ -130,57 +136,44 @@ static SdResult executeSave(uint8_t slot, const int16_t* bufferL,
     Serial.print(length);
     Serial.println(" samples)...");
 
-    Serial.println("  Checking if file exists...");
-
     // Delete existing file first (if any)
     if (SD.exists(fileName)) {
-        Serial.println("  File exists, removing...");
         SD.remove(fileName);
     }
-
-    Serial.println("  Opening file for write...");
 
     // Open file for writing
     File file = SD.open(fileName, FILE_WRITE);
     if (!file) {
-        Serial.print("ERROR: SdCardStorage - Failed to create file: ");
-        Serial.println(fileName);
+        Serial.println("ERROR: Failed to create file");
         return SdResult::ERROR_FILE_CREATE;
     }
-
-    Serial.println("  Writing header...");
 
     // Write header: capture length (4 bytes)
     size_t written = file.write((const uint8_t*)&length, sizeof(uint32_t));
     if (written != sizeof(uint32_t)) {
-        Serial.println("ERROR: SdCardStorage - Failed to write header");
         file.close();
         SD.remove(fileName);
+        Serial.println("ERROR: Failed to write header");
         return SdResult::ERROR_WRITE_FAILED;
     }
 
-    Serial.println("  Writing left channel...");
-
-    // Write left channel data (chunked)
+    // Write left channel data
     size_t bytesToWrite = length * sizeof(int16_t);
     if (!writeChunked(file, (const uint8_t*)bufferL, bytesToWrite)) {
-        Serial.println("ERROR: SdCardStorage - Failed to write left channel");
         file.close();
         SD.remove(fileName);
+        Serial.println("ERROR: Failed to write left channel");
         return SdResult::ERROR_WRITE_FAILED;
     }
 
-    Serial.println("  Writing right channel...");
-
-    // Write right channel data (chunked)
+    // Write right channel data
     if (!writeChunked(file, (const uint8_t*)bufferR, bytesToWrite)) {
-        Serial.println("ERROR: SdCardStorage - Failed to write right channel");
         file.close();
         SD.remove(fileName);
+        Serial.println("ERROR: Failed to write right channel");
         return SdResult::ERROR_WRITE_FAILED;
     }
 
-    Serial.println("  Closing file...");
     file.close();
 
     Serial.print("SdCardStorage: Saved preset ");
@@ -194,23 +187,22 @@ static SdResult executeSave(uint8_t slot, const int16_t* bufferL,
 
 /**
  * Execute load operation (called from SD thread)
+ * Only SD thread calls this, so no mutex needed
  */
 static SdResult executeLoad(uint8_t slot, int16_t* bufferL,
                             int16_t* bufferR, uint32_t& outLength) {
     outLength = 0;
 
+    // Validate parameters
     if (!s_cardInitialized) {
         return SdResult::ERROR_NO_CARD;
     }
-
     if (slot < 1 || slot > 4) {
         return SdResult::ERROR_INVALID_SLOT;
     }
-
     if (!bufferL || !bufferR) {
         return SdResult::ERROR_INVALID_BUFFER;
     }
-
     const char* fileName = getFileName(slot);
     if (!fileName) {
         return SdResult::ERROR_INVALID_SLOT;
@@ -220,109 +212,96 @@ static SdResult executeLoad(uint8_t slot, int16_t* bufferL,
     Serial.print(slot);
     Serial.println("...");
 
-    Serial.println("  Opening file for read...");
+    uint32_t captureLength = 0;
 
     // Open file for reading
     File file = SD.open(fileName, FILE_READ);
     if (!file) {
-        Serial.print("ERROR: SdCardStorage - File not found: ");
-        Serial.println(fileName);
+        Serial.println("ERROR: File not found");
         return SdResult::ERROR_FILE_NOT_FOUND;
     }
 
-    Serial.println("  Reading header...");
-
     // Read header: capture length (4 bytes)
-    uint32_t captureLength = 0;
     size_t bytesRead = file.read((uint8_t*)&captureLength, sizeof(uint32_t));
     if (bytesRead != sizeof(uint32_t)) {
-        Serial.println("ERROR: SdCardStorage - Failed to read header");
         file.close();
+        Serial.println("ERROR: Failed to read header");
         return SdResult::ERROR_READ_FAILED;
     }
-
-    Serial.print("  Header says ");
-    Serial.print(captureLength);
-    Serial.println(" samples");
 
     // Sanity check on length (max ~590KB buffer = ~150,000 samples per channel)
     if (captureLength == 0 || captureLength > 200000) {
-        Serial.print("ERROR: SdCardStorage - Invalid capture length: ");
-        Serial.println(captureLength);
         file.close();
+        Serial.print("ERROR: Invalid capture length: ");
+        Serial.println(captureLength);
         return SdResult::ERROR_INVALID_LENGTH;
     }
 
-    Serial.println("  Reading left channel...");
-
-    // Read left channel data (chunked)
+    // Read left channel data
     size_t bytesToRead = captureLength * sizeof(int16_t);
     if (!readChunked(file, (uint8_t*)bufferL, bytesToRead)) {
-        Serial.println("ERROR: SdCardStorage - Failed to read left channel");
         file.close();
+        Serial.println("ERROR: Failed to read left channel");
         return SdResult::ERROR_READ_FAILED;
     }
 
-    Serial.println("  Reading right channel...");
-
-    // Read right channel data (chunked)
+    // Read right channel data
     if (!readChunked(file, (uint8_t*)bufferR, bytesToRead)) {
-        Serial.println("ERROR: SdCardStorage - Failed to read right channel");
         file.close();
+        Serial.println("ERROR: Failed to read right channel");
         return SdResult::ERROR_READ_FAILED;
     }
 
-    Serial.println("  Closing file...");
     file.close();
-
     outLength = captureLength;
 
     Serial.print("SdCardStorage: Loaded preset ");
     Serial.print(slot);
     Serial.print(" (");
     Serial.print(captureLength);
-    Serial.print(" samples, ");
-    Serial.print((captureLength * 4 + 4) / 1024);
-    Serial.println(" KB)");
+    Serial.println(" samples)");
 
     return SdResult::SUCCESS;
 }
 
 /**
  * Execute delete operation (called from SD thread)
+ * Only SD thread calls this, so no mutex needed
  */
 static SdResult executeDelete(uint8_t slot) {
+    // Validate parameters
     if (!s_cardInitialized) {
         return SdResult::ERROR_NO_CARD;
     }
-
     if (slot < 1 || slot > 4) {
         return SdResult::ERROR_INVALID_SLOT;
     }
-
     const char* fileName = getFileName(slot);
     if (!fileName) {
         return SdResult::ERROR_INVALID_SLOT;
     }
 
     // Check if file exists
-    if (!SD.exists(fileName)) {
-        // File doesn't exist - that's fine, consider it deleted
+    bool fileExists = SD.exists(fileName);
+    bool deleteSuccess = false;
+    if (fileExists) {
+        deleteSuccess = SD.remove(fileName);
+    }
+
+    if (!fileExists) {
         Serial.print("SdCardStorage: Preset ");
         Serial.print(slot);
         Serial.println(" already empty");
         return SdResult::SUCCESS;
     }
 
-    // Delete the file
-    if (SD.remove(fileName)) {
+    if (deleteSuccess) {
         Serial.print("SdCardStorage: Deleted preset ");
         Serial.println(slot);
         return SdResult::SUCCESS;
     }
 
-    Serial.print("ERROR: SdCardStorage - Failed to delete: ");
-    Serial.println(fileName);
+    Serial.println("ERROR: Failed to delete");
     return SdResult::ERROR_DELETE_FAILED;
 }
 
@@ -333,6 +312,20 @@ bool begin() {
     if (SD.begin(BUILTIN_SDCARD)) {
         s_cardInitialized = true;
         Serial.println("SdCardStorage: SD card initialized (SDIO)");
+
+        // One-time scan for existing presets at boot
+        // This is the ONLY place SD.exists() is called outside the SD thread
+        // (safe because thread hasn't started yet)
+        for (uint8_t slot = 1; slot <= 4; ++slot) {
+            char name[16];
+            snprintf(name, sizeof(name), "preset%d.bin", slot);
+            s_slotHasPreset[slot] = SD.exists(name);
+            if (s_slotHasPreset[slot]) {
+                Serial.print("  Found preset ");
+                Serial.println(slot);
+            }
+        }
+
         return true;
     }
 
@@ -363,14 +356,23 @@ void threadLoop() {
             switch (cmd.operation) {
                 case SdOperation::SAVE:
                     result = executeSave(cmd.slot, cmd.bufferL, cmd.bufferR, cmd.length);
+                    // Update cached state on success
+                    if (result == SdResult::SUCCESS) {
+                        s_slotHasPreset[cmd.slot] = true;
+                    }
                     break;
 
                 case SdOperation::LOAD:
                     result = executeLoad(cmd.slot, cmd.bufferL, cmd.bufferR, loadedLength);
+                    // Load doesn't change existence state
                     break;
 
                 case SdOperation::DELETE:
                     result = executeDelete(cmd.slot);
+                    // Update cached state on success
+                    if (result == SdResult::SUCCESS) {
+                        s_slotHasPreset[cmd.slot] = false;
+                    }
                     break;
 
                 default:
@@ -434,13 +436,11 @@ bool presetExists(uint8_t slot) {
     if (!s_cardInitialized) {
         return false;
     }
-
-    const char* fileName = getFileName(slot);
-    if (!fileName) {
+    if (slot < 1 || slot > 4) {
         return false;
     }
-
-    return SD.exists(fileName);
+    // Read from cached state - NEVER touch SD from outside the SD thread
+    return s_slotHasPreset[slot];
 }
 
 bool isBusy() {

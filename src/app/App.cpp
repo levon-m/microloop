@@ -392,9 +392,10 @@ void App::threadLoop() {
         // 7. Update beat indicator LED
         updateBeatLed();
 
-        // 8. Update preset LEDs (beat-synced for selected preset)
+        // 8. Update preset LEDs and poll SD events (beat-synced for selected preset)
         if (s_presetController) {
             s_presetController->updateLEDs();
+            s_presetController->pollSdEvents();  // Process SD operation completions
         }
 
         // 9. Periodic debug output (optional)

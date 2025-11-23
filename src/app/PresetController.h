@@ -14,7 +14,12 @@
  * - Uses SdCardStorage HAL for async file operations
  * - Tracks FUNC button state with grace period for cross-bus timing
  * - LED states: OFF (empty), ON (written), beat-sync blink (selected)
- * - Operations are non-blocking; completion handled via callbacks
+ * - Operations are non-blocking; completion handled via polling
+ *
+ * THREAD SAFETY:
+ * - SD thread only writes a minimal result event struct
+ * - App thread polls pollSdEvents() to process results
+ * - All state mutations happen in App thread (no cross-thread races)
  *
  * CONSTRAINTS:
  * - All actions only allowed in IDLE states (IDLE_NO_LOOP or IDLE_WITH_LOOP)
@@ -28,6 +33,18 @@
 #include <Arduino.h>
 #include "StutterAudio.h"
 #include "SdCardStorage.h"
+
+/**
+ * Result event from SD thread - minimal POD struct
+ * Written atomically by SD thread, consumed by App thread
+ */
+struct SdResultEvent {
+    SdCardStorage::SdOperation op;
+    uint8_t slot;
+    SdCardStorage::SdResult result;
+    uint32_t length;
+    volatile bool valid;  // Atomic flag - true when event ready for processing
+};
 
 class PresetController {
 public:
@@ -85,6 +102,13 @@ public:
     void updateLEDs();
 
     /**
+     * Poll for SD operation completion events (call from App::threadLoop)
+     * Processes results from SD thread and updates state
+     * All state mutations happen here (in App thread) for thread safety
+     */
+    void pollSdEvents();
+
+    /**
      * Check if SD card is available for preset operations
      */
     bool isEnabled() const { return m_sdCardPresent; }
@@ -130,6 +154,9 @@ private:
     // Async operation tracking
     volatile bool m_operationInProgress;
     uint8_t m_pendingSlot;  // Slot being operated on
+
+    // SD thread result event (written by SD thread, consumed by App thread)
+    SdResultEvent m_pendingEvent;
 
     /**
      * Check if FUNC is effectively held (including grace period)
