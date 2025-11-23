@@ -6,6 +6,7 @@
 #include "NeokeyInput.h"
 #include "Ssd1306Display.h"
 #include "Mcp23017Input.h"
+#include "SdCardStorage.h"
 #include "FreezeAudio.h"
 #include "ChokeAudio.h"
 #include "StutterAudio.h"
@@ -52,6 +53,10 @@ void displayThreadEntry() {
     Ssd1306Display::threadLoop();  // Never returns
 }
 
+void sdThreadEntry() {
+    SdCardStorage::threadLoop();  // Never returns
+}
+
 void appThreadEntry() {
     App::threadLoop();  // Never returns
 }
@@ -94,6 +99,14 @@ void setup() {
 
     MidiInput::begin();
     Serial.println("MIDI: OK (DIN on Serial8)");
+
+    // Initialize SD card BEFORE App::begin() (PresetController needs it)
+    if (!SdCardStorage::begin()) {
+        Serial.println("WARNING: SD card init failed (presets disabled)");
+        // Continue anyway - SD card is optional for basic functionality
+    } else {
+        Serial.println("SD Card: OK (SDIO)");
+    }
 
     App::begin();
     Serial.println("App Logic: OK");
@@ -157,9 +170,10 @@ void setup() {
     int inputThreadId = threads.addThread(inputThreadEntry, 2048);
     int mcpThreadId = threads.addThread(mcpThreadEntry, 2048);
     int displayThreadId = threads.addThread(displayThreadEntry, 2048);
+    int sdThreadId = threads.addThread(sdThreadEntry, 4096);  // 4KB stack for SD operations
     int appThreadId = threads.addThread(appThreadEntry, 3072);
 
-    if (ioThreadId < 0 || inputThreadId < 0 || mcpThreadId < 0 || displayThreadId < 0 || appThreadId < 0) {
+    if (ioThreadId < 0 || inputThreadId < 0 || mcpThreadId < 0 || displayThreadId < 0 || sdThreadId < 0 || appThreadId < 0) {
         Serial.println("ERROR: Thread creation failed!");
         while (1);  // Halt
     }

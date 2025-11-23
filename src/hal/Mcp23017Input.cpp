@@ -130,6 +130,10 @@ static void processButton(bool &lastState, uint32_t &lastEventTime, bool &presse
 
 // Process a single event (quadrature + button debounce)
 static void processEvent(const McpEvent &ev) {
+    // DEBUG: Print raw pin state
+    Serial.print("MCP event: 0x");
+    Serial.println(ev.pins, HEX);
+
     // Process all encoders with this captured state
     for (int i = 0; i < 4; i++) {
         // 1. Quadrature decoding (rotation)
@@ -218,6 +222,14 @@ bool begin() {
         presetButtons[j].lastState = (bit == 0);  // Convert to pressed/released
         presetButtons[j].lastEventTime = 0;
         presetButtons[j].pressedFlag = false;
+
+        // DEBUG: Print initial state
+        Serial.print("Preset ");
+        Serial.print(j + 1);
+        Serial.print(" (pin ");
+        Serial.print(presetButtonPins[j]);
+        Serial.print("): ");
+        Serial.println(bit ? "HIGH" : "LOW");
     }
 
     // Enable interrupt-on-change for all pins

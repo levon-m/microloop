@@ -11,20 +11,23 @@
  *
  * DESIGN:
  * - Works with StutterAudio buffer via accessor methods
- * - Uses SdCardStorage HAL for file operations
+ * - Uses SdCardStorage HAL for async file operations
  * - Tracks FUNC button state with grace period for cross-bus timing
  * - LED states: OFF (empty), ON (written), beat-sync blink (selected)
+ * - Operations are non-blocking; completion handled via callbacks
  *
  * CONSTRAINTS:
  * - All actions only allowed in IDLE states (IDLE_NO_LOOP or IDLE_WITH_LOOP)
  * - Cannot overwrite preset - must delete first then write
  * - New capture while preset selected deselects that preset
+ * - Only one SD operation at a time (busy check)
  */
 
 #pragma once
 
 #include <Arduino.h>
 #include "StutterAudio.h"
+#include "SdCardStorage.h"
 
 class PresetController {
 public:
@@ -96,6 +99,11 @@ public:
      */
     bool presetExists(uint8_t slot) const;
 
+    /**
+     * Check if an SD operation is in progress
+     */
+    bool isBusy() const { return m_operationInProgress; }
+
 private:
     StutterAudio& m_stutter;
 
@@ -119,6 +127,10 @@ private:
     // Beat LED tracking for sync
     bool m_lastBeatLedState;
 
+    // Async operation tracking
+    volatile bool m_operationInProgress;
+    uint8_t m_pendingSlot;  // Slot being operated on
+
     /**
      * Check if FUNC is effectively held (including grace period)
      */
@@ -130,19 +142,19 @@ private:
     bool isStutterIdle() const;
 
     /**
-     * Save current loop to preset slot
+     * Request async save of current loop to preset slot
      */
-    bool saveToPreset(uint8_t slot);
+    bool requestSave(uint8_t slot);
 
     /**
-     * Load preset into current loop buffer
+     * Request async load of preset into current loop buffer
      */
-    bool loadFromPreset(uint8_t slot);
+    bool requestLoad(uint8_t slot);
 
     /**
-     * Delete preset from SD card
+     * Request async delete of preset from SD card
      */
-    bool deletePresetSlot(uint8_t slot);
+    bool requestDelete(uint8_t slot);
 
     /**
      * Deselect current preset (switch to "scratch" mode)
@@ -153,4 +165,20 @@ private:
      * Show error screen on display
      */
     void showError(const char* message);
+
+    /**
+     * Show status message on display
+     */
+    void showStatus(const char* message);
+
+    // Static callback handlers (bridge to instance methods)
+    static void onSaveComplete(SdCardStorage::SdOperation op, uint8_t slot,
+                               SdCardStorage::SdResult result, uint32_t length);
+    static void onLoadComplete(SdCardStorage::SdOperation op, uint8_t slot,
+                               SdCardStorage::SdResult result, uint32_t length);
+    static void onDeleteComplete(SdCardStorage::SdOperation op, uint8_t slot,
+                                 SdCardStorage::SdResult result, uint32_t length);
+
+    // Singleton instance pointer for static callbacks
+    static PresetController* s_instance;
 };

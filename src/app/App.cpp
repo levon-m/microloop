@@ -174,14 +174,23 @@ static void processInputCommands() {
  * Handles preset save/load/delete via PresetController
  */
 static void processPresetButtons() {
-    if (!s_presetController || !s_presetController->isEnabled()) {
-        return;
-    }
-
-    // Check each preset button (1-4)
+    // Check each preset button (1-4) - always check even if SD not present for debug
     for (uint8_t i = 0; i < 4; i++) {
         if (Mcp23017Input::getPresetButton(i)) {
             // Button pressed (one-shot flag consumed)
+            Serial.print("Preset button ");
+            Serial.print(i + 1);
+            Serial.println(" pressed");
+
+            if (!s_presetController) {
+                Serial.println("  -> PresetController is null!");
+                continue;
+            }
+            if (!s_presetController->isEnabled()) {
+                Serial.println("  -> PresetController disabled (no SD card)");
+                continue;
+            }
+
             s_presetController->handleButtonPress(i + 1);  // Convert to 1-indexed slot
         }
     }
