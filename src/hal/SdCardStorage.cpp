@@ -1,45 +1,20 @@
 #include "SdCardStorage.h"
-#include "SpscQueue.h"
 #include <SD.h>
 #include <SPI.h>
-#include <TeensyThreads.h>
 
 namespace SdCardStorage {
 
 // ========== CONFIGURATION ==========
 
 // Chunk size for SD card writes/reads (4KB is optimal for SD cards)
-// Writing in chunks prevents blocking the scheduler and allows other threads to run
 static constexpr size_t CHUNK_SIZE_BYTES = 4096;
-
-// Idle delay when queue is empty (ms)
-static constexpr uint32_t IDLE_DELAY_MS = 10;
-
-// Note: No mutex needed - SD is only accessed from this thread after begin()
-// The SD library is not thread-safe, but single-thread ownership is sufficient
-
-// ========== COMMAND QUEUE ==========
-
-struct SdCommand {
-    SdOperation operation;
-    uint8_t slot;
-    int16_t* bufferL;       // Non-const for load, cast from const for save
-    int16_t* bufferR;
-    uint32_t length;        // Sample count (for save)
-    CompletionCallback callback;
-};
-
-// Command queue (4 slots should be plenty - operations are slow)
-static SpscQueue<SdCommand, 4> s_commandQueue;
 
 // ========== STATE ==========
 
 static bool s_cardInitialized = false;
-static volatile bool s_busy = false;
 
-// Preset existence state - updated only by SD thread after operations
-// This allows presetExists() to be called safely from any thread without touching SD
-static volatile bool s_slotHasPreset[5] = {false, false, false, false, false};  // indices 1-4 used
+// Preset existence state - updated after SD operations
+static bool s_slotHasPreset[5] = {false, false, false, false, false};  // indices 1-4 used
 
 // File name buffer (preset1.bin, preset2.bin, etc.)
 static char s_fileNameBuffer[16];
@@ -56,7 +31,6 @@ static const char* getFileName(uint8_t slot) {
 
 /**
  * Write buffer to file in chunks
- * Note: No yields during SD operations - SD library is not thread-safe
  */
 static bool writeChunked(File& file, const uint8_t* data, size_t totalBytes) {
     Serial.print("  writeChunked: ");
@@ -88,7 +62,6 @@ static bool writeChunked(File& file, const uint8_t* data, size_t totalBytes) {
 
 /**
  * Read buffer from file in chunks
- * Note: No yields during SD operations - SD library is not thread-safe
  */
 static bool readChunked(File& file, uint8_t* data, size_t totalBytes) {
     size_t bytesRead = 0;
@@ -110,8 +83,7 @@ static bool readChunked(File& file, uint8_t* data, size_t totalBytes) {
 }
 
 /**
- * Execute save operation (called from SD thread)
- * Only SD thread calls this, so no mutex needed
+ * Execute save operation
  */
 static SdResult executeSave(uint8_t slot, const int16_t* bufferL,
                             const int16_t* bufferR, uint32_t length) {
@@ -182,12 +154,12 @@ static SdResult executeSave(uint8_t slot, const int16_t* bufferL,
     Serial.print((length * 4 + 4) / 1024);
     Serial.println(" KB)");
 
+    Serial.println("SdCardStorage: save finished OK");
     return SdResult::SUCCESS;
 }
 
 /**
- * Execute load operation (called from SD thread)
- * Only SD thread calls this, so no mutex needed
+ * Execute load operation
  */
 static SdResult executeLoad(uint8_t slot, int16_t* bufferL,
                             int16_t* bufferR, uint32_t& outLength) {
@@ -265,8 +237,7 @@ static SdResult executeLoad(uint8_t slot, int16_t* bufferL,
 }
 
 /**
- * Execute delete operation (called from SD thread)
- * Only SD thread calls this, so no mutex needed
+ * Execute delete operation
  */
 static SdResult executeDelete(uint8_t slot) {
     // Validate parameters
@@ -298,6 +269,7 @@ static SdResult executeDelete(uint8_t slot) {
     if (deleteSuccess) {
         Serial.print("SdCardStorage: Deleted preset ");
         Serial.println(slot);
+        Serial.println("SdCardStorage: delete finished OK");
         return SdResult::SUCCESS;
     }
 
@@ -314,8 +286,6 @@ bool begin() {
         Serial.println("SdCardStorage: SD card initialized (SDIO)");
 
         // One-time scan for existing presets at boot
-        // This is the ONLY place SD.exists() is called outside the SD thread
-        // (safe because thread hasn't started yet)
         for (uint8_t slot = 1; slot <= 4; ++slot) {
             char name[16];
             snprintf(name, sizeof(name), "preset%d.bin", slot);
@@ -338,98 +308,34 @@ bool isCardPresent() {
     return s_cardInitialized;
 }
 
-void threadLoop() {
-    Serial.println("SdCardStorage: Thread started");
+// ========== SYNCHRONOUS OPERATIONS ==========
 
-    for (;;) {
-        SdCommand cmd;
-        bool hadWork = false;
+SdResult saveSync(uint8_t slot, const int16_t* bufferL, const int16_t* bufferR,
+                  uint32_t length) {
+    SdResult result = executeSave(slot, bufferL, bufferR, length);
 
-        // Process one command at a time
-        if (s_commandQueue.pop(cmd)) {
-            hadWork = true;
-            s_busy = true;
-
-            SdResult result = SdResult::SUCCESS;
-            uint32_t loadedLength = 0;
-
-            switch (cmd.operation) {
-                case SdOperation::SAVE:
-                    result = executeSave(cmd.slot, cmd.bufferL, cmd.bufferR, cmd.length);
-                    // Update cached state on success
-                    if (result == SdResult::SUCCESS) {
-                        s_slotHasPreset[cmd.slot] = true;
-                    }
-                    break;
-
-                case SdOperation::LOAD:
-                    result = executeLoad(cmd.slot, cmd.bufferL, cmd.bufferR, loadedLength);
-                    // Load doesn't change existence state
-                    break;
-
-                case SdOperation::DELETE:
-                    result = executeDelete(cmd.slot);
-                    // Update cached state on success
-                    if (result == SdResult::SUCCESS) {
-                        s_slotHasPreset[cmd.slot] = false;
-                    }
-                    break;
-
-                default:
-                    break;
-            }
-
-            s_busy = false;
-
-            // Invoke completion callback (if provided)
-            if (cmd.callback) {
-                cmd.callback(cmd.operation, cmd.slot, result, loadedLength);
-            }
-        }
-
-        // Sleep when idle
-        if (!hadWork) {
-            threads.delay(IDLE_DELAY_MS);
-        }
+    // Update cached state on success
+    if (result == SdResult::SUCCESS && slot >= 1 && slot <= 4) {
+        s_slotHasPreset[slot] = true;
     }
+
+    return result;
 }
 
-bool requestSave(uint8_t slot, const int16_t* bufferL, const int16_t* bufferR,
-                 uint32_t length, CompletionCallback callback) {
-    SdCommand cmd;
-    cmd.operation = SdOperation::SAVE;
-    cmd.slot = slot;
-    cmd.bufferL = const_cast<int16_t*>(bufferL);  // Safe: save only reads
-    cmd.bufferR = const_cast<int16_t*>(bufferR);
-    cmd.length = length;
-    cmd.callback = callback;
-
-    return s_commandQueue.push(cmd);
+SdResult loadSync(uint8_t slot, int16_t* bufferL, int16_t* bufferR,
+                  uint32_t& outLength) {
+    return executeLoad(slot, bufferL, bufferR, outLength);
 }
 
-bool requestLoad(uint8_t slot, int16_t* bufferL, int16_t* bufferR,
-                 CompletionCallback callback) {
-    SdCommand cmd;
-    cmd.operation = SdOperation::LOAD;
-    cmd.slot = slot;
-    cmd.bufferL = bufferL;
-    cmd.bufferR = bufferR;
-    cmd.length = 0;  // Not used for load
-    cmd.callback = callback;
+SdResult deleteSync(uint8_t slot) {
+    SdResult result = executeDelete(slot);
 
-    return s_commandQueue.push(cmd);
-}
+    // Update cached state on success
+    if (result == SdResult::SUCCESS && slot >= 1 && slot <= 4) {
+        s_slotHasPreset[slot] = false;
+    }
 
-bool requestDelete(uint8_t slot, CompletionCallback callback) {
-    SdCommand cmd;
-    cmd.operation = SdOperation::DELETE;
-    cmd.slot = slot;
-    cmd.bufferL = nullptr;
-    cmd.bufferR = nullptr;
-    cmd.length = 0;
-    cmd.callback = callback;
-
-    return s_commandQueue.push(cmd);
+    return result;
 }
 
 bool presetExists(uint8_t slot) {
@@ -439,12 +345,7 @@ bool presetExists(uint8_t slot) {
     if (slot < 1 || slot > 4) {
         return false;
     }
-    // Read from cached state - NEVER touch SD from outside the SD thread
     return s_slotHasPreset[slot];
-}
-
-bool isBusy() {
-    return s_busy;
 }
 
 }

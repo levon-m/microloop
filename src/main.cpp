@@ -53,10 +53,6 @@ void displayThreadEntry() {
     Ssd1306Display::threadLoop();  // Never returns
 }
 
-void sdThreadEntry() {
-    SdCardStorage::threadLoop();  // Never returns
-}
-
 void appThreadEntry() {
     App::threadLoop();  // Never returns
 }
@@ -170,10 +166,10 @@ void setup() {
     int inputThreadId = threads.addThread(inputThreadEntry, 2048);
     int mcpThreadId = threads.addThread(mcpThreadEntry, 2048);
     int displayThreadId = threads.addThread(displayThreadEntry, 2048);
-    int sdThreadId = threads.addThread(sdThreadEntry, 8192);  // 8KB stack for SD operations (FAT + I/O needs headroom)
-    int appThreadId = threads.addThread(appThreadEntry, 3072);
+    // 16KB stack: App thread runs blocking SD save/load/delete operations
+    int appThreadId = threads.addThread(appThreadEntry, 16384);
 
-    if (ioThreadId < 0 || inputThreadId < 0 || mcpThreadId < 0 || displayThreadId < 0 || sdThreadId < 0 || appThreadId < 0) {
+    if (ioThreadId < 0 || inputThreadId < 0 || mcpThreadId < 0 || displayThreadId < 0 || appThreadId < 0) {
         Serial.println("ERROR: Thread creation failed!");
         while (1);  // Halt
     }

@@ -11,21 +11,15 @@
  *
  * DESIGN:
  * - Works with StutterAudio buffer via accessor methods
- * - Uses SdCardStorage HAL for async file operations
+ * - Uses SdCardStorage HAL for synchronous file operations
  * - Tracks FUNC button state with grace period for cross-bus timing
  * - LED states: OFF (empty), ON (written), beat-sync blink (selected)
- * - Operations are non-blocking; completion handled via polling
- *
- * THREAD SAFETY:
- * - SD thread only writes a minimal result event struct
- * - App thread polls pollSdEvents() to process results
- * - All state mutations happen in App thread (no cross-thread races)
+ * - Operations are blocking (run in App thread)
  *
  * CONSTRAINTS:
  * - All actions only allowed in IDLE states (IDLE_NO_LOOP or IDLE_WITH_LOOP)
  * - Cannot overwrite preset - must delete first then write
  * - New capture while preset selected deselects that preset
- * - Only one SD operation at a time (busy check)
  */
 
 #pragma once
@@ -33,18 +27,6 @@
 #include <Arduino.h>
 #include "StutterAudio.h"
 #include "SdCardStorage.h"
-#include "SpscQueue.h"
-
-/**
- * Result event from SD thread - minimal POD struct
- * Passed via SpscQueue from SD thread to App thread
- */
-struct SdResultEvent {
-    SdCardStorage::SdOperation op;
-    uint8_t slot;
-    SdCardStorage::SdResult result;
-    uint32_t length;
-};
 
 class PresetController {
 public:
@@ -102,13 +84,6 @@ public:
     void updateLEDs();
 
     /**
-     * Poll for SD operation completion events (call from App::threadLoop)
-     * Processes results from SD thread and updates state
-     * All state mutations happen here (in App thread) for thread safety
-     */
-    void pollSdEvents();
-
-    /**
      * Check if SD card is available for preset operations
      */
     bool isEnabled() const { return m_sdCardPresent; }
@@ -122,11 +97,6 @@ public:
      * Check if a preset slot has data
      */
     bool presetExists(uint8_t slot) const;
-
-    /**
-     * Check if an SD operation is in progress
-     */
-    bool isBusy() const { return m_operationInProgress; }
 
 private:
     StutterAudio& m_stutter;
@@ -151,15 +121,6 @@ private:
     // Beat LED tracking for sync
     bool m_lastBeatLedState;
 
-    // Async operation tracking
-    volatile bool m_operationInProgress;
-    uint8_t m_pendingSlot;  // Slot being operated on
-
-    // Lock-free queue for SD thread -> App thread event passing
-    // SD thread = single producer, App thread = single consumer
-    // Size 4 is sufficient since we only allow one operation at a time
-    static SpscQueue<SdResultEvent, 4> s_eventQueue;
-
     /**
      * Check if FUNC is effectively held (including grace period)
      */
@@ -171,19 +132,19 @@ private:
     bool isStutterIdle() const;
 
     /**
-     * Request async save of current loop to preset slot
+     * Execute synchronous save of current loop to preset slot
      */
-    bool requestSave(uint8_t slot);
+    void executeSave(uint8_t slot);
 
     /**
-     * Request async load of preset into current loop buffer
+     * Execute synchronous load of preset into current loop buffer
      */
-    bool requestLoad(uint8_t slot);
+    void executeLoad(uint8_t slot);
 
     /**
-     * Request async delete of preset from SD card
+     * Execute synchronous delete of preset from SD card
      */
-    bool requestDelete(uint8_t slot);
+    void executeDelete(uint8_t slot);
 
     /**
      * Deselect current preset (switch to "scratch" mode)
@@ -199,15 +160,4 @@ private:
      * Show status message on display
      */
     void showStatus(const char* message);
-
-    // Static callback handlers (bridge to instance methods)
-    static void onSaveComplete(SdCardStorage::SdOperation op, uint8_t slot,
-                               SdCardStorage::SdResult result, uint32_t length);
-    static void onLoadComplete(SdCardStorage::SdOperation op, uint8_t slot,
-                               SdCardStorage::SdResult result, uint32_t length);
-    static void onDeleteComplete(SdCardStorage::SdOperation op, uint8_t slot,
-                                 SdCardStorage::SdResult result, uint32_t length);
-
-    // Singleton instance pointer for static callbacks
-    static PresetController* s_instance;
 };
