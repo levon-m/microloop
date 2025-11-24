@@ -32,7 +32,7 @@ bool PresetController::begin() {
     if (!m_sdCardPresent) {
         // Show error on display
         showError("No SD Card");
-        Serial.println("PresetController: SD card not present - preset feature disabled");
+        // Serial.println("PresetController: SD card not present - preset feature disabled");
         return false;
     }
 
@@ -42,15 +42,15 @@ bool PresetController::begin() {
         if (m_presetExists[i]) {
             // Turn on LED for existing preset (solid = written, not selected)
             digitalWrite(PRESET_LED_PINS[i], HIGH);
-            Serial.print("PresetController: Found preset ");
-            Serial.println(i + 1);
+            // Serial.print("PresetController: Found preset ");
+            // Serial.println(i + 1);
         }
     }
 
     // No preset selected at startup
     m_selectedPreset = 0;
 
-    Serial.println("PresetController: Initialized");
+    // Serial.println("PresetController: Initialized");
     return true;
 }
 
@@ -59,10 +59,10 @@ void PresetController::handleButtonPress(uint8_t slot) {
         return;
     }
 
-    Serial.print("PresetController: Button ");
-    Serial.print(slot);
-    Serial.print(" pressed, selected=");
-    Serial.println(m_selectedPreset);
+    // Serial.print("PresetController: Button ");
+    // Serial.print(slot);
+    // Serial.print(" pressed, selected=");
+    // Serial.println(m_selectedPreset);
 
     // Check if SD card is available
     if (!m_sdCardPresent) {
@@ -72,8 +72,8 @@ void PresetController::handleButtonPress(uint8_t slot) {
 
     // Check if stutter is in idle state (required for all preset actions)
     if (!isStutterIdle()) {
-        Serial.print("PresetController: Action blocked - stutter state=");
-        Serial.println(static_cast<int>(m_stutter.getState()));
+        // Serial.print("PresetController: Action blocked - stutter state=");
+        // Serial.println(static_cast<int>(m_stutter.getState()));
         return;
     }
 
@@ -85,31 +85,31 @@ void PresetController::handleButtonPress(uint8_t slot) {
         // FUNC held - either save or delete
         if (slotHasData) {
             // FUNC + written preset = DELETE
-            Serial.print("PresetController: Deleting preset ");
-            Serial.println(slot);
+            // Serial.print("PresetController: Deleting preset ");
+            // Serial.println(slot);
             executeDelete(slot);
         } else {
             // FUNC + empty preset = SAVE (only if we have a loop)
             if (m_stutter.getState() == StutterState::IDLE_WITH_LOOP) {
-                Serial.print("PresetController: Saving to preset ");
-                Serial.println(slot);
+                // Serial.print("PresetController: Saving to preset ");
+                // Serial.println(slot);
                 executeSave(slot);
             } else {
-                Serial.println("PresetController: Cannot save - no loop captured");
+                // Serial.println("PresetController: Cannot save - no loop captured");
             }
         }
     } else {
         // No FUNC - select/load preset
         if (slotHasData) {
             // Click written preset = LOAD and SELECT
-            Serial.print("PresetController: Loading preset ");
-            Serial.println(slot);
+            // Serial.print("PresetController: Loading preset ");
+            // Serial.println(slot);
             executeLoad(slot);
         } else {
             // Click empty preset - do nothing
-            Serial.print("PresetController: Preset ");
-            Serial.print(slot);
-            Serial.println(" is empty");
+            // Serial.print("PresetController: Preset ");
+            // Serial.print(slot);
+            // Serial.println(" is empty");
         }
     }
 }
@@ -131,11 +131,11 @@ void PresetController::handleFuncRelease() {
 void PresetController::onCaptureComplete() {
     // User captured a new loop - deselect any current preset
     // The new loop is now "scratch work" not associated with any preset
-    Serial.print("PresetController: onCaptureComplete called, m_selectedPreset=");
-    Serial.println(m_selectedPreset);
+    // Serial.print("PresetController: onCaptureComplete called, m_selectedPreset=");
+    // Serial.println(m_selectedPreset);
     if (m_selectedPreset != 0) {
-        Serial.print("PresetController: Capture complete - deselecting preset ");
-        Serial.println(m_selectedPreset);
+        // Serial.print("PresetController: Capture complete - deselecting preset ");
+        // Serial.println(m_selectedPreset);
         deselectPreset();
     }
 }
@@ -192,11 +192,11 @@ void PresetController::executeSave(uint8_t slot) {
     uint32_t length = m_stutter.getCaptureLength();
 
     if (!bufferL || !bufferR || length == 0) {
-        Serial.println("PresetController ERROR: No loop data");
+        // Serial.println("PresetController ERROR: No loop data");
         return;
     }
 
-    Serial.println("PresetController: Saving...");
+    // Serial.println("PresetController: Saving...");
 
     // Execute synchronous save
     SdCardStorage::SdResult result = SdCardStorage::saveSync(slot, bufferL, bufferR, length);
@@ -204,11 +204,11 @@ void PresetController::executeSave(uint8_t slot) {
     if (result == SdCardStorage::SdResult::SUCCESS) {
         m_presetExists[index] = true;
         m_selectedPreset = slot;  // Auto-select after save
-        Serial.print("PresetController: Save complete - preset ");
-        Serial.println(slot);
+        // Serial.print("PresetController: Save complete - preset ");
+        // Serial.println(slot);
     } else {
-        Serial.print("PresetController: Save failed with error ");
-        Serial.println(static_cast<int>(result));
+        // Serial.print("PresetController: Save failed with error ");
+        // Serial.println(static_cast<int>(result));
     }
 }
 
@@ -222,11 +222,11 @@ void PresetController::executeLoad(uint8_t slot) {
     int16_t* bufferR = m_stutter.getBufferR();
 
     if (!bufferL || !bufferR) {
-        Serial.println("PresetController ERROR: Buffer error");
+        // Serial.println("PresetController ERROR: Buffer error");
         return;
     }
 
-    Serial.println("PresetController: Loading...");
+    // Serial.println("PresetController: Loading...");
 
     // Execute synchronous load
     uint32_t outLength = 0;
@@ -240,14 +240,14 @@ void PresetController::executeLoad(uint8_t slot) {
         // Select this preset
         m_selectedPreset = slot;
 
-        Serial.print("PresetController: Load complete - preset ");
-        Serial.print(slot);
-        Serial.print(" (");
-        Serial.print(outLength);
-        Serial.println(" samples)");
+        // Serial.print("PresetController: Load complete - preset ");
+        // Serial.print(slot);
+        // Serial.print(" (");
+        // Serial.print(outLength);
+        // Serial.println(" samples)");
     } else {
-        Serial.print("PresetController: Load failed with error ");
-        Serial.println(static_cast<int>(result));
+        // Serial.print("PresetController: Load failed with error ");
+        // Serial.println(static_cast<int>(result));
     }
 }
 
@@ -258,7 +258,7 @@ void PresetController::executeDelete(uint8_t slot) {
 
     uint8_t index = slot - 1;
 
-    Serial.println("PresetController: Deleting...");
+    // Serial.println("PresetController: Deleting...");
 
     // Execute synchronous delete
     SdCardStorage::SdResult result = SdCardStorage::deleteSync(slot);
@@ -274,11 +274,11 @@ void PresetController::executeDelete(uint8_t slot) {
         // Turn off LED
         digitalWrite(PRESET_LED_PINS[index], LOW);
 
-        Serial.print("PresetController: Delete complete - preset ");
-        Serial.println(slot);
+        // Serial.print("PresetController: Delete complete - preset ");
+        // Serial.println(slot);
     } else {
-        Serial.print("PresetController: Delete failed with error ");
-        Serial.println(static_cast<int>(result));
+        // Serial.print("PresetController: Delete failed with error ");
+        // Serial.println(static_cast<int>(result));
     }
 }
 
@@ -296,12 +296,14 @@ void PresetController::deselectPreset() {
 
 void PresetController::showError(const char* message) {
     // Serial only - no OLED during preset operations to avoid stack issues
-    Serial.print("PresetController ERROR: ");
-    Serial.println(message);
+    // Serial.print("PresetController ERROR: ");
+    // Serial.println(message);
+    (void)message;  // Suppress unused parameter warning
 }
 
 void PresetController::showStatus(const char* message) {
     // Serial only - no OLED during preset operations to avoid stack issues
-    Serial.print("PresetController: ");
-    Serial.println(message);
+    // Serial.print("PresetController: ");
+    // Serial.println(message);
+    (void)message;  // Suppress unused parameter warning
 }

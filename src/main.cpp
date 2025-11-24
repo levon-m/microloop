@@ -166,7 +166,7 @@ void setup() {
     int inputThreadId = threads.addThread(inputThreadEntry, 2048);
     int mcpThreadId = threads.addThread(mcpThreadEntry, 2048);
     int displayThreadId = threads.addThread(displayThreadEntry, 2048);
-    // 16KB stack: App thread runs blocking SD save/load/delete operations
+    // 8KB stack: App thread runs blocking SD save/load/delete operations
     int appThreadId = threads.addThread(appThreadEntry, 16384);
 
     if (ioThreadId < 0 || inputThreadId < 0 || mcpThreadId < 0 || displayThreadId < 0 || appThreadId < 0) {

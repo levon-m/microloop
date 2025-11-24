@@ -39,6 +39,10 @@ static PresetController* s_presetController = nullptr;  // Preset save/load cont
 static constexpr uint8_t LED_PIN = 38;
 static uint64_t s_ledOffSample = 0;  // Sample position when LED should turn off (0 = LED off)
 
+// ========== PRESET BUTTON GPIO PINS ==========
+static constexpr uint8_t PRESET_PINS[4] = { 40, 41, 27, 26 };  // Preset 1-4 buttons (active-low)
+static bool s_presetLastState[4] = { true, true, true, true }; // true = released (HIGH)
+
 // ========== TRANSPORT STATE ==========
 static bool s_transportActive = false;  // Is sequencer running?
 
@@ -169,29 +173,38 @@ static void processInputCommands() {
 }
 
 /**
- * Process preset button inputs from MCP23017
+ * Process preset button inputs from direct GPIO pins
  * Handles preset save/load/delete via PresetController
+ * Buttons are active-low with INPUT_PULLUP, detect falling edge (HIGH→LOW)
  */
 static void processPresetButtons() {
-    // Check each preset button (1-4) - always check even if SD not present for debug
+    // Debug: periodic state dump (every 2 seconds)
+    // static uint32_t lastDebugTime = 0;
+    // uint32_t now = millis();
+    // if (now - lastDebugTime >= 2000) {
+    //     lastDebugTime = now;
+    //     Serial.print("Preset GPIO: ");
+    //     for (uint8_t i = 0; i < 4; i++) {
+    //         Serial.print(digitalRead(PRESET_PINS[i]) ? "1" : "0");
+    //     }
+    //     Serial.println();
+    // }
+
     for (uint8_t i = 0; i < 4; i++) {
-        if (Mcp23017Input::getPresetButton(i)) {
-            // Button pressed (one-shot flag consumed)
-            Serial.print("Preset button ");
-            Serial.print(i + 1);
-            Serial.println(" pressed");
+        bool currentState = digitalRead(PRESET_PINS[i]);  // HIGH = released, LOW = pressed
 
-            if (!s_presetController) {
-                Serial.println("  -> PresetController is null!");
-                continue;
-            }
-            if (!s_presetController->isEnabled()) {
-                Serial.println("  -> PresetController disabled (no SD card)");
-                continue;
-            }
+        // Detect falling edge (HIGH → LOW) = button press
+        if (s_presetLastState[i] && !currentState) {
+            // Serial.print("Preset button ");
+            // Serial.print(i + 1);
+            // Serial.println(" pressed");
 
-            s_presetController->handleButtonPress(i + 1);  // Convert to 1-indexed slot
+            if (s_presetController && s_presetController->isEnabled()) {
+                s_presetController->handleButtonPress(i + 1);  // Convert to 1-indexed slot
+            }
         }
+
+        s_presetLastState[i] = currentState;
     }
 }
 
@@ -327,6 +340,23 @@ void App::begin() {
     analogWrite(28, 0);   // R off
     analogWrite(36, 0);   // G off
     analogWrite(37, 0);   // B off
+
+    // Configure preset button GPIO pins (active-low, internal pullup)
+    for (uint8_t i = 0; i < 4; i++) {
+        pinMode(PRESET_PINS[i], INPUT_PULLUP);
+    }
+
+    // Debug: Print initial state of preset buttons
+    // Serial.println("Preset GPIO pins configured:");
+    // for (uint8_t i = 0; i < 4; i++) {
+    //     bool state = digitalRead(PRESET_PINS[i]);
+    //     Serial.print("  Preset ");
+    //     Serial.print(i + 1);
+    //     Serial.print(" (pin ");
+    //     Serial.print(PRESET_PINS[i]);
+    //     Serial.print("): ");
+    //     Serial.println(state ? "HIGH (released)" : "LOW (pressed)");
+    // }
 
     // Initialize subsystems
     EffectQuantization::initialize();
