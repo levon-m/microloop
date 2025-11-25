@@ -122,11 +122,11 @@ static SdResult executeSave(uint8_t slot, const int16_t* bufferL,
         return SdResult::ERROR_INVALID_SLOT;
     }
 
-    // Serial.print("SdCardStorage: Saving preset ");
-    // Serial.print(slot);
-    // Serial.print(" (");
-    // Serial.print(length);
-    // Serial.println(" samples)...");
+    Serial.print("SdCardStorage: Saving preset ");
+    Serial.print(slot);
+    Serial.print(" (");
+    Serial.print(length);
+    Serial.println(" samples)...");
 
     // Delete existing file first (if any)
     if (SD.exists(fileName)) {
@@ -136,7 +136,7 @@ static SdResult executeSave(uint8_t slot, const int16_t* bufferL,
     // Open file for writing
     File file = SD.open(fileName, FILE_WRITE);
     if (!file) {
-        // Serial.println("ERROR: Failed to create file");
+        Serial.println("ERROR: Failed to create file");
         return SdResult::ERROR_FILE_CREATE;
     }
 
@@ -144,6 +144,7 @@ static SdResult executeSave(uint8_t slot, const int16_t* bufferL,
     memcpy(s_sdScratch, &length, sizeof(uint32_t));
     size_t written = file.write(s_sdScratch, sizeof(uint32_t));
     if (written != sizeof(uint32_t)) {
+        Serial.println("ERROR: Failed to write header");
         file.close();
         SD.remove(fileName);
         return SdResult::ERROR_WRITE_FAILED;
@@ -154,7 +155,7 @@ static SdResult executeSave(uint8_t slot, const int16_t* bufferL,
     if (!writeChunked(file, (const uint8_t*)bufferL, bytesToWrite)) {
         file.close();
         SD.remove(fileName);
-        // Serial.println("ERROR: Failed to write left channel");
+        Serial.println("ERROR: Failed to write left channel");
         return SdResult::ERROR_WRITE_FAILED;
     }
 
@@ -162,19 +163,19 @@ static SdResult executeSave(uint8_t slot, const int16_t* bufferL,
     if (!writeChunked(file, (const uint8_t*)bufferR, bytesToWrite)) {
         file.close();
         SD.remove(fileName);
-        // Serial.println("ERROR: Failed to write right channel");
+        Serial.println("ERROR: Failed to write right channel");
         return SdResult::ERROR_WRITE_FAILED;
     }
 
     file.close();
 
-    // Serial.print("SdCardStorage: Saved preset ");
-    // Serial.print(slot);
-    // Serial.print(" (");
-    // Serial.print((length * 4 + 4) / 1024);
-    // Serial.println(" KB)");
+    Serial.print("SdCardStorage: Saved preset ");
+    Serial.print(slot);
+    Serial.print(" (");
+    Serial.print((length * 4 + 4) / 1024);
+    Serial.println(" KB)");
 
-    // Serial.println("SdCardStorage: save finished OK");
+    Serial.println("SdCardStorage: save finished OK");
     return SdResult::SUCCESS;
 }
 
@@ -200,22 +201,23 @@ static SdResult executeLoad(uint8_t slot, int16_t* bufferL,
         return SdResult::ERROR_INVALID_SLOT;
     }
 
-    // Serial.print("SdCardStorage: Loading preset ");
-    // Serial.print(slot);
-    // Serial.println("...");
+    Serial.print("SdCardStorage: Loading preset ");
+    Serial.print(slot);
+    Serial.println("...");
 
     uint32_t captureLength = 0;
 
     // Open file for reading
     File file = SD.open(fileName, FILE_READ);
     if (!file) {
-        // Serial.println("ERROR: File not found");
+        Serial.println("ERROR: File not found");
         return SdResult::ERROR_FILE_NOT_FOUND;
     }
 
     // Read header: capture length (4 bytes) via scratch buffer
     size_t bytesRead = file.read(s_sdScratch, sizeof(uint32_t));
     if (bytesRead != sizeof(uint32_t)) {
+        Serial.println("ERROR: Failed to read header");
         file.close();
         return SdResult::ERROR_READ_FAILED;
     }
@@ -237,25 +239,25 @@ static SdResult executeLoad(uint8_t slot, int16_t* bufferL,
     size_t bytesToRead = captureLength * sizeof(int16_t);
     if (!readChunked(file, (uint8_t*)bufferL, bytesToRead)) {
         file.close();
-        // Serial.println("ERROR: Failed to read left channel");
+        Serial.println("ERROR: Failed to read left channel");
         return SdResult::ERROR_READ_FAILED;
     }
 
     // Read right channel data
     if (!readChunked(file, (uint8_t*)bufferR, bytesToRead)) {
         file.close();
-        // Serial.println("ERROR: Failed to read right channel");
+        Serial.println("ERROR: Failed to read right channel");
         return SdResult::ERROR_READ_FAILED;
     }
 
     file.close();
     outLength = captureLength;
 
-    // Serial.print("SdCardStorage: Loaded preset ");
-    // Serial.print(slot);
-    // Serial.print(" (");
-    // Serial.print(captureLength);
-    // Serial.println(" samples)");
+    Serial.print("SdCardStorage: Loaded preset ");
+    Serial.print(slot);
+    Serial.print(" (");
+    Serial.print(captureLength);
+    Serial.println(" samples)");
 
     return SdResult::SUCCESS;
 }
@@ -278,53 +280,55 @@ static SdResult executeDelete(uint8_t slot) {
 
     // Check if file exists
     bool fileExists = SD.exists(fileName);
+
     bool deleteSuccess = false;
     if (fileExists) {
         deleteSuccess = SD.remove(fileName);
     }
 
     if (!fileExists) {
-        // Serial.print("SdCardStorage: Preset ");
-        // Serial.print(slot);
-        // Serial.println(" already empty");
+        Serial.print("SdCardStorage: Preset ");
+        Serial.print(slot);
+        Serial.println(" already empty");
         return SdResult::SUCCESS;
     }
 
     if (deleteSuccess) {
-        // Serial.print("SdCardStorage: Deleted preset ");
-        // Serial.println(slot);
-        // Serial.println("SdCardStorage: delete finished OK");
+        Serial.print("SdCardStorage: Deleted preset ");
+        Serial.println(slot);
         return SdResult::SUCCESS;
     }
 
-    // Serial.println("ERROR: Failed to delete");
+    Serial.println("ERROR: Failed to delete");
     return SdResult::ERROR_DELETE_FAILED;
 }
 
 // ========== PUBLIC API ==========
 
 bool begin() {
+    Serial.println("SdCardStorage: begin() START");
     // Teensy 4.1 uses built-in SDIO interface (no chip select pin needed)
     if (SD.begin(BUILTIN_SDCARD)) {
         s_cardInitialized = true;
-        // Serial.println("SdCardStorage: SD card initialized (SDIO)");
+        Serial.println("SdCardStorage: SD card initialized (SDIO)");
 
         // One-time scan for existing presets at boot
         for (uint8_t slot = 1; slot <= 4; ++slot) {
             char name[16];
             snprintf(name, sizeof(name), "preset%d.bin", slot);
             s_slotHasPreset[slot] = SD.exists(name);
-            // if (s_slotHasPreset[slot]) {
-            //     Serial.print("  Found preset ");
-            //     Serial.println(slot);
-            // }
+            if (s_slotHasPreset[slot]) {
+                Serial.print("  Found preset ");
+                Serial.println(slot);
+            }
         }
 
+        Serial.println("SdCardStorage: begin() END (success)");
         return true;
     }
 
     s_cardInitialized = false;
-    // Serial.println("ERROR: SdCardStorage - SD card not detected!");
+    Serial.println("ERROR: SdCardStorage - SD card not detected!");
     return false;
 }
 

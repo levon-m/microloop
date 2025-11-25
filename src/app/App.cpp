@@ -195,17 +195,21 @@ static void processPresetButtons() {
 
         // Detect falling edge (HIGH → LOW) = button press
         if (s_presetLastState[i] && !currentState) {
-            // Serial.print("Preset button ");
-            // Serial.print(i + 1);
-            // Serial.println(" pressed");
+            Serial.print("App: Preset button ");
+            Serial.print(i + 1);
+            Serial.println(" pressed (GPIO edge detected)");
 
             if (s_presetController && s_presetController->isEnabled()) {
+                Serial.println("App: Calling PresetController::handleButtonPress...");
                 s_presetController->handleButtonPress(i + 1);  // Convert to 1-indexed slot
+                Serial.println("App: PresetController::handleButtonPress RETURNED");
+                Serial.println("App: [P1] About to continue from button handler");
             }
         }
 
         s_presetLastState[i] = currentState;
     }
+    Serial.println("App: [P2] processPresetButtons complete");
 }
 
 /**
@@ -347,16 +351,16 @@ void App::begin() {
     }
 
     // Debug: Print initial state of preset buttons
-    // Serial.println("Preset GPIO pins configured:");
-    // for (uint8_t i = 0; i < 4; i++) {
-    //     bool state = digitalRead(PRESET_PINS[i]);
-    //     Serial.print("  Preset ");
-    //     Serial.print(i + 1);
-    //     Serial.print(" (pin ");
-    //     Serial.print(PRESET_PINS[i]);
-    //     Serial.print("): ");
-    //     Serial.println(state ? "HIGH (released)" : "LOW (pressed)");
-    // }
+    Serial.println("Preset GPIO pins configured:");
+    for (uint8_t i = 0; i < 4; i++) {
+        bool state = digitalRead(PRESET_PINS[i]);
+        Serial.print("  Preset ");
+        Serial.print(i + 1);
+        Serial.print(" (pin ");
+        Serial.print(PRESET_PINS[i]);
+        Serial.print("): ");
+        Serial.println(state ? "HIGH (released)" : "LOW (pressed)");
+    }
 
     // Initialize subsystems
     EffectQuantization::initialize();
@@ -396,15 +400,38 @@ void App::begin() {
 }
 
 void App::threadLoop() {
+    static uint32_t s_loopCounter = 0;
+    static uint32_t s_lastHeartbeat = 0;
+
     for (;;) {
         // Main application loop - organized into logical sections
         // Each section is implemented as a separate function for clarity
+
+        s_loopCounter++;
+
+        // Heartbeat every 2 seconds to verify loop is running
+        uint32_t nowHb = millis();
+        if (nowHb - s_lastHeartbeat >= 2000) {
+            s_lastHeartbeat = nowHb;
+            Serial.print("App::threadLoop HEARTBEAT - iteration ");
+            Serial.print(s_loopCounter);
+            Serial.print(", millis=");
+            Serial.println(nowHb);
+        }
 
         // 1. Process button presses and effect commands
         processInputCommands();
 
         // 2. Process preset button inputs
         processPresetButtons();
+
+        // Debug: Check if we survived preset button processing
+        // static uint32_t s_lastPresetDebug = 0;
+        // uint32_t nowPst = millis();
+        // if (nowPst - s_lastPresetDebug >= 3000) {
+        //     s_lastPresetDebug = nowPst;
+        //     Serial.println("App: processPresetButtons completed");
+        // }
 
         // 3. Update encoder menu handlers (parameter editing)
         updateEncoders();
@@ -423,18 +450,80 @@ void App::threadLoop() {
 
         // 8. Update preset LEDs (beat-synced for selected preset)
         if (s_presetController) {
+            // Debug: Track if updateLEDs hangs
+            static bool s_inCall = false;
+            static uint32_t s_callStartTime = 0;
+            static uint32_t s_lastWarnTime = 0;
+
+            // Detect if we're stuck in updateLEDs
+            if (s_inCall) {
+                uint32_t elapsed = millis() - s_callStartTime;
+                if (elapsed > 1000 && (millis() - s_lastWarnTime > 1000)) {
+                    Serial.print("App: WARNING - updateLEDs has been running for ");
+                    Serial.print(elapsed);
+                    Serial.println(" ms!");
+                    s_lastWarnTime = millis();
+                }
+            }
+
+            s_inCall = true;
+            s_callStartTime = millis();
             s_presetController->updateLEDs();
+            s_inCall = false;
+
+            // Debug after updateLEDs returns
+            static bool s_afterSave = false;
+            static uint32_t s_afterSaveTime = 0;
+            if (s_presetController->getSelectedPreset() != 0 && !s_afterSave) {
+                s_afterSave = true;
+                s_afterSaveTime = millis();
+                Serial.println("App: [X1] updateLEDs returned after save");
+            }
+
+            if (s_afterSave && (millis() - s_afterSaveTime < 3000)) {
+                Serial.println("App: [X2] About to process periodic debug");
+            }
         }
 
         // 9. Periodic debug output (optional)
+        static bool s_afterSave = false;
+        static uint32_t s_afterSaveTime = 0;
+        if (s_presetController && s_presetController->getSelectedPreset() != 0 && !s_afterSave) {
+            s_afterSave = true;
+            s_afterSaveTime = millis();
+        }
+
+        if (s_afterSave && (millis() - s_afterSaveTime < 3000)) {
+            Serial.println("App: [X3] About to check PRINT_INTERVAL_MS");
+        }
+
         uint32_t now = millis();
         if (now - s_lastPrint >= PRINT_INTERVAL_MS) {
             s_lastPrint = now;
             // Optional: Print status here
         }
 
+        if (s_afterSave && (millis() - s_afterSaveTime < 3000)) {
+            Serial.println("App: [X4] About to call threads.delay(2)");
+        }
+
         // 10. Yield CPU to other threads
         threads.delay(2);
+
+        if (s_afterSave && (millis() - s_afterSaveTime < 3000)) {
+            Serial.println("App: [X5] threads.delay(2) returned");
+        }
+
+        // Debug: Verify we completed the loop iteration
+        static uint32_t s_lastIterComplete = 0;
+        if (millis() - s_lastIterComplete >= 3000) {
+            s_lastIterComplete = millis();
+            Serial.println("App: [X6] Loop iteration completed");
+        }
+
+        if (s_afterSave && (millis() - s_afterSaveTime >= 3000)) {
+            s_afterSave = false;
+        }
     }
 }
 
