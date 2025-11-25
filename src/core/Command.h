@@ -48,6 +48,10 @@ enum class CommandType : uint8_t {
     EFFECT_DISABLE = 3,  // Force disable effect (regardless of current state)
     EFFECT_SET_PARAM = 4, // Set effect parameter (uses param1 as index, value as data)
 
+    // Preset control commands
+    PRESET_BUTTON_PRESS = 5,   // Preset button pressed (param1 = preset slot 1-4)
+    PRESET_BUTTON_RELEASE = 6, // Preset button released (param1 = preset slot 1-4)
+
     // Future: Transport control (MIDI START/STOP/CONTINUE)
     // TRANSPORT_PLAY = 10,
     // TRANSPORT_STOP = 11,

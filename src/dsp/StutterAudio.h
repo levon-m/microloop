@@ -118,6 +118,44 @@ public:
 
     void setStutterHeld(bool held) { m_stutterHeld = held; }
 
+    // ========== BUFFER ACCESS (for preset save/load) ==========
+
+    /**
+     * Get pointer to left channel buffer
+     * Used by PresetController for SD card save/load
+     */
+    int16_t* getBufferL() { return m_stutterBufferL; }
+
+    /**
+     * Get pointer to right channel buffer
+     * Used by PresetController for SD card save/load
+     */
+    int16_t* getBufferR() { return m_stutterBufferR; }
+
+    /**
+     * Get current capture length in samples
+     */
+    uint32_t getCaptureLength() const { return m_captureLength; }
+
+    /**
+     * Set capture length (used when loading preset)
+     */
+    void setCaptureLength(uint32_t length) { m_captureLength = length; }
+
+    /**
+     * Transition to IDLE_WITH_LOOP state (used after loading preset)
+     */
+    void setStateWithLoop() {
+        m_state = StutterState::IDLE_WITH_LOOP;
+        m_readPos = 0;
+        m_writePos = m_captureLength;
+    }
+
+    /**
+     * Get maximum buffer size in samples
+     */
+    static constexpr size_t getMaxBufferSize() { return STUTTER_BUFFER_SAMPLES; }
+
     void setLengthMode(StutterLength mode) { m_lengthMode = mode; }
     StutterLength getLengthMode() const { return m_lengthMode; }
 

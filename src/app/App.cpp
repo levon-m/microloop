@@ -15,6 +15,7 @@
 #include "FreezeController.h"
 #include "StutterController.h"
 #include "GlobalController.h"
+#include "PresetController.h"
 #include "AppState.h"
 
 #include <TeensyThreads.h>
@@ -32,10 +33,15 @@ static ChokeController* s_chokeController = nullptr;    // Choke effect controll
 static FreezeController* s_freezeController = nullptr;  // Freeze effect controller
 static StutterController* s_stutterController = nullptr;
 static GlobalController* s_globalController = nullptr;  // Global parameters controller
+static PresetController* s_presetController = nullptr;  // Preset save/load controller
 
 // ========== LED BEAT INDICATOR STATE ==========
 static constexpr uint8_t LED_PIN = 38;
 static uint64_t s_ledOffSample = 0;  // Sample position when LED should turn off (0 = LED off)
+
+// ========== PRESET BUTTON GPIO PINS ==========
+static constexpr uint8_t PRESET_PINS[4] = { 40, 41, 27, 26 };  // Preset 1-4 buttons (active-low)
+static bool s_presetLastState[4] = { true, true, true, true }; // true = released (HIGH)
 
 // ========== TRANSPORT STATE ==========
 static bool s_transportActive = false;  // Is sequencer running?
@@ -130,12 +136,23 @@ static void processInputCommands() {
             } else if (cmd.type == CommandType::EFFECT_DISABLE) {
                 handled = s_stutterController->handleButtonRelease(cmd);
             }
-        } else if (cmd.targetEffect == EffectID::FUNC && s_stutterController) {
+        } else if (cmd.targetEffect == EffectID::FUNC) {
             // FUNC is handled by stutter controller (modifier button)
+            // Also notify preset controller for FUNC+preset combos
             if (cmd.type == CommandType::EFFECT_ENABLE) {
-                handled = s_stutterController->handleButtonPress(cmd);
+                if (s_stutterController) {
+                    handled = s_stutterController->handleButtonPress(cmd);
+                }
+                if (s_presetController) {
+                    s_presetController->handleFuncPress();
+                }
             } else if (cmd.type == CommandType::EFFECT_DISABLE) {
-                handled = s_stutterController->handleButtonRelease(cmd);
+                if (s_stutterController) {
+                    handled = s_stutterController->handleButtonRelease(cmd);
+                }
+                if (s_presetController) {
+                    s_presetController->handleFuncRelease();
+                }
             }
         }
 
@@ -153,6 +170,46 @@ static void processInputCommands() {
             }
         }
     }
+}
+
+/**
+ * Process preset button inputs from direct GPIO pins
+ * Handles preset save/load/delete via PresetController
+ * Buttons are active-low with INPUT_PULLUP, detect falling edge (HIGH→LOW)
+ */
+static void processPresetButtons() {
+    // Debug: periodic state dump (every 2 seconds)
+    // static uint32_t lastDebugTime = 0;
+    // uint32_t now = millis();
+    // if (now - lastDebugTime >= 2000) {
+    //     lastDebugTime = now;
+    //     Serial.print("Preset GPIO: ");
+    //     for (uint8_t i = 0; i < 4; i++) {
+    //         Serial.print(digitalRead(PRESET_PINS[i]) ? "1" : "0");
+    //     }
+    //     Serial.println();
+    // }
+
+    for (uint8_t i = 0; i < 4; i++) {
+        bool currentState = digitalRead(PRESET_PINS[i]);  // HIGH = released, LOW = pressed
+
+        // Detect falling edge (HIGH → LOW) = button press
+        if (s_presetLastState[i] && !currentState) {
+            Serial.print("App: Preset button ");
+            Serial.print(i + 1);
+            Serial.println(" pressed (GPIO edge detected)");
+
+            if (s_presetController && s_presetController->isEnabled()) {
+                Serial.println("App: Calling PresetController::handleButtonPress...");
+                s_presetController->handleButtonPress(i + 1);  // Convert to 1-indexed slot
+                Serial.println("App: PresetController::handleButtonPress RETURNED");
+                Serial.println("App: [P1] About to continue from button handler");
+            }
+        }
+
+        s_presetLastState[i] = currentState;
+    }
+    Serial.println("App: [P2] processPresetButtons complete");
 }
 
 /**
@@ -288,6 +345,23 @@ void App::begin() {
     analogWrite(36, 0);   // G off
     analogWrite(37, 0);   // B off
 
+    // Configure preset button GPIO pins (active-low, internal pullup)
+    for (uint8_t i = 0; i < 4; i++) {
+        pinMode(PRESET_PINS[i], INPUT_PULLUP);
+    }
+
+    // Debug: Print initial state of preset buttons
+    Serial.println("Preset GPIO pins configured:");
+    for (uint8_t i = 0; i < 4; i++) {
+        bool state = digitalRead(PRESET_PINS[i]);
+        Serial.print("  Preset ");
+        Serial.print(i + 1);
+        Serial.print(" (pin ");
+        Serial.print(PRESET_PINS[i]);
+        Serial.print("): ");
+        Serial.println(state ? "HIGH (released)" : "LOW (pressed)");
+    }
+
     // Initialize subsystems
     EffectQuantization::initialize();
     DisplayManager::instance().initialize();
@@ -297,6 +371,17 @@ void App::begin() {
     s_freezeController = new FreezeController(freeze);
     s_stutterController = new StutterController(stutter);
     s_globalController = new GlobalController();
+    s_presetController = new PresetController(stutter);
+
+    // Initialize preset system (SD card)
+    s_presetController->begin();
+
+    // Set up capture complete callback to notify PresetController
+    s_stutterController->setCaptureCompleteCallback([]() {
+        if (s_presetController) {
+            s_presetController->onCaptureComplete();
+        }
+    });
 
     // Create encoder handlers
     s_encoder1 = new EncoderHandler::Handler(0);  // STUTTER parameters
@@ -315,36 +400,69 @@ void App::begin() {
 }
 
 void App::threadLoop() {
+    static uint32_t s_loopCounter = 0;
+    static uint32_t s_lastHeartbeat = 0;
+
     for (;;) {
         // Main application loop - organized into logical sections
         // Each section is implemented as a separate function for clarity
 
+        s_loopCounter++;
+
+        // Heartbeat every 2 seconds to verify loop is running
+        uint32_t nowHb = millis();
+        if (nowHb - s_lastHeartbeat >= 2000) {
+            s_lastHeartbeat = nowHb;
+            Serial.print("App::threadLoop HEARTBEAT - iteration ");
+            Serial.print(s_loopCounter);
+            Serial.print(", millis=");
+            Serial.println(nowHb);
+        }
+
         // 1. Process button presses and effect commands
         processInputCommands();
 
-        // 2. Update encoder menu handlers (parameter editing)
+        // 2. Process preset button inputs
+        processPresetButtons();
+
+        // Debug: Check if we survived preset button processing
+        // static uint32_t s_lastPresetDebug = 0;
+        // uint32_t nowPst = millis();
+        // if (nowPst - s_lastPresetDebug >= 3000) {
+        //     s_lastPresetDebug = nowPst;
+        //     Serial.println("App: processPresetButtons completed");
+        // }
+
+        // 3. Update encoder menu handlers (parameter editing)
         updateEncoders();
 
-        // 3. Update effect handler visual feedback
+        // 4. Update effect handler visual feedback
         updateEffectHandlers();
 
-        // 4. Process MIDI transport events (START/STOP/CONTINUE)
+        // 5. Process MIDI transport events (START/STOP/CONTINUE)
         processTransportEvents();
 
-        // 5. Process MIDI clock ticks (tempo tracking)
+        // 6. Process MIDI clock ticks (tempo tracking)
         processClockTicks();
 
-        // 6. Update beat indicator LED
+        // 7. Update beat indicator LED
         updateBeatLed();
 
-        // 7. Periodic debug output (optional)
+        // 8. Update preset LEDs (beat-synced for selected preset)
+        if (s_presetController) {
+            // Get beat LED state (same logic as beat indicator)
+            bool beatLedOn = (s_ledOffSample > 0 && Timebase::getSamplePosition() < s_ledOffSample);
+            s_presetController->updateLEDs(beatLedOn);
+        }
+
+        // 9. Periodic debug output (optional)
         uint32_t now = millis();
         if (now - s_lastPrint >= PRINT_INTERVAL_MS) {
             s_lastPrint = now;
             // Optional: Print status here
         }
 
-        // 8. Yield CPU to other threads
+        // 10. Yield CPU to other threads
         threads.delay(2);
     }
 }

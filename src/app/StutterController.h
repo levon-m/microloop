@@ -39,6 +39,9 @@ namespace EncoderHandler {
 // Callback type for checking if any other encoder is touched
 typedef bool (*AnyEncoderTouchedFn)(const EncoderHandler::Handler* ignore);
 
+// Callback type for capture complete notification
+typedef void (*CaptureCompleteCallback)();
+
 /**
  * Stutter effect controller
  *
@@ -90,6 +93,17 @@ public:
     void bindToEncoder(EncoderHandler::Handler& encoder,
                        AnyEncoderTouchedFn anyTouchedExcept);
 
+    /**
+     * Set callback for capture complete notification
+     * Called when a new loop capture completes (transitions to IDLE_WITH_LOOP)
+     * Used by PresetController to deselect preset when user captures new loop
+     *
+     * @param callback Function to call when capture completes
+     */
+    void setCaptureCompleteCallback(CaptureCompleteCallback callback) {
+        m_captureCompleteCallback = callback;
+    }
+
     // Utility functions for bitmap/name mapping
     // TODO: Re-enable when stutter parameter bitmaps are added
     // static BitmapID onsetToBitmap(StutterOnset onset);
@@ -118,4 +132,14 @@ private:
 
     // Effect state tracking for edge detection
     bool m_wasEnabled;              // Previous enabled state (for edge detection)
+
+    // Capture complete callback (for PresetController notification)
+    CaptureCompleteCallback m_captureCompleteCallback;
+
+    // Track previous state for capture complete detection
+    StutterState m_lastState;
+
+    // Track if we've been through a capture phase (for deferred callback)
+    // Set true when entering CAPTURING, cleared when callback fires or on IDLE_NO_LOOP
+    bool m_captureInProgress;
 };

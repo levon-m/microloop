@@ -146,6 +146,16 @@ target_include_directories(audio PUBLIC
 )
 target_link_libraries(audio teensy_core)
 
+# SD library (for preset storage)
+set(SD_LIB "${TEENSY_LIBS}/SD/src")
+set(SDFAT_LIB "${TEENSY_LIBS}/SdFat/src")
+file(GLOB SD_SOURCES "${SD_LIB}/*.cpp")
+file(GLOB SDFAT_SOURCES "${SDFAT_LIB}/*.cpp" "${SDFAT_LIB}/*/*.cpp")
+add_library(sd_card STATIC ${SD_SOURCES} ${SDFAT_SOURCES})
+target_include_directories(sd_card PUBLIC ${SD_LIB} ${SDFAT_LIB})
+target_link_libraries(sd_card teensy_core spi)
+message(STATUS "SD library found")
+
 # MIDI library (header-only)
 add_library(midi INTERFACE)
 target_include_directories(midi INTERFACE ${MIDI_LIB})
@@ -253,6 +263,10 @@ add_library(mcp_io STATIC src/hal/Mcp23017Input.cpp)
 target_include_directories(mcp_io PUBLIC src/hal src/core)
 target_link_libraries(mcp_io teensy_core teensy_threads wire mcp23017 busio)
 
+add_library(sd_io STATIC src/hal/SdCardStorage.cpp)
+target_include_directories(sd_io PUBLIC src/hal src/core)
+target_link_libraries(sd_io teensy_core sd_card)
+
 # DSP libraries (Audio Effects)
 add_library(effect_manager STATIC src/dsp/EffectManager.cpp)
 target_include_directories(effect_manager PUBLIC src/dsp)
@@ -299,6 +313,10 @@ add_library(global_controller STATIC src/app/GlobalController.cpp)
 target_include_directories(global_controller PUBLIC src/app src/dsp src/hal)
 target_link_libraries(global_controller teensy_core effect_quantization display_manager)
 
+add_library(preset_controller STATIC src/app/PresetController.cpp)
+target_include_directories(preset_controller PUBLIC src/app src/dsp src/hal src/core)
+target_link_libraries(preset_controller teensy_core audio_stutter sd_io oled_io microloop_utils)
+
 add_library(app_logic STATIC src/app/App.cpp)
 target_include_directories(app_logic PUBLIC src/app src/dsp src/hal src/core)
 target_link_libraries(app_logic
@@ -307,6 +325,8 @@ target_link_libraries(app_logic
     midi_io
     neokey_io
     oled_io
+    mcp_io
+    sd_io
     effect_manager
     microloop_utils
     effect_quantization
@@ -316,6 +336,7 @@ target_link_libraries(app_logic
     freeze_controller
     stutter_controller
     global_controller
+    preset_controller
 )
 
 # MAIN
@@ -337,6 +358,9 @@ target_link_libraries(microloop.elf
     midi_io
     neokey_io
     oled_io
+    mcp_io
+    sd_io
+    sd_card
     app_logic
     effect_manager
     effect_quantization
@@ -349,13 +373,13 @@ target_link_libraries(microloop.elf
     freeze_controller
     stutter_controller
     global_controller
+    preset_controller
     seesaw
     neopixel
     busio
     ssd1306
     gfx
     mcp23017
-    mcp_io
     microloop_utils
     m  # Math library
 )

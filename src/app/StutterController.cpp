@@ -22,7 +22,10 @@ StutterController::StutterController(StutterAudio& effect)
       m_stutterHeld(false),
       m_lastBlinkTime(0),
       m_ledBlinkState(false),
-      m_wasEnabled(false) {
+      m_wasEnabled(false),
+      m_captureCompleteCallback(nullptr),
+      m_lastState(StutterState::IDLE_NO_LOOP),
+      m_captureInProgress(false) {
 }
 
 BitmapID StutterController::stateToBitmap(StutterState state) {
@@ -404,17 +407,41 @@ void StutterController::updateVisualFeedback() {
 
     // ========== ISR STATE TRANSITION DETECTION ==========
     // Check for state changes that happened in ISR (scheduled events fired)
-    static StutterState s_lastState = StutterState::IDLE_NO_LOOP;
 
-    if (currentState != s_lastState) {
+    if (currentState != m_lastState) {
         // State changed - log it
         Serial.print("Stutter: State changed (");
-        Serial.print(static_cast<int>(s_lastState));
+        Serial.print(static_cast<int>(m_lastState));
         Serial.print(" → ");
         Serial.print(static_cast<int>(currentState));
         Serial.println(")");
 
-        s_lastState = currentState;
+        // Track if we've entered a capture state (set flag)
+        // This handles the case where capture → play → idle (flag persists through play)
+        bool enteringCapture = (currentState == StutterState::CAPTURING ||
+                               currentState == StutterState::WAIT_CAPTURE_END ||
+                               currentState == StutterState::WAIT_CAPTURE_START);
+        if (enteringCapture) {
+            m_captureInProgress = true;
+        }
+
+        // Check for capture complete: transition TO IDLE_WITH_LOOP while capture was in progress
+        // This handles: CAPTURING → PLAYING → IDLE_WITH_LOOP (common stutter flow)
+        bool nowIdleWithLoop = (currentState == StutterState::IDLE_WITH_LOOP);
+
+        if (m_captureInProgress && nowIdleWithLoop && m_captureCompleteCallback) {
+            // New capture completed - notify PresetController
+            Serial.println("StutterController: Capture complete - notifying PresetController");
+            m_captureCompleteCallback();
+            m_captureInProgress = false;  // Clear flag after callback
+        }
+
+        // Clear capture flag if we go back to no loop (capture was cancelled/failed)
+        if (currentState == StutterState::IDLE_NO_LOOP) {
+            m_captureInProgress = false;
+        }
+
+        m_lastState = currentState;
     }
 
     // ========== EDGE DETECTION FOR DISPLAY UPDATES ==========

@@ -6,6 +6,7 @@
 #include "NeokeyInput.h"
 #include "Ssd1306Display.h"
 #include "Mcp23017Input.h"
+#include "SdCardStorage.h"
 #include "FreezeAudio.h"
 #include "ChokeAudio.h"
 #include "StutterAudio.h"
@@ -35,6 +36,21 @@ AudioConnection patchCord10(choke, 1, i2s_out, 1);       // Choke → Right out
 
 // Teensy Audio Library SGTL5000 control
 AudioControlSGTL5000 codec;
+
+// Global thread IDs for debugging
+int g_ioThreadId = -1;
+int g_inputThreadId = -1;
+int g_mcpThreadId = -1;
+int g_displayThreadId = -1;
+int g_appThreadId = -1;
+
+// SD operation request from thread to main loop
+// threads.stop()/start() MUST be called from main loop, not from within a thread
+volatile bool g_sdOperationPending = false;
+volatile uint8_t g_sdOperationSlot = 0;
+volatile int g_sdOperationType = 0; // 0=none, 1=save, 2=load, 3=delete
+volatile bool g_sdOperationComplete = false;
+volatile int g_sdOperationResult = 0;
 
 void ioThreadEntry() {
     MidiInput::threadLoop();  // Never returns
@@ -95,6 +111,14 @@ void setup() {
     MidiInput::begin();
     Serial.println("MIDI: OK (DIN on Serial8)");
 
+    // Initialize SD card BEFORE App::begin() (PresetController needs it)
+    if (!SdCardStorage::begin()) {
+        Serial.println("WARNING: SD card init failed (presets disabled)");
+        // Continue anyway - SD card is optional for basic functionality
+    } else {
+        Serial.println("SD Card: OK (SDIO)");
+    }
+
     App::begin();
     Serial.println("App Logic: OK");
 
@@ -153,13 +177,14 @@ void setup() {
     Serial.print(EffectManager::getNumEffects());
     Serial.println(" effect(s)");
 
-    int ioThreadId = threads.addThread(ioThreadEntry, 2048);
-    int inputThreadId = threads.addThread(inputThreadEntry, 2048);
-    int mcpThreadId = threads.addThread(mcpThreadEntry, 2048);
-    int displayThreadId = threads.addThread(displayThreadEntry, 2048);
-    int appThreadId = threads.addThread(appThreadEntry, 3072);
+    g_ioThreadId = threads.addThread(ioThreadEntry, 0, 2048);
+    g_inputThreadId = threads.addThread(inputThreadEntry, 0, 2048);
+    g_mcpThreadId = threads.addThread(mcpThreadEntry, 0, 2048);
+    g_displayThreadId = threads.addThread(displayThreadEntry, 0, 2048);
+    // 16KB stack: App thread runs blocking SD save/load/delete operations
+    g_appThreadId = threads.addThread(appThreadEntry, 0, 16384);
 
-    if (ioThreadId < 0 || inputThreadId < 0 || mcpThreadId < 0 || displayThreadId < 0 || appThreadId < 0) {
+    if (g_ioThreadId < 0 || g_inputThreadId < 0 || g_mcpThreadId < 0 || g_displayThreadId < 0 || g_appThreadId < 0) {
         Serial.println("ERROR: Thread creation failed!");
         while (1);  // Halt
     }
@@ -178,6 +203,42 @@ void setup() {
 }
 
 void loop() {
+    // Thread state monitoring - print every second
+    static uint32_t lastThreadStatePrint = 0;
+    if (millis() - lastThreadStatePrint >= 1000) {
+        lastThreadStatePrint = millis();
+
+        auto printState = [](const char* name, int id) {
+            Serial.print(" ");
+            Serial.print(name);
+            Serial.print("=");
+            if (id >= 0) {
+                int state = threads.getState(id);
+                Serial.print(state);
+                // Decode state: 0=RUNNING, 1=SUSPENDED, 2=ENDED, etc.
+                Serial.print("(");
+                switch(state) {
+                    case 0: Serial.print("RUN"); break;
+                    case 1: Serial.print("SUSP"); break;
+                    case 2: Serial.print("END"); break;
+                    default: Serial.print("???"); break;
+                }
+                Serial.print(")");
+            } else {
+                Serial.print("N/A");
+            }
+        };
+
+        Serial.print("[ThreadStates] T=");
+        Serial.print(millis());
+        printState(" app", g_appThreadId);
+        printState(" io", g_ioThreadId);
+        printState(" nk", g_inputThreadId);
+        printState(" mcp", g_mcpThreadId);
+        printState(" disp", g_displayThreadId);
+        Serial.println();
+    }
+
     // Check for serial commands (non-blocking)
     if (Serial.available()) {
         char cmd = Serial.read();
