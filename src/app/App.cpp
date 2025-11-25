@@ -450,80 +450,20 @@ void App::threadLoop() {
 
         // 8. Update preset LEDs (beat-synced for selected preset)
         if (s_presetController) {
-            // Debug: Track if updateLEDs hangs
-            static bool s_inCall = false;
-            static uint32_t s_callStartTime = 0;
-            static uint32_t s_lastWarnTime = 0;
-
-            // Detect if we're stuck in updateLEDs
-            if (s_inCall) {
-                uint32_t elapsed = millis() - s_callStartTime;
-                if (elapsed > 1000 && (millis() - s_lastWarnTime > 1000)) {
-                    Serial.print("App: WARNING - updateLEDs has been running for ");
-                    Serial.print(elapsed);
-                    Serial.println(" ms!");
-                    s_lastWarnTime = millis();
-                }
-            }
-
-            s_inCall = true;
-            s_callStartTime = millis();
-            s_presetController->updateLEDs();
-            s_inCall = false;
-
-            // Debug after updateLEDs returns
-            static bool s_afterSave = false;
-            static uint32_t s_afterSaveTime = 0;
-            if (s_presetController->getSelectedPreset() != 0 && !s_afterSave) {
-                s_afterSave = true;
-                s_afterSaveTime = millis();
-                Serial.println("App: [X1] updateLEDs returned after save");
-            }
-
-            if (s_afterSave && (millis() - s_afterSaveTime < 3000)) {
-                Serial.println("App: [X2] About to process periodic debug");
-            }
+            // Get beat LED state (same logic as beat indicator)
+            bool beatLedOn = (s_ledOffSample > 0 && Timebase::getSamplePosition() < s_ledOffSample);
+            s_presetController->updateLEDs(beatLedOn);
         }
 
         // 9. Periodic debug output (optional)
-        static bool s_afterSave = false;
-        static uint32_t s_afterSaveTime = 0;
-        if (s_presetController && s_presetController->getSelectedPreset() != 0 && !s_afterSave) {
-            s_afterSave = true;
-            s_afterSaveTime = millis();
-        }
-
-        if (s_afterSave && (millis() - s_afterSaveTime < 3000)) {
-            Serial.println("App: [X3] About to check PRINT_INTERVAL_MS");
-        }
-
         uint32_t now = millis();
         if (now - s_lastPrint >= PRINT_INTERVAL_MS) {
             s_lastPrint = now;
             // Optional: Print status here
         }
 
-        if (s_afterSave && (millis() - s_afterSaveTime < 3000)) {
-            Serial.println("App: [X4] About to call threads.delay(2)");
-        }
-
         // 10. Yield CPU to other threads
         threads.delay(2);
-
-        if (s_afterSave && (millis() - s_afterSaveTime < 3000)) {
-            Serial.println("App: [X5] threads.delay(2) returned");
-        }
-
-        // Debug: Verify we completed the loop iteration
-        static uint32_t s_lastIterComplete = 0;
-        if (millis() - s_lastIterComplete >= 3000) {
-            s_lastIterComplete = millis();
-            Serial.println("App: [X6] Loop iteration completed");
-        }
-
-        if (s_afterSave && (millis() - s_afterSaveTime >= 3000)) {
-            s_afterSave = false;
-        }
     }
 }
 

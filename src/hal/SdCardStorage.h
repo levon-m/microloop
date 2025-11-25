@@ -16,6 +16,7 @@
  *
  * THREAD SAFETY:
  * - All SD operations must be called from the same thread (App thread)
+ * - Caller must use threads.stop()/threads.start() to prevent context switches
  * - Do NOT call SD functions from ISR or other threads
  */
 
@@ -61,6 +62,7 @@ bool isCardPresent();
 /**
  * Save loop buffer to preset file (blocking)
  * Call from App thread only - will block until complete
+ * Caller must wrap with threads.stop()/threads.start()
  *
  * @param slot Preset slot (1-4)
  * @param bufferL Pointer to left channel buffer
@@ -74,6 +76,7 @@ SdResult saveSync(uint8_t slot, const int16_t* bufferL, const int16_t* bufferR,
 /**
  * Load loop buffer from preset file (blocking)
  * Call from App thread only - will block until complete
+ * Caller must wrap with threads.stop()/threads.start()
  *
  * @param slot Preset slot (1-4)
  * @param bufferL Pointer to left channel buffer (output)
@@ -87,6 +90,7 @@ SdResult loadSync(uint8_t slot, int16_t* bufferL, int16_t* bufferR,
 /**
  * Delete preset file (blocking)
  * Call from App thread only - will block until complete
+ * Caller must wrap with threads.stop()/threads.start()
  *
  * @param slot Preset slot (1-4)
  * @return Result code indicating success or failure

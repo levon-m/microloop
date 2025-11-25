@@ -80,8 +80,10 @@ public:
     /**
      * Update LED states (call from App::threadLoop)
      * Handles beat-synced blinking for selected preset
+     *
+     * @param beatLedState Current state of the beat LED (from App thread)
      */
-    void updateLEDs();
+    void updateLEDs(bool beatLedState);
 
     /**
      * Check if SD card is available for preset operations
@@ -118,9 +120,6 @@ private:
     // LED pins (directly on Teensy)
     static constexpr uint8_t PRESET_LED_PINS[4] = {29, 30, 31, 32};
 
-    // Beat LED tracking for sync
-    bool m_lastBeatLedState;
-
     /**
      * Check if FUNC is effectively held (including grace period)
      */
@@ -150,14 +149,4 @@ private:
      * Deselect current preset (switch to "scratch" mode)
      */
     void deselectPreset();
-
-    /**
-     * Show error screen on display
-     */
-    void showError(const char* message);
-
-    /**
-     * Show status message on display
-     */
-    void showStatus(const char* message);
 };

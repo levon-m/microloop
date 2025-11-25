@@ -16,8 +16,7 @@ Tactile Switches,4,"SW5, SW6, SW7, SW8",TE Connectivity ALCOSWITCH Switches,1825
 Green LED,1,D2,Lite-On Inc.,LTL-307GE,160-1702-ND,$0.19
 Red LEDs,4,"D3, D4, D5, D6",Lite-On Inc.,LTL-307EE,160-1701-ND,$0.76
 RGB LED,1,D1,Inolux,HV-5RGB60,1830-1014-ND,$1.06
-330 Ohm Resistors,6,"R1, R2, R3, R4, R5, R6",Stackpole Electronics Inc,CF14JT330R,CF14JT330RCT-ND,$0.60
-100 Ohm Resistors,2,"R7, R8",Stackpole Electronics Inc,CF14JT100R,CF14JT100RCT-ND,$0.20
+330 Ohm Resistors,8,"R1, R2, R3, R4, R5, R6, R7, R8",Stackpole Electronics Inc,CF14JT330R,CF14JT330RCT-ND,$0.60
 100 nF Capacitor,1,C1,Vishay Beyschlag/Draloric/BC Components,K104K15X7RF5TL2,BC1084CT-ND,$0.25
 ,,,,,,
-,,,,,,$127.32
+,,,,,,$127
