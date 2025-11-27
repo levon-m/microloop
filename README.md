@@ -8,26 +8,26 @@ Inspired by French House and Electro sounds, μLoop lets you create immediate **
 
 ## Features
 
-### Effects
+#### Effects
 
 - **STUTTER**: Loop buffer that captures and repeats audio slices for glitchy textures
 - **FREEZE**: Granular hold effect that captures and sustains a 3ms moment of audio
 - **CHOKE**: Instant mute with 3ms crossfades for dramatic cuts and rhythmic gating
 
-### Control
+#### Control
 
 - **4 Rotary Encoders**: Real-time parameter adjustment for each effect
 - **4 Mechanical Switches**: Cherry MX Blue switches with RGB LED feedback
 - **4 Preset Buttons**: Access to 4 slots for saving loops via microSD card
 
-### Interface
+#### Interface
 
 - **OLED Display**: Shows effect state, parameter menu system, and settings
 - **RGB LED**: Visual feedback for effect states and loop capture
 - **Beat LED**: Visualizes incoming jitter-smoothed MIDI clock
 - **Preset LEDs**: Visualizes selected preset as well as save/delete operations
 
-### Timing
+#### Timing
 
 - **MIDI Sync**: External MIDI clock sync with <50µs jitter
 - **Free & Quantized Modes**: Immediate triggering or synced onset/release for all effects
@@ -140,6 +140,7 @@ teensy_loader_cli --mcu=TEENSY41 -w microloop.hex
 ```
 
 Press the Teensy BOOT button once if it doesn’t auto-detect
+
 
 
 
