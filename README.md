@@ -38,7 +38,7 @@ Inspired by French House and Electro sounds, μLoop lets you create immediate **
 - Built around the [Teensy 4.1](https://www.pjrc.com/store/teensy41.html) (ARM Cortex-M7 @ 600 MHz)
 - Stereo audio I/O via the [Teensy Audio Adapter](https://www.pjrc.com/store/teensy3_audio.html) (SGTL5000 codec @ 44.1 kHz, 16-bit, 128-sample block size)
 
-### Components
+#### Components
 
 - Teensy 4.1 + Audio Adapter
 - Adafruit MIDI FeatherWing
@@ -48,7 +48,7 @@ Inspired by French House and Electro sounds, μLoop lets you create immediate **
 - MCP23017 I2C I/O expander
 - MicroSD Card
 
-### Interfaces
+#### Interfaces
 
 - **Audio**: Stereo line-in/out via 3.5mm jacks
 - **MIDI**: DIN connector
@@ -59,18 +59,18 @@ See [hardware/](hardware/) for full BOM and KiCAD schematics
 
 ## Software
 
-### Signal Flow
+#### Signal Flow
 
 - Input -> Timebase -> Stutter -> Freeze -> Choke -> Output
 
-### Components
+#### Components
 
 - **SGTL5000**: custom register-layer driver for I2C codec configuration
 - **Timebase**: Centralized timing authority bridging MIDI clock and audio samples
 - **Quantization API**: Sample-accurate for beat/bar-aligned recording and playback
 - **Effect System**: Polymorphic command dispatch
 
-### Architecture
+#### Architecture
 
 - **Audio ISR**: 128-sample blocks, zero-allocation DSP
 - **App Thread**: MIDI clock processing, command dispatch, preset I/O
@@ -79,7 +79,7 @@ See [hardware/](hardware/) for full BOM and KiCAD schematics
 - **MCP Thread**: 4 rotary encoders via I/O expander interrupts
 - **Display Thread**: OLED runtime rendering
 
-### Design Patterns
+#### Design Patterns
 
 - **State Machines**: Deterministic effect transitions with atomic updates
 - **Command Pattern**: Type-safe button -> effect communication
@@ -98,14 +98,14 @@ See [libs/](libs/) for external libraries used
 
 ## Build & Flash
 
-### Prerequisites
+#### Prerequisites
 
 - [ARM GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (bare-metal `arm-none-eabi`) 10.3+ on your `PATH`  
 - [CMake](https://cmake.org/download/) 3.16+
 - [Ninja](https://ninja-build.org/) 1.10+
 - Teensy Loader [GUI](https://www.pjrc.com/teensy/loader.html) or [CLI](https://www.pjrc.com/teensy/loader_cli.html)
 
-### Build
+#### Build
 
 ```bash
 git clone https://github.com/levon-m/microloop.git
@@ -122,7 +122,7 @@ This produces the firmware file:
 build/microloop.hex
 ```
 
-### Flash
+#### Flash
 
 GUI:
 
@@ -140,6 +140,7 @@ teensy_loader_cli --mcu=TEENSY41 -w microloop.hex
 ```
 
 Press the Teensy BOOT button once if it doesn’t auto-detect
+
 
 
 
