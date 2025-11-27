@@ -1,7 +1,8 @@
 # μLoop
 
-μLoop is a standalone looper & sampler quantized to external MIDI clock for real-time audio manipulation.\
-Inspired by French House and Electro sounds, μLoop lets you create immediate rhythmic glitches and sustained textures with added performance effects.
+μLoop is a standalone **looper & sampler** quantized to external MIDI clock for real-time audio manipulation.\
+\
+Inspired by French House and Electro sounds, μLoop lets you create immediate **rhythmic glitches** and **sustained textures** with added performance effects.
 
 ![MicroLoop Hardware](media/microloop.jpg)
 
@@ -139,6 +140,7 @@ teensy_loader_cli --mcu=TEENSY41 -w microloop.hex
 ```
 
 Press the Teensy BOOT button once if it doesn’t auto-detect
+
 
 
 
