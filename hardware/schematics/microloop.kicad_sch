@@ -4611,8 +4611,8 @@
 			(exclude_from_sim no)
 			(in_bom yes)
 			(on_board yes)
-			(property "Reference" "U"
-				(at 0 2.54 0)
+			(property "Reference" "U3"
+				(at 0 3.81 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -4620,7 +4620,7 @@
 				)
 			)
 			(property "Value" "Adafruit MIDI Featherwing"
-				(at 0 0 0)
+				(at 0 1.27 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -4656,8 +4656,8 @@
 			)
 			(symbol "midi_0_0"
 				(pin passive line
-					(at -12.7 -3.81 0)
-					(length 2.54)
+					(at -15.24 -3.81 0)
+					(length 5.08)
 					(name "RESET"
 						(effects
 							(font
@@ -4674,8 +4674,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -6.35 0)
-					(length 2.54)
+					(at -15.24 -6.35 0)
+					(length 5.08)
 					(name "3.3V"
 						(effects
 							(font
@@ -4692,8 +4692,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -8.89 0)
-					(length 2.54)
+					(at -15.24 -8.89 0)
+					(length 5.08)
 					(name "AREF"
 						(effects
 							(font
@@ -4710,8 +4710,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -11.43 0)
-					(length 2.54)
+					(at -15.24 -11.43 0)
+					(length 5.08)
 					(name "GND"
 						(effects
 							(font
@@ -4728,8 +4728,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -13.97 0)
-					(length 2.54)
+					(at -15.24 -13.97 0)
+					(length 5.08)
 					(name "A0"
 						(effects
 							(font
@@ -4746,8 +4746,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -16.51 0)
-					(length 2.54)
+					(at -15.24 -16.51 0)
+					(length 5.08)
 					(name "A1"
 						(effects
 							(font
@@ -4764,8 +4764,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -19.05 0)
-					(length 2.54)
+					(at -15.24 -19.05 0)
+					(length 5.08)
 					(name "A2"
 						(effects
 							(font
@@ -4782,8 +4782,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -21.59 0)
-					(length 2.54)
+					(at -15.24 -21.59 0)
+					(length 5.08)
 					(name "A3"
 						(effects
 							(font
@@ -4800,8 +4800,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -24.13 0)
-					(length 2.54)
+					(at -15.24 -24.13 0)
+					(length 5.08)
 					(name "A4"
 						(effects
 							(font
@@ -4818,8 +4818,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -26.67 0)
-					(length 2.54)
+					(at -15.24 -26.67 0)
+					(length 5.08)
 					(name "A5"
 						(effects
 							(font
@@ -4836,8 +4836,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -29.21 0)
-					(length 2.54)
+					(at -15.24 -29.21 0)
+					(length 5.08)
 					(name "SCK"
 						(effects
 							(font
@@ -4854,8 +4854,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -31.75 0)
-					(length 2.54)
+					(at -15.24 -31.75 0)
+					(length 5.08)
 					(name "MOSI"
 						(effects
 							(font
@@ -4872,8 +4872,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -34.29 0)
-					(length 2.54)
+					(at -15.24 -34.29 0)
+					(length 5.08)
 					(name "MISO"
 						(effects
 							(font
@@ -4890,8 +4890,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -36.83 0)
-					(length 2.54)
+					(at -15.24 -36.83 0)
+					(length 5.08)
 					(name "RX"
 						(effects
 							(font
@@ -4908,8 +4908,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -39.37 0)
-					(length 2.54)
+					(at -15.24 -39.37 0)
+					(length 5.08)
 					(name "TX"
 						(effects
 							(font
@@ -4926,8 +4926,8 @@
 					)
 				)
 				(pin passive line
-					(at -12.7 -41.91 0)
-					(length 2.54)
+					(at -15.24 -41.91 0)
+					(length 5.08)
 					(name "NC"
 						(effects
 							(font
@@ -4944,8 +4944,8 @@
 					)
 				)
 				(pin passive line
-					(at 12.7 -13.97 180)
-					(length 2.54)
+					(at 15.24 -13.97 180)
+					(length 5.08)
 					(name "VBAT"
 						(effects
 							(font
@@ -4962,8 +4962,8 @@
 					)
 				)
 				(pin passive line
-					(at 12.7 -16.51 180)
-					(length 2.54)
+					(at 15.24 -16.51 180)
+					(length 5.08)
 					(name "EN"
 						(effects
 							(font
@@ -4980,8 +4980,8 @@
 					)
 				)
 				(pin passive line
-					(at 12.7 -19.05 180)
-					(length 2.54)
+					(at 15.24 -19.05 180)
+					(length 5.08)
 					(name "USB"
 						(effects
 							(font
@@ -4998,8 +4998,8 @@
 					)
 				)
 				(pin passive line
-					(at 12.7 -21.59 180)
-					(length 2.54)
+					(at 15.24 -21.59 180)
+					(length 5.08)
 					(name "13"
 						(effects
 							(font
@@ -5016,8 +5016,8 @@
 					)
 				)
 				(pin passive line
-					(at 12.7 -24.13 180)
-					(length 2.54)
+					(at 15.24 -24.13 180)
+					(length 5.08)
 					(name "12"
 						(effects
 							(font
@@ -5034,8 +5034,8 @@
 					)
 				)
 				(pin passive line
-					(at 12.7 -26.67 180)
-					(length 2.54)
+					(at 15.24 -26.67 180)
+					(length 5.08)
 					(name "11"
 						(effects
 							(font
@@ -5052,8 +5052,8 @@
 					)
 				)
 				(pin passive line
-					(at 12.7 -29.21 180)
-					(length 2.54)
+					(at 15.24 -29.21 180)
+					(length 5.08)
 					(name "10"
 						(effects
 							(font
@@ -5070,8 +5070,8 @@
 					)
 				)
 				(pin passive line
-					(at 12.7 -31.75 180)
-					(length 2.54)
+					(at 15.24 -31.75 180)
+					(length 5.08)
 					(name "9"
 						(effects
 							(font
@@ -5088,8 +5088,8 @@
 					)
 				)
 				(pin passive line
-					(at 12.7 -34.29 180)
-					(length 2.54)
+					(at 15.24 -34.29 180)
+					(length 5.08)
 					(name "6"
 						(effects
 							(font
@@ -5106,8 +5106,8 @@
 					)
 				)
 				(pin passive line
-					(at 12.7 -36.83 180)
-					(length 2.54)
+					(at 15.24 -36.83 180)
+					(length 5.08)
 					(name "5"
 						(effects
 							(font
@@ -5124,8 +5124,8 @@
 					)
 				)
 				(pin passive line
-					(at 12.7 -39.37 180)
-					(length 2.54)
+					(at 15.24 -39.37 180)
+					(length 5.08)
 					(name "SCL"
 						(effects
 							(font
@@ -5142,8 +5142,8 @@
 					)
 				)
 				(pin passive line
-					(at 12.7 -41.91 180)
-					(length 2.54)
+					(at 15.24 -41.91 180)
+					(length 5.08)
 					(name "SDA"
 						(effects
 							(font
@@ -5180,8 +5180,8 @@
 			(exclude_from_sim no)
 			(in_bom yes)
 			(on_board yes)
-			(property "Reference" "U"
-				(at 5.08 -6.35 0)
+			(property "Reference" "U6"
+				(at 5.08 -6.3499 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -5190,7 +5190,7 @@
 				)
 			)
 			(property "Value" "SSD1306 OLED"
-				(at 5.08 -8.636 0)
+				(at 5.08 -8.8899 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -5227,8 +5227,8 @@
 			)
 			(symbol "oled_0_0"
 				(pin passive line
-					(at -6.35 -3.81 0)
-					(length 2.54)
+					(at -8.89 -3.81 0)
+					(length 5.08)
 					(name "GND"
 						(effects
 							(font
@@ -5245,8 +5245,8 @@
 					)
 				)
 				(pin passive line
-					(at -6.35 -6.35 0)
-					(length 2.54)
+					(at -8.89 -6.35 0)
+					(length 5.08)
 					(name "VCC"
 						(effects
 							(font
@@ -5263,8 +5263,8 @@
 					)
 				)
 				(pin passive line
-					(at -6.35 -8.89 0)
-					(length 2.54)
+					(at -8.89 -8.89 0)
+					(length 5.08)
 					(name "SCL"
 						(effects
 							(font
@@ -5281,8 +5281,8 @@
 					)
 				)
 				(pin passive line
-					(at -6.35 -11.43 0)
-					(length 2.54)
+					(at -8.89 -11.43 0)
+					(length 5.08)
 					(name "SDA"
 						(effects
 							(font
@@ -5319,8 +5319,8 @@
 			(exclude_from_sim no)
 			(in_bom yes)
 			(on_board yes)
-			(property "Reference" "U"
-				(at 6.096 -8.89 0)
+			(property "Reference" "U7"
+				(at 6.35 -8.8899 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -5329,7 +5329,7 @@
 				)
 			)
 			(property "Value" "Adafruit NeoKey 1x4"
-				(at 6.096 -11.176 0)
+				(at 6.35 -11.4299 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -5366,8 +5366,8 @@
 			)
 			(symbol "neokey_1_0_0"
 				(pin passive line
-					(at -7.62 -3.81 0)
-					(length 2.54)
+					(at -10.16 -3.81 0)
+					(length 5.08)
 					(name "VIN"
 						(effects
 							(font
@@ -5384,8 +5384,8 @@
 					)
 				)
 				(pin passive line
-					(at -7.62 -6.35 0)
-					(length 2.54)
+					(at -10.16 -6.35 0)
+					(length 5.08)
 					(name "3.3V_OUT"
 						(effects
 							(font
@@ -5402,8 +5402,8 @@
 					)
 				)
 				(pin passive line
-					(at -7.62 -8.89 0)
-					(length 2.54)
+					(at -10.16 -8.89 0)
+					(length 5.08)
 					(name "GND"
 						(effects
 							(font
@@ -5420,8 +5420,8 @@
 					)
 				)
 				(pin passive line
-					(at -7.62 -11.43 0)
-					(length 2.54)
+					(at -10.16 -11.43 0)
+					(length 5.08)
 					(name "CLK"
 						(effects
 							(font
@@ -5438,8 +5438,8 @@
 					)
 				)
 				(pin passive line
-					(at -7.62 -13.97 0)
-					(length 2.54)
+					(at -10.16 -13.97 0)
+					(length 5.08)
 					(name "SDA"
 						(effects
 							(font
@@ -5456,8 +5456,8 @@
 					)
 				)
 				(pin passive line
-					(at -7.62 -16.51 0)
-					(length 2.54)
+					(at -10.16 -16.51 0)
+					(length 5.08)
 					(name "INT"
 						(effects
 							(font

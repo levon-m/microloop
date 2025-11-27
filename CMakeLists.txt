@@ -17,11 +17,10 @@ set(F_CPU 600000000)
 set(F_BUS 150000000)
 set(LAYOUT US_ENGLISH)
 
-# Arduino/Teensy paths (use CMake path normalization for Windows)
-file(TO_CMAKE_PATH "$ENV{LOCALAPPDATA}/Arduino15" ARDUINO15_PATH)
-set(TEENSY_ROOT "${ARDUINO15_PATH}/packages/teensy")
-set(TEENSY_CORES "${TEENSY_ROOT}/hardware/avr/1.59.0/cores/teensy4")
-set(TEENSY_LIBS "${TEENSY_ROOT}/hardware/avr/1.59.0/libraries")
+# Vendored Teensy core + libraries in libs/
+set(LIBS_DIR     "${CMAKE_CURRENT_SOURCE_DIR}/libs")
+set(TEENSY_CORES "${LIBS_DIR}/TeensyCores/teensy4")
+set(TEENSY_LIBS  "${LIBS_DIR}")
 
 # Compiler flags for Teensy 4.1
 add_compile_options(
@@ -64,12 +63,12 @@ set(WIRE_LIB "${TEENSY_LIBS}/Wire")
 set(MIDI_LIB "${TEENSY_LIBS}/MIDI/src")
 set(AUDIO_LIB "${TEENSY_LIBS}/Audio")
 set(THREADS_LIB "${TEENSY_LIBS}/TeensyThreads")
-set(SEESAW_LIB "${TEENSY_LIBS}/Adafruit_seesaw_Library")
+set(SEESAW_LIB "${TEENSY_LIBS}/Adafruit_Seesaw")
 set(NEOPIXEL_LIB "${TEENSY_LIBS}/Adafruit_NeoPixel")
 set(BUSIO_LIB "${TEENSY_LIBS}/Adafruit_BusIO")
-set(SSD1306_LIB "${TEENSY_LIBS}/Adafruit_SSD1306-2.5.15")
-set(GFX_LIB "${TEENSY_LIBS}/Adafruit-GFX-Library-1.12.3")
-set(MCP23017_LIB "${TEENSY_LIBS}/Adafruit-MCP23017-Arduino-Library-2.3.2/src")
+set(SSD1306_LIB "${TEENSY_LIBS}/Adafruit_SSD1306")
+set(GFX_LIB "${TEENSY_LIBS}/Adafruit_GFX")
+set(MCP23017_LIB "${TEENSY_LIBS}/Adafruit_MCP23017/src")
 
 # Include directories
 include_directories(

@@ -1,56 +1,150 @@
 # μLoop
 
-μLoop is a hardware looper/sampler quantized to external MIDI clock, inspired by the French House and Electro sounds of *Ed Banger Records*.
+μLoop is a standalone looper & sampler quantized to external MIDI clock for real-time audio manipulation.
+Inspired by French House and Electro sounds, μLoop lets you create immediate rhythmic glitches and sustained textures with added performance effects.
 
 ![MicroLoop Hardware](media/microloop.jpg)
 
+---
+
 ## Features
 
-**Three core effects:**
+### Effects
 
-- **CHOKE**: Instant audio mute with short crossfades for click-free audio
-- **STUTTER**: Rhythmic buffer looping that captures and repeats a slice of incoming audio for glitchy, chopped textures
-- **FREEZE**: Granular hold effect that captures and sustains a moment of audio
+- **STUTTER**: Loop buffer that captures and repeats audio slices for glitchy textures
+- **FREEZE**: Granular hold effect that captures and sustains a 3ms moment of audio
+- **CHOKE**: Instant mute with 3ms crossfades for dramatic cuts and rhythmic gating
 
-**Triggering modes & parameters:**
+### Control
 
-- **Free/Quantized**:Trigger effects immediately or snap onset/release to the set beat grid
-- **Global Quantization**: Sets beat grid (1/4, 1/8, 1/16, 1/32 note divisions) for all quantized effect parameters
-- **Onset**: Delay effect start by a set number of beats after button press
-- **Length**: Automatically release effect after set beat grid length
-- **Capture Start/End**: Define loop boundaries for STUTTER repetition
+- **4 Rotary Encoders**: Real-time parameter adjustment for each effect
+- **4 Mechanical Switches**: Cherry MX Blue switches with RGB LED feedback
+- **4 Preset Buttons**: Access to 4 slots for saving loops via microSD card
 
-**System features:**
+### Interface
 
-- **MIDI-synchronized timing**: Locks to external MIDI clock (24 PPQN) with jitter-smoothed beat tracking
-- **Parameter/menu control**: x4 rotary encoders for real-time parameter adjustment and menu navigation
-- **Visual feedback**: 128×64 OLED display shows current effect state, parameters, and menu options
-- **Effect presets**: Save and recall complete parameter configurations for different performance contexts
+- **OLED Display**: Shows effect state, parameter menu system, and settings
+- **RGB LED**: Visual feedback for effect states and loop capture
+- **Beat LED**: Visualizes incoming jitter-smoothed MIDI clock
+- **Preset LEDs**: Visualizes selected preset as well as save/delete operations
 
-## Architecture
+### Timing
 
-**Hardware**: ARM Cortex-M7 (Teensy 4.1) + SGTL5000 audio codec, Adafruit MIDI FeatherWing, Adafruit 1x4 NeoKey, 128×64 OLED display, MCP23017 GPIO expander, 4 encoders, 4 push buttons, and some status LEDs
+- **MIDI Sync**: External MIDI clock sync with <50µs jitter
+- **Free & Quantized Modes**: Immediate triggering or synced onset/release for all effects
+- **Quantization Grid**: Global beat divisions (1/4, 1/8, 1/16, 1/32 notes)
 
-**Software**: Custom CMake build system, C++17, zero-allocation DSP engine
+---
 
-**Threading model**: Deterministic multithreaded architecture with:
-- High-priority audio ISR (44.1kHz, 128-sample blocks)
-- 5 control threads (MIDI I/O, input polling, display updates, encoder handling, app logic)
-- Lock-free SPSC queues for non-blocking inter-thread communication
+## Hardware
 
-**Key components**:
-- Custom SGTL5000 register-layer driver (I²C codec configuration)
-- TimeKeeper: Centralized timing authority bridging MIDI clock and audio samples
-- Sample-accurate quantization API for beat/bar-aligned recording and playback
-- Effect system with polymorphic command dispatch
+- Built around the **Teensy 4.1** (ARM Cortex-M7 @ 600 MHz)
+- Stereo audio I/O via the **Teensy Audio Adapter** (SGTL5000 codec @ 44.1 kHz, 16-bit, 128-sample block size)
 
-**Real-time safety**: No dynamic allocation in audio path, wait-free data structures
+### Components
+
+- Teensy 4.1 + Audio Adapter
+- Adafruit MIDI FeatherWing
+- Adafruit NeoKey 1X4 switches
+- SSD1306 128x64 OLED Display
+- CYT1100 Rotary Encoders with switches
+- MCP23017 I2C I/O expander
+- MicroSD Card
+
+See [hardware/BOM.csv](hardware/BOM.csv) for full BOM
+See [hardware/schematics/](hardware/schematics/) for KiCAD schematics
+
+### Interfaces
+
+- **Audio**: Stereo line-in/out via 3.5mm jacks
+- **MIDI**: DIN connector
+- **I2C**: 3 independent buses for peripherals
+- **SDIO**: High-speed 4-bit microSD interface
+
+---
+
+## Software
+
+### Signal Flow
+
+- Input -> Timebase -> Stutter -> Freeze -> Choke -> Output
+
+### Components
+
+- **SGTL5000**: custom register-layer driver for I2C codec configuration
+- **Timebase**: Centralized timing authority bridging MIDI clock and audio samples
+- **Quantization API**: Sample-accurate for beat/bar-aligned recording and playback
+- **Effect System**: Polymorphic command dispatch
+
+### Architecture
+
+- **Audio ISR**: 128-sample blocks, zero-allocation DSP
+- **App Thread**: MIDI clock processing, command dispatch, preset I/O
+- **MIDI Thread**: Serial clock reception from DIN connector
+- **NeoKey Thread**: Button event handling ISR and RGB LED updates
+- **MCP Thread**: 4 rotary encoders via I/O expander interrupts
+- **Display Thread**: OLED runtime rendering
+
+### Design Patterns
+
+- **State Machines**: Deterministic effect transitions with atomic updates
+- **Command Pattern**: Type-safe button -> effect communication
+- **Registry Pattern**: Dynamic effect lookup and dispatch
+- **Observer**: Display subscribes to effect state changes
+
+---
 
 ## Technical Highlights
 
-- **Sub-millisecond effect latency**: ISR state capture with 64-event ring buffer (~26us response time)
-- **Professional timing**: EMA-smoothed MIDI clock with atomic beat boundary detection
-- **Click-free audio**: 3ms linear crossfades on all effect transitions
-- **Zero missed steps**: Hardware-frozen encoder state via MCP23017 INTCAP registers
+- **Lock-free architecture**: Zero mutexes, all critical paths use atomics + SPSC queues
+- **Zero-allocation DSP**: All buffers pre-allocated for deterministic performance
+- **Quantization accuracy**: ±11µs (0.5 samples)
+- **MIDI jitter**: <50µs (EMA-smoothed BPM)
+- **Clean layering**: 4-tier dependency graph (Core -> HAL -> DSP -> App), no upward dependencies
 
+---
 
+## Build & Flash
+
+### Prerequisites
+
+- [ARM GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (bare-metal `arm-none-eabi`) 10.3+ on your `PATH`  
+- [CMake](https://cmake.org/download/) 3.16+
+- [Ninja](https://ninja-build.org/) 1.10+
+- Teensy Loader [GUI](https://www.pjrc.com/teensy/loader.html) or [CLI](https://www.pjrc.com/teensy/loader_cli.html)
+
+### Build
+
+```bash
+git clone https://github.com/levon-m/microloop.git
+cd microloop
+
+# Configure and build
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+This produces the firmware file:
+
+```text
+build/microloop.hex
+```
+
+### Flash
+
+GUI:
+
+1. Open the Teensy Loader app
+
+2. File -> Open HEX File -> select build/microloop.hex
+
+3. Connect the Teensy and press Program (or the BOOT button if prompted)
+
+CLI:
+
+```bash
+cd build
+teensy_loader_cli --mcu=TEENSY41 -w microloop.hex
+```
+
+Press the Teensy BOOT button once if it doesn’t auto-detect
