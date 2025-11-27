@@ -47,14 +47,14 @@ Inspired by French House and Electro sounds, μLoop lets you create immediate rh
 - MCP23017 I2C I/O expander
 - MicroSD Card
 
-See [hardware/](hardware/) for full BOM and KiCAD schematics
-
 ### Interfaces
 
 - **Audio**: Stereo line-in/out via 3.5mm jacks
 - **MIDI**: DIN connector
 - **I2C**: 3 independent buses for peripherals
 - **SDIO**: High-speed 4-bit microSD interface
+
+See [hardware/](hardware/) for full BOM and KiCAD schematics
 
 ## Software
 
@@ -84,6 +84,8 @@ See [hardware/](hardware/) for full BOM and KiCAD schematics
 - **Command Pattern**: Type-safe button -> effect communication
 - **Registry Pattern**: Dynamic effect lookup and dispatch
 - **Observer**: Display subscribes to effect state changes
+
+See [libs/](libs/) for external libraries used
 
 ## Technical Highlights
 
@@ -137,4 +139,5 @@ teensy_loader_cli --mcu=TEENSY41 -w microloop.hex
 ```
 
 Press the Teensy BOOT button once if it doesn’t auto-detect
+
 
