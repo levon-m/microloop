@@ -5,8 +5,6 @@ Inspired by French House and Electro sounds, μLoop lets you create immediate rh
 
 ![MicroLoop Hardware](media/microloop.jpg)
 
----
-
 ## Features
 
 ### Effects
@@ -34,8 +32,6 @@ Inspired by French House and Electro sounds, μLoop lets you create immediate rh
 - **Free & Quantized Modes**: Immediate triggering or synced onset/release for all effects
 - **Quantization Grid**: Global beat divisions (1/4, 1/8, 1/16, 1/32 notes)
 
----
-
 ## Hardware
 
 - Built around the **Teensy 4.1** (ARM Cortex-M7 @ 600 MHz)
@@ -60,8 +56,6 @@ See [hardware/schematics/](hardware/schematics/) for KiCAD schematics
 - **MIDI**: DIN connector
 - **I2C**: 3 independent buses for peripherals
 - **SDIO**: High-speed 4-bit microSD interface
-
----
 
 ## Software
 
@@ -92,8 +86,6 @@ See [hardware/schematics/](hardware/schematics/) for KiCAD schematics
 - **Registry Pattern**: Dynamic effect lookup and dispatch
 - **Observer**: Display subscribes to effect state changes
 
----
-
 ## Technical Highlights
 
 - **Lock-free architecture**: Zero mutexes, all critical paths use atomics + SPSC queues
@@ -101,8 +93,6 @@ See [hardware/schematics/](hardware/schematics/) for KiCAD schematics
 - **Quantization accuracy**: ±11µs (0.5 samples)
 - **MIDI jitter**: <50µs (EMA-smoothed BPM)
 - **Clean layering**: 4-tier dependency graph (Core -> HAL -> DSP -> App), no upward dependencies
-
----
 
 ## Build & Flash
 
