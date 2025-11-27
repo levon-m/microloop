@@ -1,6 +1,6 @@
 # μLoop
 
-μLoop is a standalone looper & sampler quantized to external MIDI clock for real-time audio manipulation.
+μLoop is a standalone looper & sampler quantized to external MIDI clock for real-time audio manipulation.\
 Inspired by French House and Electro sounds, μLoop lets you create immediate rhythmic glitches and sustained textures with added performance effects.
 
 ![MicroLoop Hardware](media/microloop.jpg)
@@ -34,8 +34,8 @@ Inspired by French House and Electro sounds, μLoop lets you create immediate rh
 
 ## Hardware
 
-- Built around the **Teensy 4.1** (ARM Cortex-M7 @ 600 MHz)
-- Stereo audio I/O via the **Teensy Audio Adapter** (SGTL5000 codec @ 44.1 kHz, 16-bit, 128-sample block size)
+- Built around the [Teensy 4.1](https://www.pjrc.com/store/teensy41.html) (ARM Cortex-M7 @ 600 MHz)
+- Stereo audio I/O via the [Teensy Audio Adapter](https://www.pjrc.com/store/teensy3_audio.html) (SGTL5000 codec @ 44.1 kHz, 16-bit, 128-sample block size)
 
 ### Components
 
@@ -139,5 +139,6 @@ teensy_loader_cli --mcu=TEENSY41 -w microloop.hex
 ```
 
 Press the Teensy BOOT button once if it doesn’t auto-detect
+
 
 
