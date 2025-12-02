@@ -36,7 +36,7 @@ bool begin();
 
 void threadLoop();
 
-void update();  // Alternative to threadLoop (if called from app thread)
+//void update();  // Alternative to threadLoop (if called from app thread)
 
 int32_t getPosition(uint8_t encoderNum);
 

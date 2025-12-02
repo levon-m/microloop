@@ -273,14 +273,14 @@ void threadLoop() {
     }
 }
 
-void update() {
-    // Alternative to threadLoop: Drain all pending events when called
-    // Use this if you don't want a dedicated MCP thread
-    McpEvent ev;
-    while (popEvent(ev)) {
-        processEvent(ev);
-    }
-}
+//void update() {
+//    // Alternative to threadLoop: Drain all pending events when called
+//    // Use this if you don't want a dedicated MCP thread
+//    McpEvent ev;
+//    while (popEvent(ev)) {
+//        processEvent(ev);
+//    }
+//}
 
 int32_t getPosition(uint8_t encoderNum) {
     if (encoderNum < 4) {
