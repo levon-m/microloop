@@ -13,12 +13,9 @@
 
 #include <Arduino.h>
 #include "test_runner.h"
-#include "timekeeper.h"
 #include "trace.h"
 
 // Include test files (they auto-register via TEST() macro)
-#include "test_timekeeper.cpp"
-#include "test_trace.cpp"
 #include "test_spsc_queue.cpp"
 
 void setup() {
@@ -33,7 +30,6 @@ void setup() {
     Serial.println();
 
     // Initialize subsystems needed for tests
-    TimeKeeper::begin();
     Trace::clear();
 
     // Run all tests

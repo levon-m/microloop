@@ -1,34 +1,36 @@
-# Teensy 4.1 Toolchain File
-# This file configures CMake to cross-compile for Teensy 4.1 (ARM Cortex-M7)
-
+# Teensy 4.1 Toolchain File (Arduino-free, uses arm-none-eabi-* from PATH)
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR ARM)
 
-# Teensy-specific settings
 set(TEENSY_VERSION 41 CACHE STRING "Teensy version")
 set(CPU_CORE_SPEED 600000000 CACHE STRING "CPU speed in Hz (600MHz default)")
 
-# Compiler paths - Adjust these based on your Teensyduino installation
-set(COMPILER_PATH "C:/Users/levon/AppData/Local/Arduino15/packages/teensy/tools/teensy-compile/11.3.1/arm/bin/")
-set(COMPILERPATH "C:/Users/levon/AppData/Local/Arduino15/packages/teensy/tools/teensy-compile/11.3.1/arm/bin/")
+# Find ARM GCC toolchain on PATH
+find_program(ARM_GCC    arm-none-eabi-gcc)
+find_program(ARM_GPP    arm-none-eabi-g++)
+find_program(ARM_AR     arm-none-eabi-ar)
+find_program(ARM_RANLIB arm-none-eabi-ranlib)
+find_program(ARM_OBJCOPY arm-none-eabi-objcopy)
+find_program(ARM_SIZE    arm-none-eabi-size)
 
-# Alternatively, use environment variable if set:
-# set(COMPILER_PATH $ENV{TEENSYDUINO_PATH}/hardware/tools/arm/bin/)
+if(NOT ARM_GCC OR NOT ARM_GPP OR NOT ARM_AR OR NOT ARM_RANLIB OR NOT ARM_OBJCOPY OR NOT ARM_SIZE)
+    message(FATAL_ERROR
+        "arm-none-eabi toolchain not found. Install GCC for ARM Embedded and "
+        "ensure arm-none-eabi-* are in your PATH.")
+endif()
 
-# Set compilers
-set(CMAKE_C_COMPILER ${COMPILER_PATH}arm-none-eabi-gcc.exe)
-set(CMAKE_CXX_COMPILER ${COMPILER_PATH}arm-none-eabi-g++.exe)
-set(CMAKE_ASM_COMPILER ${COMPILER_PATH}arm-none-eabi-gcc.exe)
-set(CMAKE_AR ${COMPILER_PATH}arm-none-eabi-ar.exe)
-set(CMAKE_RANLIB ${COMPILER_PATH}arm-none-eabi-ranlib.exe)
-set(CMAKE_OBJCOPY ${COMPILER_PATH}arm-none-eabi-objcopy.exe)
-set(CMAKE_SIZE ${COMPILER_PATH}arm-none-eabi-size.exe)
+set(CMAKE_C_COMPILER   ${ARM_GCC})
+set(CMAKE_CXX_COMPILER ${ARM_GPP})
+set(CMAKE_ASM_COMPILER ${ARM_GCC})
 
-# Don't run the linker on compiler check
+set(CMAKE_AR      ${ARM_AR})
+set(CMAKE_RANLIB  ${ARM_RANLIB})
+set(CMAKE_OBJCOPY ${ARM_OBJCOPY})
+set(CMAKE_SIZE    ${ARM_SIZE})
+
+# Don't try to link when CMake is just testing the compiler
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
-# Search for programs in the build host directories
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-# Search for libraries and headers in the target directories
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
