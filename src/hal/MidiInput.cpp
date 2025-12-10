@@ -1,11 +1,13 @@
 #include "MidiInput.h"
-#include <MIDI.h>
 #include <TeensyThreads.h>
 #include "SpscQueue.h"
 #include "Trace.h"
 
-// Create MIDI instance on Serial8 (RX8=pin34, TX8=pin35)
-MIDI_CREATE_INSTANCE(HardwareSerial, Serial8, DIN);
+// MIDI Real-Time message bytes (single-byte, can appear anywhere in stream)
+static constexpr uint8_t MIDI_CLOCK    = 0xF8;
+static constexpr uint8_t MIDI_START    = 0xFA;
+static constexpr uint8_t MIDI_CONTINUE = 0xFB;
+static constexpr uint8_t MIDI_STOP     = 0xFC;
 
 // Lock-free queues using our generic SPSC implementation
 static SpscQueue<uint32_t, 256> clockQueue;  // Timestamps in microseconds
@@ -14,65 +16,60 @@ static SpscQueue<MidiEvent, 32> eventQueue;  // Transport events
 // Transport state (volatile for cross-thread visibility)
 static volatile bool transportRunning = false;
 
-static void onClock() {
-    uint32_t timestamp = micros();
-    TRACE(TRACE_MIDI_CLOCK_RECV);
-
-    // Push to queue (returns false if full, which we ignore)
-    // TRADEOFF: Dropping ticks vs blocking
-    // - Dropping is real-time safe (no blocking)
-    // - We have 5s buffer, if app stalls that long, we have bigger problems
-    // - Future improvement: Count overruns and report as error
-    if (clockQueue.push(timestamp)) {
-        TRACE(TRACE_MIDI_CLOCK_QUEUED, clockQueue.size());
-    } else {
-        TRACE(TRACE_MIDI_CLOCK_DROPPED);
-    }
-}
-
-static void onStart() {
-    transportRunning = true;
-    eventQueue.push(MidiEvent::START);
-}
-
-static void onStop() {
-    transportRunning = false;
-    eventQueue.push(MidiEvent::STOP);
-}
-
-static void onContinue() {
-    transportRunning = true;
-    eventQueue.push(MidiEvent::CONTINUE);
-}
-
 // Public API Implementation
 
 void MidiInput::begin() {
-    // Initialize MIDI library
-    // MIDI_CHANNEL_OMNI = respond to all channels
-    // This sets Serial8 to 31250 baud (MIDI standard)
-    DIN.begin(MIDI_CHANNEL_OMNI);
-
-    // Register handlers
-    // These will be called from threadLoop() when messages are parsed
-    DIN.setHandleClock(onClock);
-    DIN.setHandleStart(onStart);
-    DIN.setHandleStop(onStop);
-    DIN.setHandleContinue(onContinue);
+    // Initialize Serial8 at MIDI baud rate (31250)
+    // Using raw serial instead of MIDI library for minimal latency
+    // This avoids parsing overhead from note/CC messages meant for other devices
+    Serial8.begin(31250);
 }
 
 void MidiInput::threadLoop() {
     for (;;) {
-        // Read and parse all pending MIDI bytes
-        // DIN.read() returns true if a message was parsed
-        // Handlers (onClock, etc.) are called inside DIN.read()
-        while (DIN.read()) {
-            // Keep pumping until UART buffer is empty
+        // Process all available bytes with minimal latency
+        // Real-time messages (clock, start, stop, continue) are single-byte
+        // and can appear anywhere in the MIDI stream, even mid-message
+        while (Serial8.available()) {
+            // Capture timestamp BEFORE reading byte for best accuracy
+            uint32_t timestamp = micros();
+            uint8_t byte = Serial8.read();
+
+            // Only process real-time messages, ignore everything else
+            // This makes us immune to note/CC traffic from other MIDI tracks
+            switch (byte) {
+                case MIDI_CLOCK:
+                    TRACE(TRACE_MIDI_CLOCK_RECV);
+                    if (clockQueue.push(timestamp)) {
+                        TRACE(TRACE_MIDI_CLOCK_QUEUED, clockQueue.size());
+                    } else {
+                        TRACE(TRACE_MIDI_CLOCK_DROPPED);
+                    }
+                    break;
+
+                case MIDI_START:
+                    transportRunning = true;
+                    eventQueue.push(MidiEvent::START);
+                    break;
+
+                case MIDI_STOP:
+                    transportRunning = false;
+                    eventQueue.push(MidiEvent::STOP);
+                    break;
+
+                case MIDI_CONTINUE:
+                    transportRunning = true;
+                    eventQueue.push(MidiEvent::CONTINUE);
+                    break;
+
+                default:
+                    // Ignore all other MIDI data (notes, CCs, etc.)
+                    // These are meant for other devices on the MIDI chain
+                    break;
+            }
         }
 
         // Yield to other threads
-        // This is TeensyThreads yield, NOT Arduino yield
-        // Immediately gives up remaining time slice
         threads.yield();
     }
 }
