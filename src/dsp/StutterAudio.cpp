@@ -18,6 +18,7 @@ StutterAudio::StutterAudio() : IEffectAudio(2) {  // Call base with 2 inputs (st
     m_playbackOnsetAtSample = 0;  // No scheduled playback onset
     m_playbackLengthAtSample = 0; // No scheduled playback length
     m_stutterHeld = false;        // Track if STUTTER button held (set by controller)
+    m_waitStartSample = 0;        // No wait in progress
 
     // Initialize buffers to silence
     memset(m_stutterBufferL, 0, sizeof(m_stutterBufferL));
@@ -64,6 +65,7 @@ void StutterAudio::startCapture() {
 
 void StutterAudio::scheduleCaptureStart(uint64_t sample) {
     m_captureStartAtSample = sample;
+    m_waitStartSample = Timebase::getSamplePosition();  // Record when wait began
     m_state = StutterState::WAIT_CAPTURE_START;
 }
 
@@ -93,6 +95,7 @@ void StutterAudio::scheduleCaptureEnd(uint64_t sample, bool stutterHeld) {
     // Only transition to WAIT_CAPTURE_END if we're currently CAPTURING
     // If we're in WAIT_CAPTURE_START, don't change state (end will fire after start)
     if (m_state == StutterState::CAPTURING) {
+        m_waitStartSample = Timebase::getSamplePosition();  // Record when wait began
         m_state = StutterState::WAIT_CAPTURE_END;
     }
 }
@@ -104,6 +107,7 @@ void StutterAudio::startPlayback() {
 
 void StutterAudio::schedulePlaybackOnset(uint64_t sample) {
     m_playbackOnsetAtSample = sample;
+    m_waitStartSample = Timebase::getSamplePosition();  // Record when wait began
     m_state = StutterState::WAIT_PLAYBACK_ONSET;
 }
 
@@ -116,6 +120,7 @@ void StutterAudio::schedulePlaybackLength(uint64_t sample) {
     // Only transition to WAIT_PLAYBACK_LENGTH if we're currently PLAYING
     // If we're in WAIT_PLAYBACK_ONSET, don't change state (length will fire after onset)
     if (m_state == StutterState::PLAYING) {
+        m_waitStartSample = Timebase::getSamplePosition();  // Record when wait began
         m_state = StutterState::WAIT_PLAYBACK_LENGTH;
     }
 }
@@ -254,5 +259,20 @@ void StutterAudio::update() {
             if (blockR) release(blockR);
             break;
         }
+    }
+}
+
+uint64_t StutterAudio::getScheduledSample() const {
+    switch (m_state) {
+        case StutterState::WAIT_CAPTURE_START:
+            return m_captureStartAtSample;
+        case StutterState::WAIT_CAPTURE_END:
+            return m_captureEndAtSample;
+        case StutterState::WAIT_PLAYBACK_ONSET:
+            return m_playbackOnsetAtSample;
+        case StutterState::WAIT_PLAYBACK_LENGTH:
+            return m_playbackLengthAtSample;
+        default:
+            return 0;  // Not in a wait state
     }
 }

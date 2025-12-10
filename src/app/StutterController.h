@@ -125,11 +125,6 @@ private:
     bool m_funcHeld;                // Is FUNC button currently held?
     bool m_stutterHeld;             // Is STUTTER button currently held?
 
-    // LED blinking state for armed states
-    uint32_t m_lastBlinkTime;       // Timestamp of last LED toggle
-    bool m_ledBlinkState;           // Current LED blink state (on/off)
-    static constexpr uint32_t BLINK_INTERVAL_MS = 250;  // 250ms on/off (4Hz blink)
-
     // Effect state tracking for edge detection
     bool m_wasEnabled;              // Previous enabled state (for edge detection)
 

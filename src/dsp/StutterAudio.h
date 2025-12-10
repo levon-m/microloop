@@ -168,6 +168,20 @@ public:
     void setCaptureEndMode(StutterCaptureEnd mode) { m_captureEndMode = mode; }
     StutterCaptureEnd getCaptureEndMode() const { return m_captureEndMode; }
 
+    // ========== WAIT TIMING ACCESS (for LED brightness ramp) ==========
+
+    /**
+     * Get the sample position when current wait began
+     * Used by controller to calculate progress for LED brightness ramp
+     */
+    uint64_t getWaitStartSample() const { return m_waitStartSample; }
+
+    /**
+     * Get the scheduled target sample for current wait state
+     * Returns appropriate scheduled sample based on current state
+     */
+    uint64_t getScheduledSample() const;
+
     virtual void update() override;
 
 private:
@@ -204,4 +218,7 @@ private:
 
     // ========== BUTTON STATE TRACKING ==========
     bool m_stutterHeld;  // Is STUTTER button held? (set by controller)
+
+    // ========== WAIT TIMING ==========
+    uint64_t m_waitStartSample;  // Sample position when current wait began (for LED ramp)
 };

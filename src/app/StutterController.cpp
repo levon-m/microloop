@@ -10,18 +10,63 @@ static constexpr uint8_t RGB_LED_R_PIN = 28;  // Red (PWM capable)
 static constexpr uint8_t RGB_LED_G_PIN = 36;  // Green (PWM capable)
 static constexpr uint8_t RGB_LED_B_PIN = 37;  // Blue (PWM capable)
 
-// ========== RGB LED BLINK STATE ==========
-static bool s_rgbBlinkState = false;       // Current RGB LED blink state (on/off)
-static uint32_t s_lastRgbBlinkTime = 0;    // Timestamp of last RGB LED blink toggle
-static constexpr uint32_t RGB_BLINK_INTERVAL_MS = 100;  // 100ms on/off (10Hz rapid blink)
+// ========== GAMMA LOOKUP TABLE (γ=4.0) ==========
+// Pre-computed gamma curve for dramatic LED brightness ramp.
+// Input: linear progress 0-255, Output: gamma-corrected brightness 0-255
+// Formula: output = 255 * (input/255)^4.0
+// Characteristic: stays dim until ~80%, then rapid ramp in final ~20%
+static constexpr uint8_t GAMMA_LUT[256] = {
+      0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+      0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+      0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+      0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+      0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   1,   1,   1,   1,   1,
+      1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   2,   2,   2,   2,   2,   2,
+      2,   2,   3,   3,   3,   3,   3,   3,   4,   4,   4,   4,   4,   5,   5,   5,
+      5,   6,   6,   6,   6,   7,   7,   7,   8,   8,   8,   9,   9,   9,  10,  10,
+     11,  11,  11,  12,  12,  13,  13,  14,  14,  15,  15,  16,  17,  17,  18,  18,
+     19,  20,  20,  21,  22,  22,  23,  24,  25,  25,  26,  27,  28,  29,  30,  31,
+     31,  32,  33,  34,  35,  36,  38,  39,  40,  41,  42,  43,  45,  46,  47,  48,
+     50,  51,  52,  54,  55,  57,  58,  60,  61,  63,  64,  66,  68,  69,  71,  73,
+     75,  76,  78,  80,  82,  84,  86,  88,  90,  92,  94,  96,  98, 100, 103, 105,
+    107, 109, 112, 114, 117, 119, 122, 124, 127, 129, 132, 135, 137, 140, 143, 146,
+    149, 151, 154, 157, 160, 163, 166, 170, 173, 176, 179, 182, 186, 189, 192, 196,
+    199, 203, 206, 210, 214, 217, 221, 225, 228, 232, 236, 240, 244, 248, 252, 255
+};
+
+/**
+ * Calculate LED brightness for wait states using gamma-corrected ramp
+ *
+ * @param currentSample Current audio sample position
+ * @param startSample Sample position when wait began
+ * @param targetSample Sample position when wait will end
+ * @param rampUp true = 0→max (onset waits), false = max→0 (end waits)
+ * @return Gamma-corrected brightness value 0-255
+ */
+static uint8_t calculateWaitBrightness(uint64_t currentSample, uint64_t startSample,
+                                       uint64_t targetSample, bool rampUp) {
+    // Safety checks
+    if (targetSample <= startSample) return rampUp ? 255 : 0;
+    if (currentSample <= startSample) return rampUp ? 0 : 255;
+    if (currentSample >= targetSample) return rampUp ? 255 : 0;
+
+    // Calculate linear progress (0-255 range for LUT indexing)
+    uint64_t elapsed = currentSample - startSample;
+    uint64_t total = targetSample - startSample;
+    uint8_t linearProgress = static_cast<uint8_t>((elapsed * 255) / total);
+
+    // Apply gamma curve
+    uint8_t gammaBrightness = GAMMA_LUT[linearProgress];
+
+    // Invert for ramp down
+    return rampUp ? gammaBrightness : (255 - gammaBrightness);
+}
 
 StutterController::StutterController(StutterAudio& effect)
     : m_effect(effect),
       m_currentParameter(Parameter::ONSET),  // Default to ONSET (first in cycle)
       m_funcHeld(false),
       m_stutterHeld(false),
-      m_lastBlinkTime(0),
-      m_ledBlinkState(false),
       m_wasEnabled(false),
       m_captureCompleteCallback(nullptr),
       m_lastState(StutterState::IDLE_NO_LOOP),
@@ -308,7 +353,6 @@ bool StutterController::handleButtonRelease(const Command& cmd) {
 
 void StutterController::updateVisualFeedback() {
     StutterState currentState = m_effect.getState();
-    uint32_t now = millis();
 
     // ========== RGB LED STATE-SPECIFIC CONTROL ==========
     switch (currentState) {
@@ -328,33 +372,23 @@ void StutterController::updateVisualFeedback() {
             NeokeyInput::setLED(EffectID::STUTTER, false);  // Off for now (RGB LED shows white)
             break;
 
-        case StutterState::WAIT_CAPTURE_START:
-            // LED BLINK RED VERY FAST
-            if (now - s_lastRgbBlinkTime >= RGB_BLINK_INTERVAL_MS) {
-                s_rgbBlinkState = !s_rgbBlinkState;
-                s_lastRgbBlinkTime = now;
+        case StutterState::WAIT_CAPTURE_START: {
+            // LED RAMP UP RED (0→max brightness as boundary approaches)
+            uint64_t currentSample = Timebase::getSamplePosition();
+            uint64_t startSample = m_effect.getWaitStartSample();
+            uint64_t targetSample = m_effect.getScheduledSample();
+            uint8_t brightness = calculateWaitBrightness(currentSample, startSample, targetSample, true);
 
-                // Write PWM values (red blinking)
-                if (s_rgbBlinkState) {
-                    analogWrite(RGB_LED_R_PIN, 255);
-                    analogWrite(RGB_LED_G_PIN, 0);
-                    analogWrite(RGB_LED_B_PIN, 0);
-                } else {
-                    analogWrite(RGB_LED_R_PIN, 0);
-                    analogWrite(RGB_LED_G_PIN, 0);
-                    analogWrite(RGB_LED_B_PIN, 0);
-                }
-            }
-            // Neokey LED blinking
-            if (now - m_lastBlinkTime >= BLINK_INTERVAL_MS) {
-                m_ledBlinkState = !m_ledBlinkState;
-                m_lastBlinkTime = now;
-                NeokeyInput::setLED(EffectID::STUTTER, m_ledBlinkState);
-            }
+            analogWrite(RGB_LED_R_PIN, brightness);
+            analogWrite(RGB_LED_G_PIN, 0);
+            analogWrite(RGB_LED_B_PIN, 0);
+
+            // Neokey LED follows brightness (on when >50%)
+            NeokeyInput::setLED(EffectID::STUTTER, brightness > 127);
             break;
+        }
 
         case StutterState::CAPTURING:
-        case StutterState::WAIT_CAPTURE_END:
             // LED SOLID RED
             analogWrite(RGB_LED_R_PIN, 255);
             analogWrite(RGB_LED_G_PIN, 0);
@@ -362,34 +396,40 @@ void StutterController::updateVisualFeedback() {
             NeokeyInput::setLED(EffectID::STUTTER, true);
             break;
 
-        case StutterState::WAIT_PLAYBACK_ONSET:
-            // LED BLINK BLUE VERY FAST
-            if (now - s_lastRgbBlinkTime >= RGB_BLINK_INTERVAL_MS) {
-                s_rgbBlinkState = !s_rgbBlinkState;
-                s_lastRgbBlinkTime = now;
-
-                // Write PWM values (blue blinking)
-                if (s_rgbBlinkState) {
-                    analogWrite(RGB_LED_R_PIN, 0);
-                    analogWrite(RGB_LED_G_PIN, 0);
-                    analogWrite(RGB_LED_B_PIN, 255);
-                } else {
-                    analogWrite(RGB_LED_R_PIN, 0);
-                    analogWrite(RGB_LED_G_PIN, 0);
-                    analogWrite(RGB_LED_B_PIN, 0);
-                }
-            }
-            // Neokey LED blinking
-            if (now - m_lastBlinkTime >= BLINK_INTERVAL_MS) {
-                m_ledBlinkState = !m_ledBlinkState;
-                m_lastBlinkTime = now;
-                NeokeyInput::setLED(EffectID::STUTTER, m_ledBlinkState);
-            }
+        case StutterState::WAIT_CAPTURE_END:
+            // LED SOLID RED (same as CAPTURING)
+            analogWrite(RGB_LED_R_PIN, 255);
+            analogWrite(RGB_LED_G_PIN, 0);
+            analogWrite(RGB_LED_B_PIN, 0);
+            NeokeyInput::setLED(EffectID::STUTTER, true);
             break;
 
+        case StutterState::WAIT_PLAYBACK_ONSET: {
+            // LED RAMP UP BLUE (0→max brightness as boundary approaches)
+            uint64_t currentSample = Timebase::getSamplePosition();
+            uint64_t startSample = m_effect.getWaitStartSample();
+            uint64_t targetSample = m_effect.getScheduledSample();
+            uint8_t brightness = calculateWaitBrightness(currentSample, startSample, targetSample, true);
+
+            analogWrite(RGB_LED_R_PIN, 0);
+            analogWrite(RGB_LED_G_PIN, 0);
+            analogWrite(RGB_LED_B_PIN, brightness);
+
+            // Neokey LED follows brightness (on when >50%)
+            NeokeyInput::setLED(EffectID::STUTTER, brightness > 127);
+            break;
+        }
+
         case StutterState::PLAYING:
-        case StutterState::WAIT_PLAYBACK_LENGTH:
             // LED SOLID BLUE
+            analogWrite(RGB_LED_R_PIN, 0);
+            analogWrite(RGB_LED_G_PIN, 0);
+            analogWrite(RGB_LED_B_PIN, 255);
+            NeokeyInput::setLED(EffectID::STUTTER, true);
+            break;
+
+        case StutterState::WAIT_PLAYBACK_LENGTH:
+            // LED SOLID BLUE (same as PLAYING)
             analogWrite(RGB_LED_R_PIN, 0);
             analogWrite(RGB_LED_G_PIN, 0);
             analogWrite(RGB_LED_B_PIN, 255);
