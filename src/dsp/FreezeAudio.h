@@ -75,7 +75,7 @@ private:
      * - 100ms: Loop-like, more musical (10 Hz fundamental)
      * - 200ms: Clearly recognizable frozen phrase (5 Hz fundamental)
      */
-    static constexpr uint32_t FREEZE_BUFFER_MS = 3;
+    static constexpr uint32_t FREEZE_BUFFER_MS = 30;
 
     /**
      * Calculate buffer size in samples (compile-time constant)

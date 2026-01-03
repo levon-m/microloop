@@ -1,4 +1,5 @@
 #include "DisplayManager.h"
+#include "StutterAudio.h"
 
 void DisplayManager::initialize() {
     m_lastActivatedEffect = EffectID::NONE;
@@ -21,10 +22,15 @@ void DisplayManager::updateDisplay() {
     }
 
     // Priority 3: STUTTER effect (lowest effect priority - first in audio chain)
+    // Only show STUTTER bitmap when actually playing (not during capture/waiting states)
     IEffectAudio* stutterEffect = EffectManager::getEffect(EffectID::STUTTER);
-    if (stutterEffect && stutterEffect->isEnabled()) {
-        Ssd1306Display::showBitmap(BitmapID::STUTTER_ACTIVE);
-        return;
+    if (stutterEffect) {
+        StutterAudio* stutter = static_cast<StutterAudio*>(stutterEffect);
+        StutterState state = stutter->getState();
+        if (state == StutterState::PLAYING || state == StutterState::WAIT_PLAYBACK_LENGTH) {
+            Ssd1306Display::showBitmap(BitmapID::STUTTER_ACTIVE);
+            return;
+        }
     }
 
     // Priority 4: Menu (if showing and no effects active)

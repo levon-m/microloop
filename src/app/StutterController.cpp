@@ -74,12 +74,13 @@ StutterController::StutterController(StutterAudio& effect)
 }
 
 BitmapID StutterController::stateToBitmap(StutterState state) {
-    // Simplified: Use STUTTER_ACTIVE for all non-idle states
+    // Only show STUTTER_ACTIVE during playback states
     switch (state) {
-        case StutterState::IDLE_NO_LOOP:
-            return BitmapID::DEFAULT;
+        case StutterState::PLAYING:
+        case StutterState::WAIT_PLAYBACK_LENGTH:
+            return BitmapID::STUTTER_ACTIVE;
         default:
-            return BitmapID::STUTTER_ACTIVE;  // All active states use same bitmap
+            return BitmapID::DEFAULT;  // All other states (idle, capture, wait onset)
     }
 }
 
@@ -479,6 +480,16 @@ void StutterController::updateVisualFeedback() {
         // Clear capture flag if we go back to no loop (capture was cancelled/failed)
         if (currentState == StutterState::IDLE_NO_LOOP) {
             m_captureInProgress = false;
+        }
+
+        // Trigger display update when entering/exiting playback states
+        // This catches ISR-triggered transitions (quantized onset/length)
+        bool wasPlayback = (m_lastState == StutterState::PLAYING ||
+                           m_lastState == StutterState::WAIT_PLAYBACK_LENGTH);
+        bool nowPlayback = (currentState == StutterState::PLAYING ||
+                           currentState == StutterState::WAIT_PLAYBACK_LENGTH);
+        if (wasPlayback != nowPlayback) {
+            DisplayManager::instance().updateDisplay();
         }
 
         m_lastState = currentState;
