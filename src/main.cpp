@@ -21,18 +21,24 @@ FreezeAudio freeze;    // Circular buffer freeze effect
 ChokeAudio choke;      // Smooth mute effect
 StutterAudio stutter;
 AudioOutputI2S i2s_out;
+// MOTU 3/4 line input gains are fixed and very insensitive, hearing noise floor without a boost
+//AudioAmplifier outGainL;
+//AudioAmplifier outGainR;
 
 // Audio connections (stereo L+R)
-AudioConnection patchCord1(i2s_in, 0, timekeeper, 0);   // Left in → TimeKeeper
-AudioConnection patchCord2(i2s_in, 1, timekeeper, 1);   // Right in → TimeKeeper
+AudioConnection patchCord1(i2s_in, 0, timekeeper, 0);
+AudioConnection patchCord2(i2s_in, 1, timekeeper, 1);
 AudioConnection patchCord3(timekeeper, 0, stutter, 0);
 AudioConnection patchCord4(timekeeper, 1, stutter, 1);
 AudioConnection patchCord5(stutter, 0, freeze, 0);
 AudioConnection patchCord6(stutter, 1, freeze, 1);
-AudioConnection patchCord7(freeze, 1, choke, 0);
+AudioConnection patchCord7(freeze, 0, choke, 0);
 AudioConnection patchCord8(freeze, 1, choke, 1);
-AudioConnection patchCord9(choke, 0, i2s_out, 0);       // Choke → Left out
-AudioConnection patchCord10(choke, 1, i2s_out, 1);       // Choke → Right out
+AudioConnection patchCord9(choke, 0, i2s_out, 0);
+AudioConnection patchCord10(choke, 1, i2s_out, 1);
+//AudioConnection patchCord11(outGainL, 0, i2s_out, 0);
+//AudioConnection patchCord12(outGainR, 0, i2s_out, 1);
+
 
 // Teensy Audio Library SGTL5000 control
 AudioControlSGTL5000 codec;
@@ -83,7 +89,7 @@ void setup() {
 
     Serial.println("=== MicroLoop Initializing ===");
 
-    AudioMemory(12);
+    AudioMemory(60);
 
     if (!codec.enable()) {
         Serial.println("ERROR: Codec init failed!");
@@ -97,11 +103,14 @@ void setup() {
     // Configure for line-in and line-out operation
     // IMPORTANT: Use MOTU M4 **REAR LINE INPUTS 3-4** (not front combo jacks!)
     codec.inputSelect(AUDIO_INPUT_LINEIN);  // Use line-in (not mic)
+    codec.micGain(0);
     codec.lineInLevel(0);  // Line-in gain: 0-15 (0 = 3.12V p-p, lowest gain to prevent clipping)
     codec.lineOutLevel(13);  // Line-out level: 13-31 (13 = 1.31V p-p, standard line level)
     codec.unmuteLineout();  // Unmute line-out
-    codec.volume(0.3);  // Headphone volume (0.0-1.0) - start low to avoid clipping
+    codec.volume(0.7);  // Headphone volume (0.0-1.0) - start low to avoid clipping
     codec.unmuteHeadphone();  // Unmute headphone (for testing)
+    //outGainL.gain(1.0f);   // try 1.5 to 3.0
+    //outGainR.gain(1.0f);
 
     Serial.println("Audio: OK (using Teensy Audio Library SGTL5000)");
 

@@ -66,9 +66,9 @@ void GlobalController::bindToEncoder(EncoderHandler::Handler& encoder,
         Parameter param = m_currentParameter;
 
         if (param == Parameter::QUANTIZATION) {
-            // Adjust global quantization (QUANT_32 → QUANT_16 → QUANT_8 → QUANT_4)
+            // Adjust global quantization (1/16 → 1/16T → 1/8 → 1/8T → 1/4 → 1/4T → 1/2 → 1 BAR)
             int8_t currentIndex = static_cast<int8_t>(EffectQuantization::getGlobalQuantization());
-            int8_t newIndex = clampIndex(currentIndex + delta, 0, 3);
+            int8_t newIndex = clampIndex(currentIndex + delta, 0, QUANT_COUNT - 1);
 
             if (newIndex != currentIndex) {
                 Quantization newQuant = static_cast<Quantization>(newIndex);
@@ -79,7 +79,7 @@ void GlobalController::bindToEncoder(EncoderHandler::Handler& encoder,
                 MenuDisplayData menuData;
                 menuData.topText = "GLOBAL->Quantization";
                 menuData.middleText = EffectQuantization::quantizationName(newQuant);
-                menuData.numOptions = 4;
+                menuData.numOptions = QUANT_COUNT;
                 menuData.selectedIndex = newIndex;
                 DisplayManager::instance().showMenu(menuData);
             }
@@ -102,7 +102,7 @@ void GlobalController::bindToEncoder(EncoderHandler::Handler& encoder,
                 MenuDisplayData menuData;
                 menuData.topText = "GLOBAL->Quantization";
                 menuData.middleText = EffectQuantization::quantizationName(quant);
-                menuData.numOptions = 4;
+                menuData.numOptions = QUANT_COUNT;
                 menuData.selectedIndex = static_cast<uint8_t>(quant);
                 DisplayManager::instance().showMenu(menuData);
             }

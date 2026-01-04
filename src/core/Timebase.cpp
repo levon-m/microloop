@@ -248,34 +248,22 @@ uint32_t Timebase::samplesToNextSubdivision(uint32_t subdivision) {
     /**
      * Calculate samples until next subdivision boundary (TICK-BASED)
      *
-     * KEY INSIGHT: We can't use (currentSample % spb) because beats don't
-     * align with sample 0. Instead, use MIDI tick position which tracks
-     * the actual beat grid.
-     *
-     * ALGORITHM:
-     *   1. Get current tick within beat (0-23)
-     *   2. Calculate samples elapsed in current beat based on ticks
-     *   3. Find subdivision boundary and calculate samples to it
-     *
-     * EXAMPLE (120 BPM, spb=22050, 1/4 note subdivision=22050):
-     *   - At tick 12 (halfway) → 11025 samples to next beat
-     *   - At tick 0 (on beat) → 22050 samples to next beat
-     *   - At tick 23 (just before beat) → ~920 samples to next beat
+     * Uses MIDI tick position to avoid drift between sample counter and MIDI clock.
+     * All subdivisions are <= 1 beat (1/4 note or smaller).
      */
     uint32_t spb = getSamplesPerBeat();
+    uint32_t samplesPerTick = spb / MIDI_PPQN;  // MIDI_PPQN = 24
     uint32_t tickInBeat = getTickInBeat();
 
-    // Calculate how many samples we've progressed into current beat
-    // based on MIDI tick position (not absolute sample position)
-    uint32_t samplesPerTick = spb / MIDI_PPQN;  // MIDI_PPQN = 24
+    // Calculate samples elapsed in current beat
     uint32_t samplesElapsedInBeat = tickInBeat * samplesPerTick;
 
-    // For 1/4 note (full beat), just return samples remaining in beat
+    // For 1/4 note (full beat), return samples remaining in beat
     if (subdivision >= spb) {
         return spb - samplesElapsedInBeat;
     }
 
-    // For subdivisions smaller than a beat (1/8, 1/16, 1/32)
+    // For subdivisions smaller than a beat (1/8, 1/16, 1/32, triplets)
     // Find which subdivision we're in and samples to its end
     uint32_t subdivisionIndex = samplesElapsedInBeat / subdivision;
     uint32_t nextSubdivisionStart = (subdivisionIndex + 1) * subdivision;
